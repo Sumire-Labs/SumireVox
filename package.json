@@ -10,6 +10,6 @@
     "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "esbuild", "prisma"]
+    "onlyBuiltDependencies": ["@discordjs/opus", "@prisma/client", "@prisma/engines", "esbuild", "prisma", "sodium-native"]
   }
 }

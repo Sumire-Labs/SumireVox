@@ -12,11 +12,17 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "@prisma/client": "^6.6.0",
     "@sumirevox/shared": "workspace:*",
+    "discord.js": "^14.25.1",
     "ioredis": "^5.6.1",
     "pino": "^9.6.0",
     "prisma": "^6.6.0"
+  },
+  "optionalDependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "sodium-native": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

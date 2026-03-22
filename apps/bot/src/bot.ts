@@ -1,2 +1,116 @@
-// シャードエントリポイント
-// TODO: Discord Client の初期化とイベントハンドラの登録
+import { Client, GatewayIntentBits, Events } from 'discord.js';
+import { config } from './infrastructure/config.js';
+import { logger } from './infrastructure/logger.js';
+import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
+import { disconnectRedis } from './infrastructure/redis.js';
+import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
+import { setClient } from './infrastructure/discord-client.js';
+
+async function bootstrap(): Promise<void> {
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildVoiceStates,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
+
+  setClient(client);
+
+  const shardId = client.shard?.ids[0] ?? 0;
+  const childLogger = logger.child({ shardId });
+
+  childLogger.info('Shard bootstrapping...');
+
+  // Prisma 接続確認
+  const prisma = getPrisma();
+  await prisma.$connect();
+  childLogger.info('Database connected');
+
+  // Redis Pub/Sub セットアップ（ハンドラは後のフェーズで実装）
+  setupPubSub({});
+  childLogger.info('Pub/Sub initialized');
+
+  let memoryInterval: ReturnType<typeof setInterval> | null = null;
+
+  // イベントハンドラ登録
+  client.on(Events.ClientReady, (readyClient) => {
+    childLogger.info(
+      { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
+      `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
+    );
+
+    // TODO: VC セッション復旧（Phase 5 で実装）
+    // TODO: VOICEVOX 話者一覧キャッシュ（Phase 3-9 で実装）
+    // TODO: 定型文事前合成（Phase 3-10 で実装）
+
+    memoryInterval = setInterval(() => {
+      const mem = process.memoryUsage();
+      childLogger.info(
+        {
+          rss: Math.round(mem.rss / 1024 / 1024),
+          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+          external: Math.round(mem.external / 1024 / 1024),
+        },
+        'Memory usage (MB)',
+      );
+    }, 60_000);
+  });
+
+  client.on(Events.Error, (error) => {
+    childLogger.error({ err: error }, 'Discord client error');
+  });
+
+  client.on(Events.Warn, (message) => {
+    childLogger.warn({ message }, 'Discord client warning');
+  });
+
+  // Graceful Shutdown
+  const shutdown = async (signal: string): Promise<void> => {
+    childLogger.info({ signal }, `Received ${signal}, shutting down...`);
+
+    // TODO: VC 切断・キュークリア（Phase 5-20 で実装）
+
+    if (memoryInterval !== null) {
+      clearInterval(memoryInterval);
+      memoryInterval = null;
+    }
+
+    client.destroy();
+    childLogger.info('Discord client destroyed');
+
+    await cleanupPubSub();
+    childLogger.info('Pub/Sub cleaned up');
+
+    await disconnectRedis();
+    childLogger.info('Redis disconnected');
+
+    await disconnectPrisma();
+    childLogger.info('Database disconnected');
+
+    childLogger.info('Shutdown complete');
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  process.on('unhandledRejection', (reason) => {
+    childLogger.error({ err: reason }, 'Unhandled rejection');
+  });
+
+  process.on('uncaughtException', (error) => {
+    childLogger.fatal({ err: error }, 'Uncaught exception');
+    process.exit(1);
+  });
+
+  // ログイン
+  await client.login(config.discordToken);
+}
+
+bootstrap().catch((error) => {
+  logger.fatal({ err: error }, 'Failed to bootstrap shard');
+  process.exit(1);
+});
