@@ -6,6 +6,7 @@ import { disconnectRedis } from './infrastructure/redis.js';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { setClient } from './infrastructure/discord-client.js';
 import { handleInteractionCreate } from './events/interaction-create.js';
+import { handleMessageCreate } from './events/message-create.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
@@ -46,6 +47,7 @@ async function bootstrap(): Promise<void> {
 
   // イベントハンドラ登録
   client.on(Events.InteractionCreate, handleInteractionCreate);
+  client.on(Events.MessageCreate, handleMessageCreate);
 
   client.on(Events.ClientReady, async (readyClient) => {
     childLogger.info(
