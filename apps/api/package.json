@@ -1,0 +1,12 @@
+{
+  "name": "@sumirevox/api",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sumirevox/shared": "workspace:*"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@sumirevox/bot",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "deploy-commands": "tsx src/deploy-commands.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sumirevox/shared": "workspace:*"
+  }
+}

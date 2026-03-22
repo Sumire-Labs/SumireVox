@@ -20,6 +20,12 @@ dist/
 build/
 *.tsbuildinfo
 
+# Test coverage
+coverage/
+
+# Turbo
+.turbo/
+
 # Vite
 .vite/
 web/dist/
