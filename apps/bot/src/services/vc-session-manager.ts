@@ -14,6 +14,7 @@ import {
 } from '../infrastructure/vc-session-store.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { logger } from '../infrastructure/logger.js';
+import { deleteGuildQueue } from './speech-queue.js';
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
@@ -55,6 +56,8 @@ export async function createVcSession(
 }
 
 export async function destroyVcSession(guildId: string): Promise<void> {
+  deleteGuildQueue(guildId);
+
   const connection = connections.get(guildId) ?? getVoiceConnection(guildId);
   if (connection) {
     connection.destroy();

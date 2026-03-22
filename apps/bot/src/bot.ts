@@ -9,6 +9,7 @@ import { handleInteractionCreate } from './events/interaction-create.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
+import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -51,6 +52,10 @@ async function bootstrap(): Promise<void> {
     await loadSpeakers();
     childLogger.info('VOICEVOX speakers loaded');
 
+    // シャードセマフォ初期化
+    const totalShards = readyClient.shard?.count ?? 1;
+    initShardSemaphore(totalShards);
+
     // VOICEVOX ヘルスチェック開始
     startHealthChecker();
     childLogger.info('VOICEVOX health checker started');
@@ -84,7 +89,10 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     childLogger.info({ signal }, `Received ${signal}, shutting down...`);
 
-    // VC 切断・キュークリア
+    // キュークリア
+    clearAllQueues();
+
+    // VC 切断
     await destroyAllVcSessions();
 
     stopHealthChecker();
