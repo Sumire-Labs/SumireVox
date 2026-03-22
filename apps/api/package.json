@@ -13,6 +13,7 @@
   "dependencies": {
     "@prisma/client": "^6.6.0",
     "@sumirevox/shared": "workspace:*",
+    "ioredis": "^5.6.1",
     "pino": "^9.6.0"
   },
   "devDependencies": {
