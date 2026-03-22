@@ -8,6 +8,7 @@
       "Bash(pnpm run build)",
       "Bash(pnpm run test*)",
       "Bash(pnpm -F * run *)",
+      "Bash(npx *)",
       "Bash(npx prisma *)",
       "Bash(npx tsc --noEmit)",
       "Bash(cat *)",
@@ -17,7 +18,8 @@
       "Bash(tail *)",
       "Bash(wc *)",
       "Bash(grep *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(tsc *)"
     ]
   }
 }
