@@ -5,11 +5,17 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "deploy-commands": "tsx src/deploy-commands.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/client": "^6.6.0",
     "@sumirevox/shared": "workspace:*",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "prisma": "^6.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

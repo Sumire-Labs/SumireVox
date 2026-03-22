@@ -4,9 +4,14 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "prisma generate --schema=../bot/prisma/schema.prisma"
+  },
+  "prisma": {
+    "schema": "../bot/prisma/schema.prisma"
   },
   "dependencies": {
+    "@prisma/client": "^6.6.0",
     "@sumirevox/shared": "workspace:*",
     "pino": "^9.6.0"
   },

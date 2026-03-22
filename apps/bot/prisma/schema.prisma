@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GuildSettings {
+  guildId               String   @id @map("guild_id")
+  // 読み上げ設定
+  maxReadLength         Int      @default(50) @map("max_read_length")
+  readUsername          Boolean  @default(false) @map("read_username")
+  addSanSuffix          Boolean  @default(false) @map("add_san_suffix")
+  romajiReading         Boolean  @default(false) @map("romaji_reading")
+  // 通知設定
+  joinLeaveNotification Boolean  @default(false) @map("join_leave_notification")
+  greetingOnJoin        Boolean  @default(false) @map("greeting_on_join")
+  // フィルタ設定
+  customEmojiHandling   String   @default("read_name") @map("custom_emoji_handling") // 'read_name' | 'remove'
+  readTargetType        String   @default("text_only") @map("read_target_type") // 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment'
+  // 接続設定
+  autoJoin              Boolean  @default(false) @map("auto_join")
+  defaultTextChannelId  String?  @map("default_text_channel_id")
+  defaultSpeakerId      Int?     @map("default_speaker_id")
+  // 権限設定
+  adminRoleId           String?  @map("admin_role_id")
+  dictionaryPermission  String   @default("admin_only") @map("dictionary_permission") // 'everyone' | 'admin_only'
+  // PREMIUM
+  manualPremium         Boolean  @default(false) @map("manual_premium")
+  // タイムスタンプ
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  // リレーション
+  boosts                Boost[]
+
+  @@map("guild_settings")
+}
+
+model UserVoiceSetting {
+  userId     String   @id @map("user_id")
+  speakerId  Int?     @map("speaker_id")
+  speedScale Float    @default(1.0) @map("speed_scale")
+  pitchScale Float    @default(0.0) @map("pitch_scale")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("user_voice_settings")
+}
+
+model GlobalDictionary {
+  word         String   @id @map("word")
+  reading      String   @map("reading")
+  registeredBy String   @map("registered_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("global_dictionary")
+}
+
+model GlobalDictionaryRequest {
+  id          String   @id @default(cuid()) @map("id")
+  word        String   @map("word")
+  reading     String   @map("reading")
+  reason      String?  @map("reason")
+  requestedBy String   @map("requested_by")
+  guildId     String   @map("guild_id")
+  status      String   @default("PENDING") @map("status") // 'PENDING' | 'APPROVED' | 'REJECTED'
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("global_dictionary_requests")
+}
+
+model ServerDictionary {
+  guildId      String   @map("guild_id")
+  word         String   @map("word")
+  reading      String   @map("reading")
+  registeredBy String   @map("registered_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([guildId, word])
+  @@map("server_dictionary")
+}
+
+model Subscription {
+  userId               String   @map("user_id")
+  stripeCustomerId     String   @map("stripe_customer_id")
+  stripeSubscriptionId String   @unique @map("stripe_subscription_id")
+  status               String   @default("INCOMPLETE") @map("status") // 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'INCOMPLETE'
+  currentPeriodEnd     DateTime @map("current_period_end")
+  boostCount           Int      @default(0) @map("boost_count")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  // リレーション
+  boosts               Boost[]
+
+  @@id([userId, stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+model Boost {
+  id             String         @id @default(cuid())
+  subscriptionId String         @map("subscription_id")
+  guildId        String?        @map("guild_id")
+  assignedAt     DateTime?      @map("assigned_at")
+  unassignedAt   DateTime?      @map("unassigned_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  // リレーション
+  subscription   Subscription   @relation(fields: [subscriptionId], references: [stripeSubscriptionId])
+  guild          GuildSettings? @relation(fields: [guildId], references: [guildId])
+
+  @@map("boosts")
+}
