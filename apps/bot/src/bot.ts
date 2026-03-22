@@ -7,6 +7,8 @@ import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { setClient } from './infrastructure/discord-client.js';
 import { handleInteractionCreate } from './events/interaction-create.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
+import { loadSpeakers } from './services/voicevox-speaker-cache.js';
+import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -45,10 +47,16 @@ async function bootstrap(): Promise<void> {
       `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
     );
 
+    // VOICEVOX 話者一覧キャッシュ
+    await loadSpeakers();
+    childLogger.info('VOICEVOX speakers loaded');
+
+    // VOICEVOX ヘルスチェック開始
+    startHealthChecker();
+    childLogger.info('VOICEVOX health checker started');
+
     // VC セッション復旧
     await restoreVcSessions();
-    // TODO: VOICEVOX 話者一覧キャッシュ（Phase 3-9 で実装）
-    // TODO: 定型文事前合成（Phase 3-10 で実装）
 
     memoryInterval = setInterval(() => {
       const mem = process.memoryUsage();
@@ -78,6 +86,8 @@ async function bootstrap(): Promise<void> {
 
     // VC 切断・キュークリア
     await destroyAllVcSessions();
+
+    stopHealthChecker();
 
     if (memoryInterval !== null) {
       clearInterval(memoryInterval);
