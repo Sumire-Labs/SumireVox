@@ -15,6 +15,7 @@ import {
 import { getClient } from '../infrastructure/discord-client.js';
 import { logger } from '../infrastructure/logger.js';
 import { deleteGuildQueue } from './speech-queue.js';
+import { initTrieSlot, destroyTrieSlot } from './text-pipeline/index.js';
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
@@ -47,6 +48,7 @@ export async function createVcSession(
     throw error;
   }
 
+  initTrieSlot(guildId);
   sessions.set(guildId, session);
   connections.set(guildId, connection);
   await saveVcSessionToRedis(session);
@@ -63,6 +65,7 @@ export async function destroyVcSession(guildId: string): Promise<void> {
     connection.destroy();
   }
 
+  destroyTrieSlot(guildId);
   sessions.delete(guildId);
   connections.delete(guildId);
   await removeVcSessionFromRedis(guildId);
