@@ -10,6 +10,7 @@ import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-m
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
+import { preloadPredefinedAudio } from './services/predefined-audio-cache.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -59,6 +60,10 @@ async function bootstrap(): Promise<void> {
     // VOICEVOX ヘルスチェック開始
     startHealthChecker();
     childLogger.info('VOICEVOX health checker started');
+
+    // 定型文事前合成
+    await preloadPredefinedAudio();
+    childLogger.info('Predefined audio preloaded');
 
     // VC セッション復旧
     await restoreVcSessions();
