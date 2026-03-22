@@ -14,10 +14,15 @@ export function buildCustomId(command: string, action: string, userId: string): 
 
 export function parseCustomId(customId: string): ParsedCustomId | null {
   const parts = customId.split(':');
-  if (parts.length !== 4) {
+  // format: command:action:userId:timestamp
+  // action may itself contain colons (e.g. "speaker:0", "page:1")
+  if (parts.length < 4) {
     return null;
   }
-  const [command, action, userId, timestampStr] = parts;
+  const command = parts[0];
+  const timestampStr = parts[parts.length - 1];
+  const userId = parts[parts.length - 2];
+  const action = parts.slice(1, parts.length - 2).join(':');
   const timestamp = parseInt(timestampStr, 10);
   if (isNaN(timestamp) || !command || !action || !userId) {
     return null;
