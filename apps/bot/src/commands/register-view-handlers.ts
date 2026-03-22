@@ -1,5 +1,6 @@
 import { registerViewHandler } from '../events/view-router.js';
 import { handleVoiceView } from './voice-view-handler.js';
+import { handleSettingsView } from './settings-view-handler.js';
 
 /**
  * 全コマンドの View ハンドラを登録する
@@ -8,5 +9,7 @@ import { handleVoiceView } from './voice-view-handler.js';
 export function registerAllViewHandlers(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   registerViewHandler('voice', handleVoiceView as any);
-  // 後続フェーズで settings, dictionary のハンドラも追加
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  registerViewHandler('settings', handleSettingsView as any);
+  // 後続フェーズで dictionary のハンドラも追加
 }
