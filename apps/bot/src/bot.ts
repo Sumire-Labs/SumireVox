@@ -6,6 +6,7 @@ import { disconnectRedis } from './infrastructure/redis.js';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { setClient } from './infrastructure/discord-client.js';
 import { handleInteractionCreate } from './events/interaction-create.js';
+import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -38,13 +39,14 @@ async function bootstrap(): Promise<void> {
   // イベントハンドラ登録
   client.on(Events.InteractionCreate, handleInteractionCreate);
 
-  client.on(Events.ClientReady, (readyClient) => {
+  client.on(Events.ClientReady, async (readyClient) => {
     childLogger.info(
       { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
       `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
     );
 
-    // TODO: VC セッション復旧（Phase 5 で実装）
+    // VC セッション復旧
+    await restoreVcSessions();
     // TODO: VOICEVOX 話者一覧キャッシュ（Phase 3-9 で実装）
     // TODO: 定型文事前合成（Phase 3-10 で実装）
 
@@ -74,7 +76,8 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     childLogger.info({ signal }, `Received ${signal}, shutting down...`);
 
-    // TODO: VC 切断・キュークリア（Phase 5-20 で実装）
+    // VC 切断・キュークリア
+    await destroyAllVcSessions();
 
     if (memoryInterval !== null) {
       clearInterval(memoryInterval);
