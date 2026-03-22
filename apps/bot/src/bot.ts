@@ -5,6 +5,7 @@ import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
 import { disconnectRedis } from './infrastructure/redis.js';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { setClient } from './infrastructure/discord-client.js';
+import { handleInteractionCreate } from './events/interaction-create.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -35,6 +36,8 @@ async function bootstrap(): Promise<void> {
   let memoryInterval: ReturnType<typeof setInterval> | null = null;
 
   // イベントハンドラ登録
+  client.on(Events.InteractionCreate, handleInteractionCreate);
+
   client.on(Events.ClientReady, (readyClient) => {
     childLogger.info(
       { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
