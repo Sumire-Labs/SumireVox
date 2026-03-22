@@ -2,6 +2,7 @@ import { Interaction } from 'discord.js';
 import { commands } from '../commands/index.js';
 import { logger } from '../infrastructure/logger.js';
 import { routeViewInteraction } from './view-router.js';
+import { handleNotificationButton } from './notification-button-handler.js';
 
 const commandMap = new Map(commands.map((cmd) => [cmd.data.name, cmd]));
 
@@ -32,6 +33,14 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       }
     }
     return;
+  }
+
+  if (interaction.isButton()) {
+    const customId = interaction.customId;
+    if (customId.startsWith('dict_notify_approve:') || customId.startsWith('dict_notify_reject:')) {
+      await handleNotificationButton(interaction);
+      return;
+    }
   }
 
   if (
