@@ -1,0 +1,34 @@
+{
+  "name": "@sumirevox/bot",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "deploy-commands": "tsx src/deploy-commands.ts",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "@prisma/client": "^6.6.0",
+    "@sumirevox/shared": "workspace:*",
+    "discord.js": "^14.25.1",
+    "ioredis": "^5.6.1",
+    "pino": "^9.6.0",
+    "prisma": "^6.6.0"
+  },
+  "optionalDependencies": {
+    "@discordjs/opus": "^0.10.0",
+    "sodium-native": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.0"
+  }
+}

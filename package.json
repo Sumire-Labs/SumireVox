@@ -1,0 +1,17 @@
+{
+  "name": "sumirevox",
+  "private": true,
+  "scripts": {
+    "dev:bot": "pnpm --filter @sumirevox/bot dev",
+    "dev:api": "pnpm --filter @sumirevox/api dev",
+    "dev:web": "pnpm --filter @sumirevox/web dev",
+    "dev:admin": "pnpm --filter @sumirevox/admin dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@discordjs/opus", "@prisma/client", "@prisma/engines", "esbuild", "prisma", "sodium-native"]
+  }
+}

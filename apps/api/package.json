@@ -1,0 +1,29 @@
+{
+  "name": "@sumirevox/api",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "test": "vitest run --passWithNoTests",
+    "postinstall": "prisma generate --schema=../bot/prisma/schema.prisma"
+  },
+  "prisma": {
+    "schema": "../bot/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@prisma/client": "^6.6.0",
+    "@sumirevox/shared": "workspace:*",
+    "hono": "^4.7.7",
+    "ioredis": "^5.6.1",
+    "pino": "^9.6.0",
+    "stripe": "^17.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.0"
+  }
+}
