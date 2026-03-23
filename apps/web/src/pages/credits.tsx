@@ -1,6 +1,24 @@
 import { motion } from 'framer-motion';
 import { ExternalLink } from 'lucide-react';
 
+const OSS_LIBRARIES = [
+  {
+    name: 'discord.js',
+    description: 'Discord API ライブラリ',
+    url: 'https://discord.js.org/',
+  },
+  {
+    name: 'Hono',
+    description: '高速 Web フレームワーク',
+    url: 'https://hono.dev/',
+  },
+  {
+    name: 'Prisma',
+    description: 'データベース ORM',
+    url: 'https://www.prisma.io/',
+  },
+];
+
 export function CreditsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-20">
@@ -11,7 +29,7 @@ export function CreditsPage() {
         className="flex flex-col gap-3 mb-12"
       >
         <h1 className="text-4xl font-bold text-white">クレジット</h1>
-        <p className="text-gray-400">SumireVox で使用している音声合成エンジンのクレジット表記です。</p>
+        <p className="text-gray-400">SumireVox で使用している音声合成エンジンおよびライブラリのクレジット表記です。</p>
       </motion.div>
 
       <motion.div
@@ -75,6 +93,37 @@ export function CreditsPage() {
             </a>{' '}
             をご参照ください。
           </p>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+        className="mt-8 flex flex-col gap-4"
+      >
+        <h2 className="text-xl font-bold text-white">その他の使用技術</h2>
+        <div className="flex flex-col gap-3">
+          {OSS_LIBRARIES.map((lib) => (
+            <div
+              key={lib.name}
+              className="bg-[#12121a] border border-white/5 rounded-xl px-5 py-4 flex items-center justify-between"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-white font-semibold">{lib.name}</span>
+                <span className="text-gray-500 text-sm">{lib.description}</span>
+              </div>
+              <a
+                href={lib.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-purple-400 hover:text-purple-300 transition-colors text-sm shrink-0 ml-4"
+              >
+                <ExternalLink size={14} />
+                {lib.url}
+              </a>
+            </div>
+          ))}
         </div>
       </motion.div>
     </div>

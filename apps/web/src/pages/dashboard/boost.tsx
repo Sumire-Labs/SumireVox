@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, CardBody, CardHeader, Button, Input, Chip, Spinner, Select, SelectItem } from '@heroui/react';
+import { Select, SelectItem, Spinner } from '@heroui/react';
 import { api, ApiError } from '../../lib/api';
 
 interface BoostData {
@@ -97,71 +97,96 @@ export function BoostPage() {
     }
   };
 
-  if (loading) return <Spinner size="lg" color="primary" className="mx-auto mt-20" />;
+  if (loading) {
+    return (
+      <div className="flex justify-center mt-20">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">ブースト管理</h1>
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">ブースト管理</h1>
+        <p className="text-gray-400">ブーストの購入・割り当て・解約を管理します</p>
+      </div>
 
       {error && (
-        <Card className="bg-danger-50 border-danger">
-          <CardBody><p className="text-danger">{error}</p></CardBody>
-        </Card>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
       )}
 
-      <Card>
-        <CardHeader className="font-semibold">ブーストを購入</CardHeader>
-        <CardBody className="flex flex-row items-end gap-4">
-          <Input
-            type="number"
-            label="ブースト数"
-            min={1}
-            max={10}
-            value={boostCount}
-            onValueChange={setBoostCount}
-            className="max-w-[120px]"
-          />
-          <div>
-            <p className="text-sm text-default-500 mb-1">月額 {parseInt(boostCount, 10) * 300}円</p>
-            <Button color="primary" onPress={handleCheckout}>購入する</Button>
+      {/* 購入 */}
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
+        <h2 className="text-lg font-semibold text-white">ブーストを購入</h2>
+        <div className="flex items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm text-gray-400">ブースト数</label>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={boostCount}
+              onChange={(e) => setBoostCount(e.target.value)}
+              className="w-24 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500/50"
+            />
           </div>
-        </CardBody>
-      </Card>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm text-gray-400">月額 {parseInt(boostCount, 10) * 300}円</p>
+            <button
+              onClick={handleCheckout}
+              className="gradient-bg text-white px-6 py-2 rounded-xl text-sm font-medium transition-all hover:opacity-90"
+            >
+              購入する
+            </button>
+          </div>
+        </div>
+      </div>
 
+      {/* ブースト一覧 */}
       {data?.boosts && data.boosts.length > 0 && (
-        <Card>
-          <CardHeader className="font-semibold">ブースト枠一覧</CardHeader>
-          <CardBody className="space-y-4">
+        <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+          <h2 className="text-lg font-semibold text-white">ブースト枠一覧</h2>
+          <div className="flex flex-col gap-3">
             {data.boosts.map((boost) => (
-              <div key={boost.id} className="flex items-center justify-between p-3 rounded-lg bg-content2">
-                <div>
+              <div
+                key={boost.id}
+                className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
+              >
+                <div className="flex items-center gap-3">
                   {boost.guildId ? (
-                    <span>割り当て先: {guilds.find((g) => g.id === boost.guildId)?.name ?? boost.guildId}</span>
+                    <span className="text-gray-300">
+                      割り当て先: {guilds.find((g) => g.id === boost.guildId)?.name ?? boost.guildId}
+                    </span>
                   ) : (
-                    <span className="text-default-500">未割り当て</span>
+                    <span className="text-gray-500">未割り当て</span>
                   )}
                   {boost.isOnCooldown && boost.cooldownEndsAt && (
-                    <Chip color="warning" size="sm" className="ml-2">
+                    <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full">
                       クールダウン: {new Date(boost.cooldownEndsAt).toLocaleDateString('ja-JP')} まで
-                    </Chip>
+                    </span>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  {boost.guildId ? (
-                    <Button
-                      size="sm"
-                      color="danger"
-                      variant="flat"
-                      isLoading={actionLoading === boost.id}
-                      onPress={() => handleUnassign(boost.id)}
+                <div className="flex items-center gap-2">
+                  {actionLoading === boost.id ? (
+                    <Spinner size="sm" color="secondary" />
+                  ) : boost.guildId ? (
+                    <button
+                      onClick={() => handleUnassign(boost.id)}
+                      className="text-sm bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 px-4 py-1.5 rounded-lg transition-all"
                     >
                       外す
-                    </Button>
+                    </button>
                   ) : !boost.isOnCooldown ? (
                     <Select
                       size="sm"
                       placeholder="サーバーを選択"
                       className="min-w-[200px]"
+                      classNames={{
+                        trigger: 'bg-white/5 border-white/10',
+                      }}
                       onChange={(e) => {
                         if (e.target.value) handleAssign(boost.id, e.target.value);
                       }}
@@ -176,21 +201,23 @@ export function BoostPage() {
                 </div>
               </div>
             ))}
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       )}
 
+      {/* 解約 */}
       {data?.subscription?.status === 'ACTIVE' && (
-        <Card>
-          <CardBody className="flex flex-row items-center justify-between">
-            <p className="text-sm text-default-500">
-              サブスクリプションを解約すると、現在の請求期間（{new Date(data.subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}）の終了後にブーストが無効になります。
-            </p>
-            <Button color="danger" variant="flat" size="sm" onPress={handleCancel}>
-              解約する
-            </Button>
-          </CardBody>
-        </Card>
+        <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex items-center justify-between gap-4">
+          <p className="text-sm text-gray-400">
+            解約すると、現在の請求期間（{new Date(data.subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}）の終了後にブーストが無効になります。
+          </p>
+          <button
+            onClick={handleCancel}
+            className="shrink-0 text-sm bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 px-5 py-2 rounded-xl transition-all"
+          >
+            解約する
+          </button>
+        </div>
       )}
     </div>
   );

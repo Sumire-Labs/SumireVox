@@ -32,7 +32,7 @@ const FEATURES = [
 const FREE_FEATURES = [
   '読み上げ最大 50 文字',
   'サーバーデフォルト話者',
-  'サーバー辞書 10 エントリ',
+  'サーバー辞書 100 エントリ',
   '入退室通知',
   '自動接続',
 ];
@@ -40,7 +40,7 @@ const FREE_FEATURES = [
 const PREMIUM_FEATURES = [
   '読み上げ最大 200 文字',
   'ユーザーごとの話者・速度・ピッチ設定',
-  'サーバー辞書 100 エントリ',
+  'サーバー辞書 500 エントリ',
   '入退室通知',
   '自動接続',
   '優先サポート',
@@ -154,7 +154,7 @@ export function HomePage() {
             特徴
           </motion.h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {FEATURES.map((feature, i) => {
               const Icon = feature.icon;
               return (
@@ -196,7 +196,7 @@ export function HomePage() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: 0 }}
-              className="bg-[#12121a] border border-white/10 rounded-2xl p-8 flex flex-col gap-6"
+              className="bg-[#12121a] border border-white/15 rounded-2xl p-8 flex flex-col gap-6"
             >
               <div>
                 <p className="text-sm text-gray-400 font-medium mb-2">FREE</p>
@@ -275,12 +275,15 @@ export function HomePage() {
         >
           <h2 className="text-3xl font-bold text-white">今すぐ SumireVox を導入しよう</h2>
           <p className="text-gray-400">完全無料で始められます</p>
-          <a
-            href="#"
-            className="gradient-bg text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:opacity-90 hover:scale-105"
-          >
-            Bot を導入する
-          </a>
+          <div className="flex flex-col items-center gap-3">
+            <a
+              href="#"
+              className="gradient-bg text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:opacity-90 hover:scale-105"
+            >
+              Bot を導入する
+            </a>
+            <p className="text-sm text-gray-500">※ 完全無料・クレジットカード不要</p>
+          </div>
         </motion.div>
       </section>
     </div>

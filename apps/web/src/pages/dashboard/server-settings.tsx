@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Card, CardBody, CardHeader, Switch, Input, Select, SelectItem,
-  Spinner, Button, Divider, Chip,
-} from '@heroui/react';
+import { Switch, Select, SelectItem } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 
@@ -25,6 +22,27 @@ interface GuildSettings {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
+      <h2 className="text-base font-semibold text-white">{title}</h2>
+      {children}
+    </div>
+  );
+}
+
+function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-white">{label}</p>
+        {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
 
 export function ServerSettingsPage() {
   const { guildId } = useParams<{ guildId: string }>();
@@ -78,216 +96,176 @@ export function ServerSettingsPage() {
     save({ [field]: value || null });
   };
 
-  if (loading) return <Spinner size="lg" color="primary" className="mx-auto mt-20" />;
-  if (!settings) return <p className="text-danger">設定の読み込みに失敗しました。</p>;
+  if (loading) {
+    return (
+      <div className="flex justify-center mt-20">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!settings) return <p className="text-red-400">設定の読み込みに失敗しました。</p>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">サーバー設定</h1>
-        <div className="flex items-center gap-3">
-          {saveStatus === 'saving' && <Spinner size="sm" />}
-          {saveStatus === 'saved' && <Chip color="success" size="sm">保存しました</Chip>}
-          {saveStatus === 'error' && <Chip color="danger" size="sm">{errorMessage ?? '保存に失敗しました'}</Chip>}
-          <Button as={Link} to={`/dashboard/servers/${guildId}/dictionary`} variant="flat" size="sm">
+    <div className="flex flex-col gap-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">サーバー設定</h1>
+          <p className="text-gray-400">読み上げ・通知・フィルタ・権限の設定</p>
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          {saveStatus === 'saving' && (
+            <span className="text-sm text-gray-400">保存中…</span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-sm bg-green-500/20 text-green-400 px-3 py-1 rounded-full">保存しました</span>
+          )}
+          {saveStatus === 'error' && (
+            <span className="text-sm bg-red-500/20 text-red-400 px-3 py-1 rounded-full">
+              {errorMessage ?? '保存に失敗しました'}
+            </span>
+          )}
+          <Link
+            to={`/dashboard/servers/${guildId}/dictionary`}
+            className="text-sm border border-white/20 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all"
+          >
             辞書管理
-          </Button>
+          </Link>
         </div>
       </div>
 
       {/* 読み上げ設定 */}
-      <Card>
-        <CardHeader className="font-semibold">読み上げ設定</CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">最大文字数</p>
-              <p className="text-sm text-default-500">FREE: 上限50 / PREMIUM: 上限200</p>
-            </div>
-            <Input
-              type="number"
-              min={1}
-              max={settings.manualPremium ? 200 : 50}
-              defaultValue={String(settings.maxReadLength)}
-              className="max-w-[100px]"
-              onBlur={(e) => handleNumberBlur('maxReadLength', e.target.value)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">名前読み上げ</p>
-              <p className="text-sm text-default-500">メッセージ送信者の名前を読み上げる</p>
-            </div>
-            <Switch
-              isSelected={settings.readName}
-              onValueChange={(v) => handleSwitch('readName', v)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">さん付け</p>
-              <p className="text-sm text-default-500">名前の後ろに「さん」を付ける</p>
-            </div>
-            <Switch
-              isSelected={settings.honorific}
-              onValueChange={(v) => handleSwitch('honorific', v)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">ローマ字読み</p>
-              <p className="text-sm text-default-500">ローマ字パターンをそのまま読む</p>
-            </div>
-            <Switch
-              isSelected={settings.romajiRead}
-              onValueChange={(v) => handleSwitch('romajiRead', v)}
-            />
-          </div>
-        </CardBody>
-      </Card>
+      <SectionCard title="読み上げ設定">
+        <SettingRow label="最大文字数" description="FREE: 上限50 / PREMIUM: 上限200">
+          <input
+            type="number"
+            min={1}
+            max={settings.manualPremium ? 200 : 50}
+            defaultValue={String(settings.maxReadLength)}
+            className="w-20 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 text-right"
+            onBlur={(e) => handleNumberBlur('maxReadLength', e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
+          <Switch
+            isSelected={settings.readName}
+            onValueChange={(v) => handleSwitch('readName', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+        <SettingRow label="さん付け" description="名前の後ろに「さん」を付ける">
+          <Switch
+            isSelected={settings.honorific}
+            onValueChange={(v) => handleSwitch('honorific', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+        <SettingRow label="ローマ字読み" description="ローマ字パターンをそのまま読む">
+          <Switch
+            isSelected={settings.romajiRead}
+            onValueChange={(v) => handleSwitch('romajiRead', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+      </SectionCard>
 
       {/* 通知設定 */}
-      <Card>
-        <CardHeader className="font-semibold">通知設定</CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">入退室通知</p>
-              <p className="text-sm text-default-500">VC の参加・退出・移動を読み上げる</p>
-            </div>
-            <Switch
-              isSelected={settings.joinLeaveNotify}
-              onValueChange={(v) => handleSwitch('joinLeaveNotify', v)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">Bot 入室時の挨拶</p>
-              <p className="text-sm text-default-500">/join 時に「接続しました」を読み上げる</p>
-            </div>
-            <Switch
-              isSelected={settings.greeting}
-              onValueChange={(v) => handleSwitch('greeting', v)}
-            />
-          </div>
-        </CardBody>
-      </Card>
+      <SectionCard title="通知設定">
+        <SettingRow label="入退室通知" description="VC の参加・退出・移動を読み上げる">
+          <Switch
+            isSelected={settings.joinLeaveNotify}
+            onValueChange={(v) => handleSwitch('joinLeaveNotify', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+        <SettingRow label="Bot 入室時の挨拶" description="/join 時に「接続しました」を読み上げる">
+          <Switch
+            isSelected={settings.greeting}
+            onValueChange={(v) => handleSwitch('greeting', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+      </SectionCard>
 
       {/* フィルタ設定 */}
-      <Card>
-        <CardHeader className="font-semibold">フィルタ設定</CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="font-medium">カスタム絵文字の扱い</p>
-            <Select
-              size="sm"
-              className="max-w-[220px]"
-              selectedKeys={[settings.customEmojiMode]}
-              onChange={(e) => handleSelect('customEmojiMode', e.target.value)}
-            >
-              <SelectItem key="READ_NAME">名前を読み上げる</SelectItem>
-              <SelectItem key="REMOVE">除去する</SelectItem>
-            </Select>
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <p className="font-medium">読み上げ対象</p>
-            <Select
-              size="sm"
-              className="max-w-[260px]"
-              selectedKeys={[settings.readTargetType]}
-              onChange={(e) => handleSelect('readTargetType', e.target.value)}
-            >
-              <SelectItem key="TEXT_ONLY">テキストのみ</SelectItem>
-              <SelectItem key="TEXT_STICKER">テキスト + スタンプ</SelectItem>
-              <SelectItem key="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</SelectItem>
-            </Select>
-          </div>
-        </CardBody>
-      </Card>
+      <SectionCard title="フィルタ設定">
+        <SettingRow label="カスタム絵文字の扱い">
+          <Select
+            size="sm"
+            className="min-w-[200px]"
+            classNames={{ trigger: 'bg-white/5 border-white/10' }}
+            selectedKeys={[settings.customEmojiMode]}
+            onChange={(e) => handleSelect('customEmojiMode', e.target.value)}
+          >
+            <SelectItem key="READ_NAME">名前を読み上げる</SelectItem>
+            <SelectItem key="REMOVE">除去する</SelectItem>
+          </Select>
+        </SettingRow>
+        <SettingRow label="読み上げ対象">
+          <Select
+            size="sm"
+            className="min-w-[240px]"
+            classNames={{ trigger: 'bg-white/5 border-white/10' }}
+            selectedKeys={[settings.readTargetType]}
+            onChange={(e) => handleSelect('readTargetType', e.target.value)}
+          >
+            <SelectItem key="TEXT_ONLY">テキストのみ</SelectItem>
+            <SelectItem key="TEXT_STICKER">テキスト + スタンプ</SelectItem>
+            <SelectItem key="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</SelectItem>
+          </Select>
+        </SettingRow>
+      </SectionCard>
 
       {/* 接続設定 */}
-      <Card>
-        <CardHeader className="font-semibold">接続設定</CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">自動接続</p>
-              <p className="text-sm text-default-500">誰かが VC に参加したとき自動で接続する</p>
-            </div>
-            <Switch
-              isSelected={settings.autoJoin}
-              onValueChange={(v) => handleSwitch('autoJoin', v)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">デフォルト読み上げチャンネル ID</p>
-              <p className="text-sm text-default-500">自動接続時に使用するテキストチャンネル</p>
-            </div>
-            <Input
-              size="sm"
-              placeholder="チャンネル ID"
-              defaultValue={settings.defaultTextChannelId ?? ''}
-              className="max-w-[200px]"
-              onBlur={(e) => handleStringBlur('defaultTextChannelId', e.target.value)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">デフォルト話者 ID</p>
-              <p className="text-sm text-default-500">ユーザー設定がない場合に使用する話者</p>
-            </div>
-            <Input
-              type="number"
-              size="sm"
-              placeholder="話者 ID"
-              defaultValue={settings.defaultSpeakerId != null ? String(settings.defaultSpeakerId) : ''}
-              className="max-w-[120px]"
-              onBlur={(e) => handleNumberBlur('defaultSpeakerId', e.target.value)}
-            />
-          </div>
-        </CardBody>
-      </Card>
+      <SectionCard title="接続設定">
+        <SettingRow label="自動接続" description="誰かが VC に参加したとき自動で接続する">
+          <Switch
+            isSelected={settings.autoJoin}
+            onValueChange={(v) => handleSwitch('autoJoin', v)}
+            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
+          />
+        </SettingRow>
+        <SettingRow label="デフォルト読み上げチャンネル ID" description="自動接続時に使用するテキストチャンネル">
+          <input
+            placeholder="チャンネル ID"
+            defaultValue={settings.defaultTextChannelId ?? ''}
+            className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600"
+            onBlur={(e) => handleStringBlur('defaultTextChannelId', e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow label="デフォルト話者 ID" description="ユーザー設定がない場合に使用する話者">
+          <input
+            type="number"
+            placeholder="話者 ID"
+            defaultValue={settings.defaultSpeakerId != null ? String(settings.defaultSpeakerId) : ''}
+            className="w-28 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600 text-right"
+            onBlur={(e) => handleNumberBlur('defaultSpeakerId', e.target.value)}
+          />
+        </SettingRow>
+      </SectionCard>
 
       {/* 権限設定 */}
-      <Card>
-        <CardHeader className="font-semibold">権限設定</CardHeader>
-        <CardBody className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium">管理ロール ID</p>
-              <p className="text-sm text-default-500">このロールのユーザーを管理者として扱う</p>
-            </div>
-            <Input
-              size="sm"
-              placeholder="ロール ID"
-              defaultValue={settings.adminRoleId ?? ''}
-              className="max-w-[200px]"
-              onBlur={(e) => handleStringBlur('adminRoleId', e.target.value)}
-            />
-          </div>
-          <Divider />
-          <div className="flex items-center justify-between">
-            <p className="font-medium">サーバー辞書追加権限</p>
-            <Select
-              size="sm"
-              className="max-w-[240px]"
-              selectedKeys={[settings.dictPermission]}
-              onChange={(e) => handleSelect('dictPermission', e.target.value)}
-            >
-              <SelectItem key="ALL_USERS">全ユーザー</SelectItem>
-              <SelectItem key="ADMIN_ONLY">管理者 / 指定ロールのみ</SelectItem>
-            </Select>
-          </div>
-        </CardBody>
-      </Card>
+      <SectionCard title="権限設定">
+        <SettingRow label="管理ロール ID" description="このロールのユーザーを管理者として扱う">
+          <input
+            placeholder="ロール ID"
+            defaultValue={settings.adminRoleId ?? ''}
+            className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600"
+            onBlur={(e) => handleStringBlur('adminRoleId', e.target.value)}
+          />
+        </SettingRow>
+        <SettingRow label="サーバー辞書追加権限">
+          <Select
+            size="sm"
+            className="min-w-[220px]"
+            classNames={{ trigger: 'bg-white/5 border-white/10' }}
+            selectedKeys={[settings.dictPermission]}
+            onChange={(e) => handleSelect('dictPermission', e.target.value)}
+          >
+            <SelectItem key="ALL_USERS">全ユーザー</SelectItem>
+            <SelectItem key="ADMIN_ONLY">管理者 / 指定ロールのみ</SelectItem>
+          </Select>
+        </SettingRow>
+      </SectionCard>
     </div>
   );
 }

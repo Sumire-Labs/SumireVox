@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Card, CardBody, CardHeader, Chip, Spinner } from '@heroui/react';
 import { Link } from 'react-router';
 import { api } from '../../lib/api';
 
@@ -28,51 +27,71 @@ export function DashboardPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <Spinner size="lg" color="primary" className="mx-auto mt-20" />;
+  if (loading) {
+    return (
+      <div className="flex justify-center mt-20">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">マイページ</h1>
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-3xl font-bold text-white mb-2">マイページ</h1>
+        <p className="text-gray-400">サブスクリプションとブースト枠の管理</p>
+      </div>
 
-      <Card>
-        <CardHeader className="font-semibold">サブスクリプション</CardHeader>
-        <CardBody>
-          {data?.subscription ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span>ステータス:</span>
-                <Chip color={data.subscription.status === 'ACTIVE' ? 'success' : 'warning'} size="sm">
-                  {data.subscription.status}
-                </Chip>
-              </div>
-              <p>ブースト枠: {data.subscription.boostCount}個</p>
-              <p>次回請求日: {new Date(data.subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}</p>
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-white">サブスクリプション</h2>
+        {data?.subscription ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-gray-400">ステータス:</span>
+              <span
+                className={`text-sm px-2.5 py-0.5 rounded-full font-medium ${
+                  data.subscription.status === 'ACTIVE'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-yellow-500/20 text-yellow-400'
+                }`}
+              >
+                {data.subscription.status}
+              </span>
             </div>
-          ) : (
-            <p className="text-default-500">
-              サブスクリプションはありません。
-              <Link to="/dashboard/boost" className="text-primary ml-1">ブーストを購入する</Link>
-            </p>
-          )}
-        </CardBody>
-      </Card>
+            <p className="text-gray-300">ブースト枠: <span className="text-white font-medium">{data.subscription.boostCount}個</span></p>
+            <p className="text-gray-300">次回請求日: <span className="text-white font-medium">{new Date(data.subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}</span></p>
+          </div>
+        ) : (
+          <p className="text-gray-500">
+            サブスクリプションはありません。
+            <Link to="/dashboard/boost" className="text-purple-400 hover:text-purple-300 transition-colors ml-1">
+              ブーストを購入する
+            </Link>
+          </p>
+        )}
+      </div>
 
       {data?.boosts && data.boosts.length > 0 && (
-        <Card>
-          <CardHeader className="font-semibold">ブースト枠</CardHeader>
-          <CardBody>
-            <div className="space-y-2">
-              {data.boosts.map((boost) => (
-                <div key={boost.id} className="flex items-center justify-between p-2 rounded bg-content2">
-                  <span>{boost.guildId ? `サーバー: ${boost.guildId}` : '未割り当て'}</span>
-                  {boost.isOnCooldown && (
-                    <Chip color="warning" size="sm">クールダウン中</Chip>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardBody>
-        </Card>
+        <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+          <h2 className="text-lg font-semibold text-white">ブースト枠</h2>
+          <div className="flex flex-col gap-2">
+            {data.boosts.map((boost) => (
+              <div
+                key={boost.id}
+                className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
+              >
+                <span className="text-gray-300">
+                  {boost.guildId ? `サーバー: ${boost.guildId}` : '未割り当て'}
+                </span>
+                {boost.isOnCooldown && (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full">
+                    クールダウン中
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

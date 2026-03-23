@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 const COMMANDS = [
   {
     name: '/join',
-    description: 'VC に参加し、コマンドを実行したテキストチャンネルを読み上げ対象に設定します。',
+    description:
+      'あなたが参加している VC に Bot を接続します。テキストチャンネルのメッセージがリアルタイムで読み上げられます。',
     notes: [
       'ユーザーが VC に参加している必要があります',
       'Bot が別 VC に接続中の場合はエラーになります',
@@ -12,7 +13,7 @@ const COMMANDS = [
   },
   {
     name: '/leave',
-    description: 'VC から退出します。即座にキューをクリアし、再生を中断して退出します。',
+    description: 'Bot を VC から退出させます。同じ VC にいるか、管理者権限が必要です。',
     notes: [
       '通常ユーザーは Bot と同じ VC に参加している必要があります',
       'ManageGuild 権限または管理ロールがあれば VC 未参加でも実行できます',
@@ -20,7 +21,8 @@ const COMMANDS = [
   },
   {
     name: '/voice',
-    description: 'ユーザーごとの音声設定を管理します。設定は全サーバー共通です（PREMIUM サーバーで適用）。',
+    description:
+      '話者・読み上げ速度・ピッチを設定します。PREMIUM サーバーではユーザーごとに個別設定が可能です。',
     notes: [
       '話者・速度（0.5〜2.0）・ピッチ（-0.15〜0.15）を設定できます',
       '設定の変更はどのサーバーでも可能ですが、適用は PREMIUM サーバーのみです',
@@ -29,7 +31,8 @@ const COMMANDS = [
   },
   {
     name: '/settings',
-    description: 'サーバーの読み上げ設定を管理します。ManageGuild 権限または管理ロールが必要です。',
+    description:
+      'サーバーの読み上げ設定を管理します。読み上げ対象チャンネル、通知、フィルターなどを設定できます。管理者権限が必要です。',
     notes: [
       '読み上げ設定、通知設定、フィルタ設定、接続設定、権限設定のカテゴリがあります',
       'FREE サーバーは最大文字数の変更不可（上限 50 文字固定）',
@@ -38,7 +41,8 @@ const COMMANDS = [
   },
   {
     name: '/dictionary',
-    description: 'サーバー辞書とグローバル辞書を管理します。単語の読み方を登録して正しく読み上げさせます。',
+    description:
+      'サーバー辞書の追加・削除・確認ができます。グローバル辞書への申請も可能です。',
     notes: [
       'サーバー辞書: FREE は 10 件、PREMIUM は 100 件まで登録可能',
       'グローバル辞書への申請は全ユーザーが可能です',
@@ -47,7 +51,7 @@ const COMMANDS = [
   },
   {
     name: '/help',
-    description: 'コマンド一覧と概要を表示します。',
+    description: 'Bot の使い方やリンク集を表示します。',
     notes: [],
   },
 ];
@@ -63,6 +67,7 @@ export function CommandsPage() {
       >
         <h1 className="text-4xl font-bold text-white">コマンド一覧</h1>
         <p className="text-gray-400">SumireVox で使用できる全スラッシュコマンドの説明です。</p>
+        <p className="text-gray-400 text-center mb-10">スラッシュコマンドで簡単に操作できます</p>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
