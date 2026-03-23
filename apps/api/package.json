@@ -16,7 +16,8 @@
     "@sumirevox/shared": "workspace:*",
     "hono": "^4.7.7",
     "ioredis": "^5.6.1",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "stripe": "^17.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
