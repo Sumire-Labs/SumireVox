@@ -8,6 +8,7 @@ import { disconnectRedis } from './infrastructure/redis.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { sessionMiddleware } from './middleware/session-middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { authRouter } from './routes/auth.js';
 
 const app = new Hono();
 
@@ -36,8 +37,8 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
-// ルート定義（後のフェーズで追加）
-// app.route('/auth', authRouter);
+// ルート定義
+app.route('/auth', authRouter);
 // app.route('/api', apiRouter);
 
 // サーバー起動
