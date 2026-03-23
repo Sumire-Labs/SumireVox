@@ -9,7 +9,12 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
-    "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands"
+    "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands",
+    "db:migrate:dev": "pnpm --filter @sumirevox/bot prisma:migrate:dev",
+    "db:migrate:deploy": "pnpm --filter @sumirevox/bot prisma:migrate:deploy",
+    "db:studio": "pnpm --filter @sumirevox/bot prisma:studio",
+    "db:generate": "pnpm --filter @sumirevox/bot prisma:generate",
+    "setup": "bash scripts/setup-env.sh && pnpm install && pnpm db:generate"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["@discordjs/opus", "@prisma/client", "@prisma/engines", "esbuild", "prisma", "sodium-native"]

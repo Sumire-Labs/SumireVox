@@ -6,7 +6,7 @@ import {
   entersState,
   getVoiceConnection,
 } from '@discordjs/voice';
-import type { InternalDiscordGatewayAdapterCreator } from '@discordjs/voice';
+import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
 import {
   saveVcSessionToRedis,
   removeVcSessionFromRedis,
@@ -24,7 +24,7 @@ export async function createVcSession(
   guildId: string,
   voiceChannelId: string,
   textChannelId: string,
-  adapterCreator: InternalDiscordGatewayAdapterCreator,
+  adapterCreator: DiscordGatewayAdapterCreator,
 ): Promise<VcSession> {
   const client = getClient();
   const shardId = client.shard?.ids[0] ?? 0;

@@ -45,6 +45,7 @@ services:
 
   # --- Migration (一度だけ実行して終了) ---
   migrate:
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/bot/Dockerfile
@@ -58,6 +59,7 @@ services:
 
   # --- Applications ---
   bot:
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/bot/Dockerfile
@@ -78,6 +80,7 @@ services:
     restart: unless-stopped
 
   api:
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -95,6 +98,7 @@ services:
     restart: unless-stopped
 
   web:
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -102,6 +106,7 @@ services:
     restart: unless-stopped
 
   admin:
+    profiles: ["production"]
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
@@ -109,6 +114,7 @@ services:
     restart: unless-stopped
 
   nginx:
+    profiles: ["production"]
     image: nginx:alpine
     ports:
       - "80:80"
@@ -124,6 +130,7 @@ services:
     restart: unless-stopped
 
   certbot:
+    profiles: ["production"]
     image: certbot/certbot
     volumes:
       - certbot_conf:/etc/letsencrypt

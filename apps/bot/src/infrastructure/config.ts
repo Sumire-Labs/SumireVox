@@ -52,17 +52,17 @@ function buildConfig(): AppConfig {
       .split(',')
       .map((u) => u.trim())
       .filter(Boolean),
-    defaultSpeakerId: requireInt('DEFAULT_SPEAKER_ID'),
+    defaultSpeakerId: requireInt('DEFAULT_SPEAKER_ID', 1),
     maxConcurrentSynthesisPerGuild: requireInt('MAX_CONCURRENT_SYNTHESIS_PER_GUILD', 3),
     maxConcurrentSynthesisGlobal: requireInt('MAX_CONCURRENT_SYNTHESIS_GLOBAL', 10),
-    healthCheckIntervalSeconds: requireInt('HEALTH_CHECK_INTERVAL_SECONDS'),
-    voiceDisconnectTimeoutSeconds: requireInt('VOICE_DISCONNECT_TIMEOUT_SECONDS'),
-    settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS'),
-    botAdminUserIds: requireEnv('BOT_ADMIN_USER_IDS')
+    healthCheckIntervalSeconds: requireInt('HEALTH_CHECK_INTERVAL_SECONDS', 30),
+    voiceDisconnectTimeoutSeconds: requireInt('VOICE_DISCONNECT_TIMEOUT_SECONDS', 300),
+    settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS', 300),
+    botAdminUserIds: (process.env['BOT_ADMIN_USER_IDS'] ?? '')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean),
-    globalDictNotificationChannelId: requireEnv('GLOBAL_DICT_NOTIFICATION_CHANNEL_ID'),
+    globalDictNotificationChannelId: process.env['GLOBAL_DICT_NOTIFICATION_CHANNEL_ID'] ?? '',
     deployGuildId: process.env['DEPLOY_GUILD_ID'] || undefined,
     logLevel: process.env['LOG_LEVEL'] ?? 'info',
   };
