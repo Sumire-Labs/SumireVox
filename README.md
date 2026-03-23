@@ -100,7 +100,7 @@ sumirevox/
 
 ## ライセンス
 
-MIT
+GPL-3.0 license
 
 ## クレジット
 
