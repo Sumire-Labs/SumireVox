@@ -1,8 +1,9 @@
 {
   "name": "@sumirevox/api",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
     "postinstall": "prisma generate --schema=../bot/prisma/schema.prisma"
