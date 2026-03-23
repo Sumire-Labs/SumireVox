@@ -4,6 +4,7 @@
   "scripts": {
     "dev:bot": "pnpm --filter @sumirevox/bot dev",
     "dev:api": "pnpm --filter @sumirevox/api dev",
+    "dev:web": "pnpm --filter @sumirevox/web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
