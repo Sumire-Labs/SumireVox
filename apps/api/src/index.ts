@@ -9,6 +9,8 @@ import { requestLogger } from './middleware/request-logger.js';
 import { sessionMiddleware } from './middleware/session-middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authRouter } from './routes/auth.js';
+import { guildsRouter } from './routes/guilds.js';
+import { dictionaryRouter } from './routes/dictionary.js';
 
 const app = new Hono();
 
@@ -39,7 +41,8 @@ app.get('/health', (c) => {
 
 // ルート定義
 app.route('/auth', authRouter);
-// app.route('/api', apiRouter);
+app.route('/api/guilds', guildsRouter);
+app.route('/api/dictionary', dictionaryRouter);
 
 // サーバー起動
 async function main(): Promise<void> {
