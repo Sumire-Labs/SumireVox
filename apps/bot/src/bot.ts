@@ -7,12 +7,14 @@ import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { setClient } from './infrastructure/discord-client.js';
 import { handleInteractionCreate } from './events/interaction-create.js';
 import { handleMessageCreate } from './events/message-create.js';
+import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
 import { preloadPredefinedAudio } from './services/predefined-audio-cache.js';
+import { clearAllDisconnectTimers } from './services/auto-disconnect-timer.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -48,6 +50,7 @@ async function bootstrap(): Promise<void> {
   // イベントハンドラ登録
   client.on(Events.InteractionCreate, handleInteractionCreate);
   client.on(Events.MessageCreate, handleMessageCreate);
+  client.on(Events.VoiceStateUpdate, handleVoiceStateUpdate);
 
   client.on(Events.ClientReady, async (readyClient) => {
     childLogger.info(
@@ -100,18 +103,23 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     childLogger.info({ signal }, `Received ${signal}, shutting down...`);
 
-    // キュークリア
-    clearAllQueues();
-
-    // VC 切断
-    await destroyAllVcSessions();
-
+    // ヘルスチェック停止
     stopHealthChecker();
 
+    // メモリ監視インターバル停止
     if (memoryInterval !== null) {
       clearInterval(memoryInterval);
       memoryInterval = null;
     }
+
+    // 読み上げキュー全クリア
+    clearAllQueues();
+
+    // 自動退出タイマー全クリア
+    clearAllDisconnectTimers();
+
+    // 全 VC セッション破棄
+    await destroyAllVcSessions();
 
     client.destroy();
     childLogger.info('Discord client destroyed');
