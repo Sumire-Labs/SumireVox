@@ -2,6 +2,8 @@ services:
   # --- Infrastructure ---
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: sumirevox
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sumirevox_dev}
@@ -17,6 +19,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
@@ -29,6 +33,8 @@ services:
 
   voicevox:
     image: voicevox/voicevox_engine:nvidia-latest
+    ports:
+      - "50021:50021"
     deploy:
       resources:
         reservations:
