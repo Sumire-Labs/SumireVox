@@ -189,8 +189,8 @@ export function ServerSettingsPage() {
               selectedKeys={[settings.customEmojiMode]}
               onChange={(e) => handleSelect('customEmojiMode', e.target.value)}
             >
-              <SelectItem key="READ_NAME" value="READ_NAME">名前を読み上げる</SelectItem>
-              <SelectItem key="REMOVE" value="REMOVE">除去する</SelectItem>
+              <SelectItem key="READ_NAME">名前を読み上げる</SelectItem>
+              <SelectItem key="REMOVE">除去する</SelectItem>
             </Select>
           </div>
           <Divider />
@@ -202,9 +202,9 @@ export function ServerSettingsPage() {
               selectedKeys={[settings.readTargetType]}
               onChange={(e) => handleSelect('readTargetType', e.target.value)}
             >
-              <SelectItem key="TEXT_ONLY" value="TEXT_ONLY">テキストのみ</SelectItem>
-              <SelectItem key="TEXT_STICKER" value="TEXT_STICKER">テキスト + スタンプ</SelectItem>
-              <SelectItem key="TEXT_STICKER_ATTACHMENT" value="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</SelectItem>
+              <SelectItem key="TEXT_ONLY">テキストのみ</SelectItem>
+              <SelectItem key="TEXT_STICKER">テキスト + スタンプ</SelectItem>
+              <SelectItem key="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</SelectItem>
             </Select>
           </div>
         </CardBody>
@@ -282,8 +282,8 @@ export function ServerSettingsPage() {
               selectedKeys={[settings.dictPermission]}
               onChange={(e) => handleSelect('dictPermission', e.target.value)}
             >
-              <SelectItem key="ALL_USERS" value="ALL_USERS">全ユーザー</SelectItem>
-              <SelectItem key="ADMIN_ONLY" value="ADMIN_ONLY">管理者 / 指定ロールのみ</SelectItem>
+              <SelectItem key="ALL_USERS">全ユーザー</SelectItem>
+              <SelectItem key="ADMIN_ONLY">管理者 / 指定ロールのみ</SelectItem>
             </Select>
           </div>
         </CardBody>

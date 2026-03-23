@@ -1,52 +1,156 @@
-import { Outlet, Link } from 'react-router';
-import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button } from '@heroui/react';
+import { useState, useEffect } from 'react';
+import { Outlet, Link, useLocation } from 'react-router';
+import { Menu, X, ExternalLink } from 'lucide-react';
+
+const NAV_LINKS = [
+  { to: '/', label: 'ホーム' },
+  { to: '/commands', label: 'コマンド' },
+  { to: '/credits', label: 'クレジット' },
+];
 
 export function Layout() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar maxWidth="xl" isBordered>
-        <NavbarBrand>
-          <Link to="/" className="font-bold text-xl text-primary">
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg-base)' }}>
+      {/* Navbar */}
+      <nav
+        className={`fixed top-0 w-full z-50 border-b transition-all duration-300 ${
+          scrolled
+            ? 'bg-[#0a0a0f]/95 backdrop-blur-xl border-white/10'
+            : 'bg-[#0a0a0f]/80 backdrop-blur-xl border-white/5'
+        }`}
+      >
+        <div className="max-w-6xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+          {/* Logo */}
+          <Link to="/" className="text-xl font-bold gradient-text shrink-0">
             SumireVox
           </Link>
-        </NavbarBrand>
-        <NavbarContent className="hidden sm:flex gap-4" justify="center">
-          <NavbarItem>
-            <Link to="/commands" className="text-foreground hover:text-primary transition-colors">
-              コマンド
-            </Link>
-          </NavbarItem>
-          <NavbarItem>
-            <Link to="/credits" className="text-foreground hover:text-primary transition-colors">
-              クレジット
-            </Link>
-          </NavbarItem>
-        </NavbarContent>
-        <NavbarContent justify="end">
-          <NavbarItem>
-            <Button
-              as="a"
+
+          {/* Desktop nav */}
+          <div className="hidden sm:flex items-center gap-6">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`text-sm transition-colors ${
+                  location.pathname === link.to
+                    ? 'text-white border-b border-purple-500 pb-0.5'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Login button + mobile toggle */}
+          <div className="flex items-center gap-3">
+            <a
               href="/auth/login"
-              color="primary"
-              variant="flat"
-              size="sm"
+              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
             >
               ログイン
-            </Button>
-          </NavbarItem>
-        </NavbarContent>
-      </Navbar>
-      <main className="flex-1 container mx-auto max-w-5xl px-4 py-8">
+            </a>
+            <button
+              className="sm:hidden text-gray-400 hover:text-white p-1"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="メニュー"
+            >
+              {menuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile drawer */}
+        {menuOpen && (
+          <div className="sm:hidden bg-[#0a0a0f]/98 backdrop-blur-xl border-t border-white/5 px-4 py-4 flex flex-col gap-4">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`text-sm py-2 ${
+                  location.pathname === link.to ? 'text-white font-medium' : 'text-gray-400'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+            <a
+              href="/auth/login"
+              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
+            >
+              ログイン
+            </a>
+          </div>
+        )}
+      </nav>
+
+      {/* Page content */}
+      <main className="flex-1 pt-16">
         <Outlet />
       </main>
-      <footer className="border-t border-divider py-6 px-4">
-        <div className="container mx-auto max-w-5xl flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-default-500">© 2025 SumireVox</p>
-          <div className="flex gap-4 text-sm text-default-500">
-            <Link to="/terms" className="hover:text-foreground transition-colors">利用規約</Link>
-            <Link to="/privacy" className="hover:text-foreground transition-colors">プライバシーポリシー</Link>
-            <Link to="/legal" className="hover:text-foreground transition-colors">特商法表記</Link>
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 bg-[#0a0a0f]">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-12 grid grid-cols-1 md:grid-cols-3 gap-10">
+          {/* Brand */}
+          <div className="flex flex-col gap-3">
+            <span className="text-lg font-bold gradient-text">SumireVox</span>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              VOICEVOX エンジンを使った Discord 読み上げ Bot
+            </p>
           </div>
+
+          {/* Links */}
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">リンク</p>
+            <div className="flex flex-col gap-2">
+              <Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors">利用規約</Link>
+              <Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors">プライバシーポリシー</Link>
+              <Link to="/legal" className="text-sm text-gray-500 hover:text-white transition-colors">特定商取引法に基づく表記</Link>
+              <Link to="/credits" className="text-sm text-gray-500 hover:text-white transition-colors">クレジット</Link>
+            </div>
+          </div>
+
+          {/* External */}
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">外部リンク</p>
+            <div className="flex flex-col gap-2">
+              <a
+                href="#"
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
+              >
+                <ExternalLink size={13} />
+                Discord サポートサーバー
+              </a>
+              <a
+                href="https://voicevox.hiroshiba.jp/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
+              >
+                <ExternalLink size={13} />
+                VOICEVOX 公式
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pb-6 border-t border-white/5 pt-6">
+          <p className="text-xs text-gray-600">© 2025 SumireVox</p>
         </div>
       </footer>
     </div>

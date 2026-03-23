@@ -167,7 +167,7 @@ export function BoostPage() {
                       }}
                     >
                       {guilds.map((guild) => (
-                        <SelectItem key={guild.id} value={guild.id}>
+                        <SelectItem key={guild.id}>
                           {guild.name}
                         </SelectItem>
                       ))}
