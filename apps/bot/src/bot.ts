@@ -4,6 +4,7 @@ import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
 import { disconnectRedis } from './infrastructure/redis.js';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
+import { createBotPubSubHandlers } from './services/pubsub-handlers.js';
 import { setClient } from './infrastructure/discord-client.js';
 import { handleInteractionCreate } from './events/interaction-create.js';
 import { handleMessageCreate } from './events/message-create.js';
@@ -38,8 +39,8 @@ async function bootstrap(): Promise<void> {
   await prisma.$connect();
   childLogger.info('Database connected');
 
-  // Redis Pub/Sub セットアップ（ハンドラは後のフェーズで実装）
-  setupPubSub({});
+  // Redis Pub/Sub セットアップ
+  setupPubSub(createBotPubSubHandlers());
   childLogger.info('Pub/Sub initialized');
 
   let memoryInterval: ReturnType<typeof setInterval> | null = null;
