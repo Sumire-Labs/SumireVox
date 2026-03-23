@@ -1,7 +1,13 @@
 // ShardingManager でシャードを管理するエントリポイント
 // このファイルがメインプロセスとして動作し、bot.ts を子プロセスとして spawn する
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { config as dotenvConfig } from 'dotenv';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__dirname, '..', '..', '..', '.env') });
+
 import { ShardingManager } from 'discord.js';
-import { resolve } from 'node:path';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 
@@ -9,11 +15,8 @@ function main(): void {
   const manager = new ShardingManager(resolve(__dirname, 'bot.ts'), {
     token: config.discordToken,
     totalShards: 'auto',
+    execArgv: ['--import', 'tsx'],
   });
-
-  // tsx で src/index.ts を実行する場合、__dirname は正しく解決される。
-  // ShardingManager が子プロセスを fork する際には、親プロセスと同じ execArgv が
-  // 引き継がれるため、tsx の --import フックが子プロセスにも適用される。
 
   manager.on('shardCreate', (shard) => {
     logger.info({ shardId: shard.id }, `Shard ${shard.id} launched`);

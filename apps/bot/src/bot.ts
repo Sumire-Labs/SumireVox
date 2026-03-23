@@ -1,3 +1,10 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { config as dotenvConfig } from 'dotenv';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__dirname, '..', '..', '..', '.env') });
+
 import { Client, GatewayIntentBits, Events } from 'discord.js';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';

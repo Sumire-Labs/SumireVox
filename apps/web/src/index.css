@@ -1,2 +1,37 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
+
+:root {
+  --color-primary: #7C3AED;
+  --color-primary-light: #A78BFA;
+  --color-bg-base: #0a0a0f;
+  --color-bg-card: #12121a;
+  --color-bg-card-hover: #1a1a2e;
+}
+
+body {
+  background-color: var(--color-bg-base);
+  color: #e4e4e7;
+}
+
+/* グロー効果 */
+.glow-purple {
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.15), 0 0 80px rgba(124, 58, 237, 0.05);
+}
+
+/* グラデーションテキスト */
+.gradient-text {
+  background: linear-gradient(135deg, #7C3AED, #3B82F6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* グラデーションボタン背景 */
+.gradient-bg {
+  background: linear-gradient(135deg, #7C3AED, #6D28D9);
+}
+
+.gradient-bg:hover {
+  background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+}

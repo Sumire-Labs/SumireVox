@@ -49,7 +49,7 @@ function buildConfig(): AppConfig {
     discordClientSecret: requireEnv('DISCORD_CLIENT_SECRET'),
     databaseUrl: requireEnv('DATABASE_URL'),
     redisUrl: requireEnv('REDIS_URL'),
-    botAdminUserIds: requireEnv('BOT_ADMIN_USER_IDS')
+    botAdminUserIds: (process.env['BOT_ADMIN_USER_IDS'] ?? '')
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean),
@@ -60,13 +60,13 @@ function buildConfig(): AppConfig {
       .map((o) => o.trim())
       .filter(Boolean),
     logLevel: process.env['LOG_LEVEL'] ?? 'info',
-    stripeSecretKey: requireEnv('STRIPE_SECRET_KEY'),
-    stripeWebhookSecret: requireEnv('STRIPE_WEBHOOK_SECRET'),
-    stripePriceId: requireEnv('STRIPE_PRICE_ID'),
+    stripeSecretKey: process.env['STRIPE_SECRET_KEY'] ?? '',
+    stripeWebhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] ?? '',
+    stripePriceId: process.env['STRIPE_PRICE_ID'] ?? '',
     boostCooldownDays: requireInt('BOOST_COOLDOWN_DAYS', 7),
-    webDomain: requireEnv('WEB_DOMAIN'),
-    adminDomain: requireEnv('ADMIN_DOMAIN'),
-    settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS'),
+    webDomain: process.env['WEB_DOMAIN'] ?? 'http://localhost:5173',
+    adminDomain: process.env['ADMIN_DOMAIN'] ?? 'http://localhost:5174',
+    settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS', 300),
   };
 }
 

@@ -1,21 +1,23 @@
 {
   "name": "@sumirevox/bot",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
-    "deploy-commands": "tsx src/deploy-commands.ts",
+    "deploy-commands": "dotenv -e ../../.env -- tsx src/deploy-commands.ts",
     "test": "vitest run",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:studio": "prisma studio"
+    "prisma:generate": "dotenv -e ../../.env -- prisma generate",
+    "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "prisma:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
     "@prisma/client": "^6.6.0",
     "@sumirevox/shared": "workspace:*",
     "discord.js": "^14.25.1",
+    "dotenv": "^16.5.0",
     "ioredis": "^5.6.1",
     "pino": "^9.6.0",
     "prisma": "^6.6.0"
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
+    "dotenv-cli": "^11.0.0",
     "pino-pretty": "^13.0.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
