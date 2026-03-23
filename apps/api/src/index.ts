@@ -13,6 +13,7 @@ import { guildsRouter } from './routes/guilds.js';
 import { dictionaryRouter } from './routes/dictionary.js';
 import { userRouter } from './routes/user.js';
 import { stripeWebhookRouter } from './routes/stripe-webhook.js';
+import { adminRouter } from './routes/admin.js';
 
 const app = new Hono();
 
@@ -47,6 +48,7 @@ app.route('/api/guilds', guildsRouter);
 app.route('/api/dictionary', dictionaryRouter);
 app.route('/api/user', userRouter);
 app.route('/api/stripe', stripeWebhookRouter);
+app.route('/api/admin', adminRouter);
 
 // サーバー起動
 async function main(): Promise<void> {
