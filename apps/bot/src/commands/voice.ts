@@ -14,7 +14,7 @@ import { buildCustomId } from '@sumirevox/shared';
 
 const data = new SlashCommandBuilder()
   .setName('voice')
-  .setDescription('音声設定を管理します');
+  .setDescription('話者・速度・ピッチを設定します');
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const userId = interaction.user.id;
