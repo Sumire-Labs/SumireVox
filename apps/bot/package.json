@@ -20,7 +20,8 @@
     "dotenv": "^16.5.0",
     "ioredis": "^5.6.1",
     "pino": "^9.6.0",
-    "prisma": "^6.6.0"
+    "prisma": "^6.6.0",
+    "wanakana": "^5.3.1"
   },
   "optionalDependencies": {
     "@discordjs/opus": "^0.10.0",
