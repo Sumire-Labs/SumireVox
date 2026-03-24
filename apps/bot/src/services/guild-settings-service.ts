@@ -50,7 +50,6 @@ function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
     greetingOnJoin: db.greetingOnJoin,
     customEmojiHandling: db.customEmojiHandling as GuildSettings['customEmojiHandling'],
     readTargetType: db.readTargetType as GuildSettings['readTargetType'],
-    autoJoin: db.autoJoin,
     defaultTextChannelId: db.defaultTextChannelId,
     defaultSpeakerId: db.defaultSpeakerId,
     adminRoleId: db.adminRoleId,

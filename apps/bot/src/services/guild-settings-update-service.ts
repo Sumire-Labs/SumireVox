@@ -41,7 +41,6 @@ export async function updateGuildSettings(
     greetingOnJoin: dbRecord.greetingOnJoin,
     customEmojiHandling: dbRecord.customEmojiHandling as GuildSettings['customEmojiHandling'],
     readTargetType: dbRecord.readTargetType as GuildSettings['readTargetType'],
-    autoJoin: dbRecord.autoJoin,
     defaultTextChannelId: dbRecord.defaultTextChannelId,
     defaultSpeakerId: dbRecord.defaultSpeakerId,
     adminRoleId: dbRecord.adminRoleId,
@@ -65,7 +64,6 @@ function mapToDbFields(settings: GuildSettings): Record<string, unknown> {
     greetingOnJoin: settings.greetingOnJoin,
     customEmojiHandling: settings.customEmojiHandling,
     readTargetType: settings.readTargetType,
-    autoJoin: settings.autoJoin,
     defaultTextChannelId: settings.defaultTextChannelId,
     defaultSpeakerId: settings.defaultSpeakerId,
     adminRoleId: settings.adminRoleId,
@@ -119,7 +117,6 @@ function mapToDbUpdateFields(updates: Partial<Omit<GuildSettings, 'guildId'>>): 
   if (updates.greetingOnJoin !== undefined) result.greetingOnJoin = updates.greetingOnJoin;
   if (updates.customEmojiHandling !== undefined) result.customEmojiHandling = updates.customEmojiHandling;
   if (updates.readTargetType !== undefined) result.readTargetType = updates.readTargetType;
-  if (updates.autoJoin !== undefined) result.autoJoin = updates.autoJoin;
   if (updates.defaultTextChannelId !== undefined) result.defaultTextChannelId = updates.defaultTextChannelId;
   if (updates.defaultSpeakerId !== undefined) result.defaultSpeakerId = updates.defaultSpeakerId;
   if (updates.adminRoleId !== undefined) result.adminRoleId = updates.adminRoleId;

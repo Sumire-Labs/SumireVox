@@ -18,7 +18,6 @@ export interface GuildSettings {
   customEmojiHandling: CustomEmojiHandling;
   readTargetType: ReadTargetType;
   // 接続設定
-  autoJoin: boolean;
   defaultTextChannelId: string | null;
   defaultSpeakerId: number | null;
   // 権限設定

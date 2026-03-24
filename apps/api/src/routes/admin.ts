@@ -41,7 +41,6 @@ adminRouter.get('/servers', async (c) => {
       items: servers.map((s) => ({
         guildId: s.guildId,
         manualPremium: s.manualPremium,
-        autoJoin: s.autoJoin,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })),
