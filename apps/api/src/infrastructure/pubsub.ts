@@ -9,7 +9,7 @@ export function setupPubSub(handlers: Partial<Record<string, PubSubHandler>>): v
 
   if (channels.length === 0) return;
 
-  subscriber.subscribe(...channels, (err) => {
+  subscriber.subscribe(...channels, (err: Error | null | undefined) => {
     if (err) {
       logger.error({ err }, 'Failed to subscribe to Redis channels');
       return;
