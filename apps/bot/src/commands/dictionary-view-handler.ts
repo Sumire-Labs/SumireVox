@@ -1,6 +1,9 @@
 import {
   Interaction,
-  EmbedBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   ButtonBuilder,
@@ -12,9 +15,8 @@ import {
   ButtonInteraction,
   ModalSubmitInteraction,
   GuildMember,
-  InteractionReplyOptions,
-  InteractionUpdateOptions,
   TextChannel,
+  EmbedBuilder,
 } from 'discord.js';
 import { buildCustomId, parseCustomId, LIMITS } from '@sumirevox/shared';
 import {
@@ -42,7 +44,9 @@ export async function buildDictionaryMessage(
   userId: string,
   tab: Tab,
   page: number,
-): Promise<InteractionReplyOptions & InteractionUpdateOptions> {
+): Promise<{ components: ContainerBuilder[] }> {
+  const mainContainer = new ContainerBuilder().setAccentColor(0x7c3aed);
+
   const tabSelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('dict', 'tab', userId))
     .setPlaceholder('タブを選択')
@@ -52,55 +56,70 @@ export async function buildDictionaryMessage(
       { label: 'グローバル辞書申請', value: 'request', default: tab === 'request' },
     );
 
-  const tabRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(tabSelect);
-  const { embed, components } = await buildTabContent(guildId, userId, tab, page);
+  mainContainer
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('## 📖 辞書管理'))
+    .addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(tabSelect),
+    );
 
-  return {
-    embeds: [embed],
-    components: [tabRow, ...components],
-  };
+  const contentContainer = await buildTabContainer(guildId, userId, tab, page);
+
+  return { components: [mainContainer, contentContainer] };
 }
 
-async function buildTabContent(
+async function buildTabContainer(
   guildId: string,
   userId: string,
   tab: Tab,
   page: number,
-): Promise<{ embed: EmbedBuilder; components: ActionRowBuilder<never>[] }> {
+): Promise<ContainerBuilder> {
   switch (tab) {
     case 'server':
-      return buildServerDictionaryTab(guildId, userId, page);
+      return buildServerDictionaryContainer(guildId, userId, page);
     case 'global':
-      return buildGlobalDictionaryTab(userId, page);
+      return buildGlobalDictionaryContainer(userId, page);
     case 'request':
-      return buildRequestTab(guildId, userId, page);
+      return buildRequestContainer(guildId, userId, page);
   }
 }
 
 // ---- サーバー辞書タブ ----
 
-async function buildServerDictionaryTab(guildId: string, userId: string, page: number) {
+async function buildServerDictionaryContainer(
+  guildId: string,
+  userId: string,
+  page: number,
+): Promise<ContainerBuilder> {
   const { entries, total } = await getServerDictionaryEntries(guildId, page);
   const totalPages = Math.max(1, Math.ceil(total / LIMITS.DICTIONARY_PAGE_SIZE));
+  const isPremium = await isGuildPremium(guildId);
+  const entryLimit = isPremium ? LIMITS.PREMIUM_DICTIONARY_ENTRIES : LIMITS.FREE_DICTIONARY_ENTRIES;
 
-  const embed = new EmbedBuilder()
-    .setTitle('📚 サーバー辞書')
-    .setDescription(
-      entries.length > 0
-        ? entries.map((e) => `**${e.word}** → ${e.reading}`).join('\n')
-        : '辞書エントリはありません。',
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 📚 サーバー辞書'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`登録数: **${total}** / ${entryLimit}`),
     )
-    .setColor(0x7c3aed);
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
 
-  if (total > 0) {
-    const start = (page - 1) * LIMITS.DICTIONARY_PAGE_SIZE + 1;
-    const end = Math.min(page * LIMITS.DICTIONARY_PAGE_SIZE, total);
-    embed.setFooter({ text: `${total}件中 ${start}〜${end}件 | ページ ${page}/${totalPages}` });
+  if (entries.length > 0) {
+    const entriesText = entries.map((e) => `${e.word}  →  ${e.reading}`).join('\n');
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`\`\`\`\n${entriesText}\n\`\`\``),
+    );
   } else {
-    embed.setFooter({ text: '0件' });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('辞書エントリはありません。'),
+    );
   }
 
-  const components: ActionRowBuilder<never>[] = [];
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+  );
 
   const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -109,56 +128,69 @@ async function buildServerDictionaryTab(guildId: string, userId: string, page: n
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 1),
     new ButtonBuilder()
+      .setCustomId(buildCustomId('dict', 'server_page_indicator', userId))
+      .setLabel(`${page} / ${totalPages}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
       .setCustomId(buildCustomId('dict', `server_page:${page + 1}`, userId))
       .setLabel('次 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
     new ButtonBuilder()
       .setCustomId(buildCustomId('dict', 'server_add', userId))
-      .setLabel('追加')
+      .setLabel('➕ 追加')
       .setStyle(ButtonStyle.Primary),
   );
-  components.push(navRow as ActionRowBuilder<never>);
+  container.addActionRowComponents(navRow);
 
   if (entries.length > 0) {
     const deleteSelect = new StringSelectMenuBuilder()
       .setCustomId(buildCustomId('dict', 'server_delete_select', userId))
-      .setPlaceholder('削除するエントリを選択')
+      .setPlaceholder('🗑️ 削除するエントリを選択')
       .addOptions(entries.map((e) => ({ label: `${e.word} → ${e.reading}`, value: e.word })));
-    components.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        deleteSelect,
-      ) as ActionRowBuilder<never>,
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(deleteSelect),
     );
   }
 
-  return { embed, components };
+  return container;
 }
 
 // ---- グローバル辞書タブ ----
 
-async function buildGlobalDictionaryTab(userId: string, page: number) {
+async function buildGlobalDictionaryContainer(
+  userId: string,
+  page: number,
+): Promise<ContainerBuilder> {
   const { entries, total } = await getGlobalDictionaryEntries(page);
   const totalPages = Math.max(1, Math.ceil(total / LIMITS.DICTIONARY_PAGE_SIZE));
 
-  const embed = new EmbedBuilder()
-    .setTitle('🌐 グローバル辞書')
-    .setDescription(
-      entries.length > 0
-        ? entries.map((e) => `**${e.word}** → ${e.reading}`).join('\n')
-        : 'グローバル辞書エントリはありません。',
-    )
-    .setColor(0x7c3aed);
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
 
-  if (total > 0) {
-    const start = (page - 1) * LIMITS.DICTIONARY_PAGE_SIZE + 1;
-    const end = Math.min(page * LIMITS.DICTIONARY_PAGE_SIZE, total);
-    embed.setFooter({ text: `${total}件中 ${start}〜${end}件 | ページ ${page}/${totalPages}` });
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🌐 グローバル辞書'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`登録数: **${total}**`),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+
+  if (entries.length > 0) {
+    const entriesText = entries.map((e) => `${e.word}  →  ${e.reading}`).join('\n');
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`\`\`\`\n${entriesText}\n\`\`\``),
+    );
   } else {
-    embed.setFooter({ text: '0件' });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('グローバル辞書エントリはありません。'),
+    );
   }
 
-  const components: ActionRowBuilder<never>[] = [];
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+  );
 
   const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -167,50 +199,66 @@ async function buildGlobalDictionaryTab(userId: string, page: number) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 1),
     new ButtonBuilder()
+      .setCustomId(buildCustomId('dict', 'global_page_indicator', userId))
+      .setLabel(`${page} / ${totalPages}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
       .setCustomId(buildCustomId('dict', `global_page:${page + 1}`, userId))
       .setLabel('次 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
     new ButtonBuilder()
       .setCustomId(buildCustomId('dict', 'global_request', userId))
-      .setLabel('申請')
+      .setLabel('📝 申請')
       .setStyle(ButtonStyle.Primary),
   );
-  components.push(navRow as ActionRowBuilder<never>);
+  container.addActionRowComponents(navRow);
 
-  return { embed, components };
+  return container;
 }
 
 // ---- グローバル辞書申請タブ ----
 
-async function buildRequestTab(guildId: string, userId: string, page: number) {
+async function buildRequestContainer(
+  guildId: string,
+  userId: string,
+  page: number,
+): Promise<ContainerBuilder> {
   const isBotAdmin = config.botAdminUserIds.includes(userId);
   const { requests, total } = await getPendingRequests(page);
   const totalPages = Math.max(1, Math.ceil(total / LIMITS.DICTIONARY_PAGE_SIZE));
 
-  const embed = new EmbedBuilder()
-    .setTitle('📝 グローバル辞書申請')
-    .setDescription(
-      requests.length > 0
-        ? requests
-            .map(
-              (r) =>
-                `**${r.word}** → ${r.reading}${r.reason ? ` (理由: ${r.reason})` : ''} — <@${r.requestedBy}>`,
-            )
-            .join('\n')
-        : '未処理の申請はありません。',
-    )
-    .setColor(0x7c3aed);
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
 
-  if (total > 0) {
-    const start = (page - 1) * LIMITS.DICTIONARY_PAGE_SIZE + 1;
-    const end = Math.min(page * LIMITS.DICTIONARY_PAGE_SIZE, total);
-    embed.setFooter({ text: `${total}件中 ${start}〜${end}件 | ページ ${page}/${totalPages}` });
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 📝 グローバル辞書申請'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`未処理の申請: **${total}**`),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+
+  if (requests.length > 0) {
+    const requestsText = requests
+      .map(
+        (r) =>
+          `${r.word}  →  ${r.reading}${r.reason ? ` (理由: ${r.reason})` : ''} — <@${r.requestedBy}>`,
+      )
+      .join('\n');
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(requestsText),
+    );
   } else {
-    embed.setFooter({ text: '0件' });
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent('未処理の申請はありません。'),
+    );
   }
 
-  const components: ActionRowBuilder<never>[] = [];
+  container.addSeparatorComponents(
+    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+  );
 
   const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
@@ -219,26 +267,29 @@ async function buildRequestTab(guildId: string, userId: string, page: number) {
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 1),
     new ButtonBuilder()
+      .setCustomId(buildCustomId('dict', 'request_page_indicator', userId))
+      .setLabel(`${page} / ${totalPages}`)
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
       .setCustomId(buildCustomId('dict', `request_page:${page + 1}`, userId))
       .setLabel('次 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
   );
-  components.push(navRow as ActionRowBuilder<never>);
+  container.addActionRowComponents(navRow);
 
   if (isBotAdmin && requests.length > 0) {
     const approveSelect = new StringSelectMenuBuilder()
       .setCustomId(buildCustomId('dict', 'request_action_select', userId))
       .setPlaceholder('処理する申請を選択')
       .addOptions(requests.map((r) => ({ label: `${r.word} → ${r.reading}`, value: r.id })));
-    components.push(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        approveSelect,
-      ) as ActionRowBuilder<never>,
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(approveSelect),
     );
   }
 
-  return { embed, components };
+  return container;
 }
 
 // ========================================
@@ -254,29 +305,29 @@ export async function handleDictionaryView(
 
   if (action === 'tab' && interaction.isStringSelectMenu()) {
     const tab = interaction.values[0] as Tab;
-    const message = await buildDictionaryMessage(guildId, parsed.userId, tab, 1);
-    await interaction.update(message);
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, tab, 1);
+    await interaction.update({ components });
     return;
   }
 
   if (action.startsWith('server_page:') && interaction.isButton()) {
     const page = Math.max(1, parseInt(action.split(':')[1], 10));
-    const message = await buildDictionaryMessage(guildId, parsed.userId, 'server', page);
-    await interaction.update(message);
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'server', page);
+    await interaction.update({ components });
     return;
   }
 
   if (action.startsWith('global_page:') && interaction.isButton()) {
     const page = Math.max(1, parseInt(action.split(':')[1], 10));
-    const message = await buildDictionaryMessage(guildId, parsed.userId, 'global', page);
-    await interaction.update(message);
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'global', page);
+    await interaction.update({ components });
     return;
   }
 
   if (action.startsWith('request_page:') && interaction.isButton()) {
     const page = Math.max(1, parseInt(action.split(':')[1], 10));
-    const message = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
-    await interaction.update(message);
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
+    await interaction.update({ components });
     return;
   }
 
@@ -301,8 +352,8 @@ export async function handleDictionaryView(
   }
 
   if (action === 'server_delete_cancel' && interaction.isButton()) {
-    const message = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
-    await interaction.update(message);
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
+    await interaction.update({ components });
     return;
   }
 
@@ -414,23 +465,30 @@ async function handleServerDeleteSelect(
   }
 
   const word = interaction.values[0];
-  const embed = new EmbedBuilder()
-    .setTitle('削除の確認')
-    .setDescription(`**${word}** を辞書から削除しますか？`)
-    .setColor(0xef4444);
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `server_delete_confirm:${word}`, parsed.userId))
-      .setLabel('削除する')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', 'server_delete_cancel', parsed.userId))
-      .setLabel('キャンセル')
-      .setStyle(ButtonStyle.Secondary),
-  );
+  const confirmContainer = new ContainerBuilder().setAccentColor(0xef4444);
+  confirmContainer
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🗑️ 削除の確認'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**${word}** を辞書から削除しますか？`),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(buildCustomId('dict', `server_delete_confirm:${word}`, parsed.userId))
+          .setLabel('削除する')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(buildCustomId('dict', 'server_delete_cancel', parsed.userId))
+          .setLabel('キャンセル')
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    );
 
-  await interaction.update({ embeds: [embed], components: [row] });
+  await interaction.update({ components: [confirmContainer] });
 }
 
 async function handleServerDeleteConfirm(
@@ -446,8 +504,8 @@ async function handleServerDeleteConfirm(
     logger.error({ err: error, guildId, word }, 'Failed to delete dictionary entry');
   }
 
-  const message = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
-  await interaction.update(message);
+  const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
+  await interaction.update({ components });
 }
 
 // ---- グローバル辞書申請 ----

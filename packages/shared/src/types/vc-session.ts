@@ -3,4 +3,5 @@ export interface VcSession {
   voiceChannelId: string;
   textChannelId: string;
   shardId: number;
+  botInstanceId: number;
 }

@@ -13,6 +13,7 @@ import { BoostPage } from './pages/dashboard/boost';
 import { ServersPage } from './pages/dashboard/servers';
 import { ServerSettingsPage } from './pages/dashboard/server-settings';
 import { ServerDictionaryPage } from './pages/dashboard/server-dictionary';
+import { ServerBotsPage } from './pages/dashboard/server-bots';
 
 export function App() {
   return (
@@ -31,6 +32,7 @@ export function App() {
         <Route path="servers" element={<ServersPage />} />
         <Route path="servers/:guildId" element={<ServerSettingsPage />} />
         <Route path="servers/:guildId/dictionary" element={<ServerDictionaryPage />} />
+        <Route path="servers/:guildId/bots" element={<ServerBotsPage />} />
       </Route>
     </Routes>
   );

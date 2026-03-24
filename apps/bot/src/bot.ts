@@ -5,11 +5,12 @@ import { config as dotenvConfig } from 'dotenv';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenvConfig({ path: resolve(__dirname, '..', '..', '..', '.env') });
 
-import { Client, GatewayIntentBits, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Events, Guild } from 'discord.js';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
-import { disconnectRedis } from './infrastructure/redis.js';
+import { disconnectRedis, getRedisClient } from './infrastructure/redis.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { createBotPubSubHandlers } from './services/pubsub-handlers.js';
 import { setClient } from './infrastructure/discord-client.js';
@@ -18,6 +19,7 @@ import { handleMessageCreate } from './events/message-create.js';
 import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
+import { registerBotInstance, deactivateBotInstance } from './services/bot-instance-registry.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
@@ -60,11 +62,41 @@ async function bootstrap(): Promise<void> {
   client.on(Events.MessageCreate, handleMessageCreate);
   client.on(Events.VoiceStateUpdate, handleVoiceStateUpdate);
 
+  // ギルド参加・退出時に Redis Set を更新
+  client.on(Events.GuildCreate, async (guild: Guild) => {
+    try {
+      await getRedisClient().sadd(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guild.id);
+    } catch (err) {
+      childLogger.error({ err, guildId: guild.id }, 'Failed to update BOT_GUILDS on GuildCreate');
+    }
+  });
+
+  client.on(Events.GuildDelete, async (guild: Guild) => {
+    try {
+      await getRedisClient().srem(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guild.id);
+    } catch (err) {
+      childLogger.error({ err, guildId: guild.id }, 'Failed to update BOT_GUILDS on GuildDelete');
+    }
+  });
+
   client.on(Events.ClientReady, async (readyClient) => {
     childLogger.info(
       { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
       `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
     );
+
+    // Bot インスタンス登録
+    await registerBotInstance();
+
+    // 参加サーバー一覧を Redis Set に保存
+    const guildIds = readyClient.guilds.cache.map((g) => g.id);
+    const redis = getRedisClient();
+    const botGuildsKey = REDIS_KEYS.BOT_GUILDS(config.botInstanceId);
+    await redis.del(botGuildsKey);
+    if (guildIds.length > 0) {
+      await redis.sadd(botGuildsKey, ...guildIds);
+    }
+    childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set initialized');
 
     // VOICEVOX 話者一覧キャッシュ
     await loadSpeakers();
@@ -125,6 +157,9 @@ async function bootstrap(): Promise<void> {
 
     // 自動退出タイマー全クリア
     clearAllDisconnectTimers();
+
+    // Bot インスタンス非アクティブ化
+    await deactivateBotInstance();
 
     // 全 VC セッション破棄
     await destroyAllVcSessions();

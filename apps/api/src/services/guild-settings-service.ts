@@ -14,7 +14,6 @@ type DbGuildSettings = {
   greetingOnJoin: boolean;
   customEmojiHandling: string;
   readTargetType: string;
-  autoJoin: boolean;
   defaultTextChannelId: string | null;
   defaultSpeakerId: number | null;
   adminRoleId: string | null;
@@ -33,7 +32,6 @@ function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
     greetingOnJoin: db.greetingOnJoin,
     customEmojiHandling: db.customEmojiHandling as GuildSettings['customEmojiHandling'],
     readTargetType: db.readTargetType as GuildSettings['readTargetType'],
-    autoJoin: db.autoJoin,
     defaultTextChannelId: db.defaultTextChannelId,
     defaultSpeakerId: db.defaultSpeakerId,
     adminRoleId: db.adminRoleId,
@@ -97,7 +95,6 @@ export async function updateGuildSettings(
       greetingOnJoin: updates.greetingOnJoin ?? current.greetingOnJoin,
       customEmojiHandling: updates.customEmojiHandling ?? current.customEmojiHandling,
       readTargetType: updates.readTargetType ?? current.readTargetType,
-      autoJoin: updates.autoJoin ?? current.autoJoin,
       defaultTextChannelId: updates.defaultTextChannelId ?? current.defaultTextChannelId,
       defaultSpeakerId: updates.defaultSpeakerId ?? current.defaultSpeakerId,
       adminRoleId: updates.adminRoleId ?? current.adminRoleId,

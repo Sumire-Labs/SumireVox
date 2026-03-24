@@ -10,6 +10,12 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands",
+    "dev:bot:1": "cross-env BOT_INSTANCE_ID=1 pnpm --filter @sumirevox/bot dev",
+    "dev:bot:2": "cross-env BOT_INSTANCE_ID=2 pnpm --filter @sumirevox/bot dev",
+    "dev:bot:3": "cross-env BOT_INSTANCE_ID=3 pnpm --filter @sumirevox/bot dev",
+    "deploy-commands:1": "cross-env BOT_INSTANCE_ID=1 pnpm --filter @sumirevox/bot deploy-commands",
+    "deploy-commands:2": "cross-env BOT_INSTANCE_ID=2 pnpm --filter @sumirevox/bot deploy-commands",
+    "deploy-commands:3": "cross-env BOT_INSTANCE_ID=3 pnpm --filter @sumirevox/bot deploy-commands",
     "db:migrate:dev": "pnpm --filter @sumirevox/bot prisma:migrate:dev",
     "db:migrate:deploy": "pnpm --filter @sumirevox/bot prisma:migrate:deploy",
     "db:studio": "pnpm --filter @sumirevox/bot prisma:studio",
@@ -17,6 +23,16 @@
     "setup": "bash scripts/setup-env.sh && pnpm install && pnpm db:generate"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@discordjs/opus", "@prisma/client", "@prisma/engines", "esbuild", "prisma", "sodium-native"]
+    "onlyBuiltDependencies": [
+      "@discordjs/opus",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "sodium-native"
+    ]
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
   }
 }

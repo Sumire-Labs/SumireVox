@@ -7,6 +7,7 @@ const navItems = [
   { path: '/servers', label: 'サーバー一覧' },
   { path: '/dictionary', label: 'グローバル辞書' },
   { path: '/requests', label: '申請管理' },
+  { path: '/bot-instances', label: 'Bot インスタンス' },
 ];
 
 export function AdminLayout() {

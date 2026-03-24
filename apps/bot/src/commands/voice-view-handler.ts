@@ -6,15 +6,12 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
-  EmbedBuilder,
-  StringSelectMenuBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   Interaction,
 } from 'discord.js';
 import { parseCustomId, buildCustomId, LIMITS, ParsedCustomId } from '@sumirevox/shared';
 import { getUserVoiceSetting, updateUserVoiceSetting } from '../services/user-voice-setting-service.js';
 import { getSpeakers, getSpeakerStyleName } from '../services/voicevox-speaker-cache.js';
+import { buildVoiceMessage } from './voice.js';
 
 /**
  * /voice の View インタラクションをハンドリングする
@@ -86,73 +83,26 @@ async function handlePageChange(
   );
 
   const pageSize = 25;
-  const totalPages = Math.ceil(styles.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil(styles.length / pageSize));
   const clampedPage = Math.max(0, Math.min(page, totalPages - 1));
-  const pageStyles = styles.slice(clampedPage * pageSize, (clampedPage + 1) * pageSize);
-
-  const components: ActionRowBuilder<StringSelectMenuBuilder | ButtonBuilder>[] = [];
-
-  if (pageStyles.length > 0) {
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId(buildCustomId('voice', `speaker:${clampedPage}`, userId))
-      .setPlaceholder('話者を選択')
-      .addOptions(
-        pageStyles.map((s) => ({
-          label: s.label,
-          value: s.value,
-          default: setting.speakerId !== null && s.value === setting.speakerId.toString(),
-        })),
-      );
-    components.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu));
-  }
-
-  if (totalPages > 1) {
-    const prevButton = new ButtonBuilder()
-      .setCustomId(buildCustomId('voice', `page:${clampedPage - 1}`, userId))
-      .setLabel('◀ 前')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(clampedPage === 0);
-    const pageIndicator = new ButtonBuilder()
-      .setCustomId(buildCustomId('voice', 'page_indicator', userId))
-      .setLabel(`${clampedPage + 1} / ${totalPages}`)
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true);
-    const nextButton = new ButtonBuilder()
-      .setCustomId(buildCustomId('voice', `page:${clampedPage + 1}`, userId))
-      .setLabel('次 ▶')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(clampedPage >= totalPages - 1);
-    components.push(
-      new ActionRowBuilder<ButtonBuilder>().addComponents(prevButton, pageIndicator, nextButton),
-    );
-  }
-
-  const speedButton = new ButtonBuilder()
-    .setCustomId(buildCustomId('voice', 'edit_speed', userId))
-    .setLabel(`速度を変更 (現在: ${setting.speedScale})`)
-    .setStyle(ButtonStyle.Primary);
-  const pitchButton = new ButtonBuilder()
-    .setCustomId(buildCustomId('voice', 'edit_pitch', userId))
-    .setLabel(`ピッチを変更 (現在: ${setting.pitchScale})`)
-    .setStyle(ButtonStyle.Primary);
-  components.push(new ActionRowBuilder<ButtonBuilder>().addComponents(speedButton, pitchButton));
 
   const speakerName =
     setting.speakerId !== null
       ? (getSpeakerStyleName(setting.speakerId) ?? `ID: ${setting.speakerId}`)
       : '未設定（サーバーデフォルト）';
 
-  const embed = new EmbedBuilder()
-    .setTitle('音声設定')
-    .setDescription('あなたの音声設定です。PREMIUM サーバーで適用されます。')
-    .addFields(
-      { name: '話者', value: speakerName, inline: true },
-      { name: '速度', value: `${setting.speedScale}`, inline: true },
-      { name: 'ピッチ', value: `${setting.pitchScale}`, inline: true },
-    )
-    .setColor(0x7c3aed);
+  const { components } = buildVoiceMessage(
+    speakerName,
+    setting.speedScale,
+    setting.pitchScale,
+    styles,
+    clampedPage,
+    totalPages,
+    userId,
+    setting.speakerId,
+  );
 
-  await interaction.update({ embeds: [embed], components });
+  await interaction.update({ components });
 }
 
 async function showSpeedModal(

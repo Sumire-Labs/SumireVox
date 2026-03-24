@@ -1,0 +1,12 @@
+{
+  "BotUserId": {
+    "autoJoin": "true",
+    "textChannelId": "1111",
+    "voiceChannelId": "1221"
+  },
+  "BotUserId2": {
+    "autoJoin": "false",
+    "textChannelId": "1234",
+    "voiceChannelId": "1235"
+  }
+}

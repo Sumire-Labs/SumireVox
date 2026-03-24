@@ -1,5 +1,6 @@
 interface AppConfig {
   nodeEnv: string;
+  botInstanceId: number;
   discordToken: string;
   discordClientId: string;
   databaseUrl: string;
@@ -42,10 +43,27 @@ function requireInt(name: string, defaultValue?: number): number {
 }
 
 function buildConfig(): AppConfig {
+  const botInstanceId = parseInt(process.env['BOT_INSTANCE_ID'] ?? '1', 10);
+
+  const discordTokenKey = `DISCORD_TOKEN_${botInstanceId}`;
+  const discordToken = process.env[discordTokenKey];
+  if (!discordToken) {
+    console.error(`[config] Required environment variable "${discordTokenKey}" is not set. Exiting.`);
+    process.exit(1);
+  }
+
+  const discordClientIdKey = `DISCORD_CLIENT_ID_${botInstanceId}`;
+  const discordClientId = process.env[discordClientIdKey];
+  if (!discordClientId) {
+    console.error(`[config] Required environment variable "${discordClientIdKey}" is not set. Exiting.`);
+    process.exit(1);
+  }
+
   return {
     nodeEnv: process.env['NODE_ENV'] ?? 'production',
-    discordToken: requireEnv('DISCORD_TOKEN'),
-    discordClientId: requireEnv('DISCORD_CLIENT_ID'),
+    botInstanceId,
+    discordToken,
+    discordClientId,
     databaseUrl: requireEnv('DATABASE_URL'),
     redisUrl: requireEnv('REDIS_URL'),
     voicevoxUrls: (process.env['VOICEVOX_URLS'] ?? 'http://voicevox:50021')

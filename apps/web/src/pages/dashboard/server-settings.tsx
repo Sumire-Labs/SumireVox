@@ -125,6 +125,12 @@ export function ServerSettingsPage() {
             </span>
           )}
           <Link
+            to={`/dashboard/servers/${guildId}/bots`}
+            className="text-sm border border-white/20 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all"
+          >
+            Bot 管理
+          </Link>
+          <Link
             to={`/dashboard/servers/${guildId}/dictionary`}
             className="text-sm border border-white/20 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all"
           >
@@ -217,21 +223,16 @@ export function ServerSettingsPage() {
 
       {/* 接続設定 */}
       <SectionCard title="接続設定">
-        <SettingRow label="自動接続" description="誰かが VC に参加したとき自動で接続する">
-          <Switch
-            isSelected={settings.autoJoin}
-            onValueChange={(v) => handleSwitch('autoJoin', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
-        </SettingRow>
-        <SettingRow label="デフォルト読み上げチャンネル ID" description="自動接続時に使用するテキストチャンネル">
-          <input
-            placeholder="チャンネル ID"
-            defaultValue={settings.defaultTextChannelId ?? ''}
-            className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600"
-            onBlur={(e) => handleStringBlur('defaultTextChannelId', e.target.value)}
-          />
-        </SettingRow>
+        <div className="bg-purple-500/10 border border-purple-500/20 text-purple-300 text-sm px-4 py-3 rounded-xl">
+          💡 自動接続の設定は{' '}
+          <Link
+            to={`/dashboard/servers/${guildId}/bots`}
+            className="underline hover:text-purple-200"
+          >
+            Bot 管理
+          </Link>{' '}
+          から行ってください。
+        </div>
         <SettingRow label="デフォルト話者 ID" description="ユーザー設定がない場合に使用する話者">
           <input
             type="number"

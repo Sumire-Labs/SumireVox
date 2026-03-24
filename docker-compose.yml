@@ -80,6 +80,29 @@ services:
     env_file:
       - .env
     environment:
+      BOT_INSTANCE_ID: 1
+      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
+      REDIS_URL: redis://redis:6379
+      VOICEVOX_URLS: http://voicevox:50021
+    restart: unless-stopped
+
+  bot2:
+    profiles: [ "production" ]
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+      target: runner
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      voicevox:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      BOT_INSTANCE_ID: 2
       DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
       REDIS_URL: redis://redis:6379
       VOICEVOX_URLS: http://voicevox:50021
