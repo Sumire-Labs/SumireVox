@@ -22,11 +22,20 @@ import {
   ChannelSelectMenuInteraction,
   StringSelectMenuInteraction,
 } from 'discord.js';
-import { GuildSettings, buildCustomId, parseCustomId, LIMITS } from '@sumirevox/shared';
-import { getGuildSettings } from '../services/guild-settings-service.js';
-import { updateGuildSettings } from '../services/guild-settings-update-service.js';
+import {
+  GuildSettings,
+  buildCustomId,
+  parseCustomId,
+  LIMITS,
+  BotInstanceSettings,
+  DEFAULT_BOT_INSTANCE_SETTINGS,
+} from '@sumirevox/shared';
+import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
+import { updateGuildSettings, updateBotInstanceSettings } from '../services/guild-settings-update-service.js';
 import { getSpeakers, getSpeakerStyleName } from '../services/voicevox-speaker-cache.js';
 import { isGuildPremium } from '../services/premium-service.js';
+import { getClient } from '../infrastructure/discord-client.js';
+import { config } from '../infrastructure/config.js';
 
 type ParsedId = NonNullable<ReturnType<typeof parseCustomId>>;
 
@@ -44,6 +53,8 @@ export function buildSettingsMessage(
   settings: GuildSettings,
   category: Category,
   userId: string,
+  instanceSettings: BotInstanceSettings = DEFAULT_BOT_INSTANCE_SETTINGS,
+  botName: string = 'SumireVox',
 ): { components: ContainerBuilder[] } {
   const mainContainer = new ContainerBuilder().setAccentColor(0x7c3aed);
 
@@ -74,7 +85,7 @@ export function buildSettingsMessage(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect),
     );
 
-  const categoryContainer = buildCategoryContainer(settings, category, userId);
+  const categoryContainer = buildCategoryContainer(settings, category, userId, instanceSettings, botName);
 
   return { components: [mainContainer, categoryContainer] };
 }
@@ -83,6 +94,8 @@ function buildCategoryContainer(
   settings: GuildSettings,
   category: Category,
   userId: string,
+  instanceSettings: BotInstanceSettings,
+  botName: string,
 ): ContainerBuilder {
   switch (category) {
     case 'reading':
@@ -92,7 +105,7 @@ function buildCategoryContainer(
     case 'filter':
       return buildFilterCategory(settings, userId);
     case 'connection':
-      return buildConnectionCategory(settings, userId);
+      return buildConnectionCategory(settings, userId, instanceSettings, botName);
     case 'permission':
       return buildPermissionCategory(settings, userId);
   }
@@ -267,70 +280,73 @@ function buildFilterCategory(settings: GuildSettings, userId: string): Container
   return container;
 }
 
-function buildConnectionCategory(settings: GuildSettings, userId: string): ContainerBuilder {
-  const speakerName =
-    settings.defaultSpeakerId !== null
-      ? (getSpeakerStyleName(settings.defaultSpeakerId) ?? `ID: ${settings.defaultSpeakerId}`)
-      : '未設定';
-  const defaultChannelText = settings.defaultTextChannelId
-    ? `<#${settings.defaultTextChannelId}>`
-    : '未設定';
+function buildConnectionCategory(
+  settings: GuildSettings,
+  userId: string,
+  instanceSettings: BotInstanceSettings,
+  botName: string,
+): ContainerBuilder {
+  const { autoJoin, voiceChannelId, textChannelId } = instanceSettings;
 
-  const channelSelect = new ChannelSelectMenuBuilder()
-    .setCustomId(buildCustomId('settings', 'default_channel', userId))
-    .setPlaceholder('デフォルト読み上げチャンネルを選択')
-    .setChannelTypes(ChannelType.GuildText);
+  const voiceChannelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId(buildCustomId('settings', 'connection_voice_channel', userId))
+    .setPlaceholder('VC チャンネルを選択')
+    .setChannelTypes(ChannelType.GuildVoice)
+    .setMinValues(0)
+    .setMaxValues(1);
 
-  const speakers = getSpeakers();
-  const speakerOptions = speakers
-    .flatMap((s) =>
-      s.styles.map((st) => ({
-        label: `${s.name}（${st.name}）`,
-        value: st.id.toString(),
-      })),
-    )
-    .slice(0, 25);
-
-  const speakerSelect = new StringSelectMenuBuilder()
-    .setCustomId(buildCustomId('settings', 'default_speaker', userId))
-    .setPlaceholder('デフォルト話者を選択')
-    .addOptions(
-      speakerOptions.map((s) => ({
-        label: s.label,
-        value: s.value,
-        default:
-          settings.defaultSpeakerId !== null && s.value === settings.defaultSpeakerId.toString(),
-      })),
-    );
+  const textChannelSelect = new ChannelSelectMenuBuilder()
+    .setCustomId(buildCustomId('settings', 'connection_text_channel', userId))
+    .setPlaceholder('テキストチャンネルを選択')
+    .setChannelTypes(ChannelType.GuildText)
+    .setMinValues(0)
+    .setMaxValues(1);
 
   const container = new ContainerBuilder().setAccentColor(0x7c3aed);
 
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔗 接続設定'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**Bot: ${botName}** の自動接続設定`),
+    )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        '> 💡 **自動接続はダッシュボードの Bot 管理から設定してください。**',
-      ),
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**自動接続:** ${autoJoin ? 'ON' : 'OFF'}\nユーザーが VC に参加したとき自動で接続します。`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_auto_join', userId))
+            .setLabel(autoJoin ? '✓ ON' : 'OFF')
+            .setStyle(autoJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
     )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `**デフォルト読み上げチャンネル:** ${defaultChannelText}`,
+        `**接続先 VC チャンネル**\n自動接続時に Bot が参加する VC を指定します。\n現在: ${voiceChannelId ? `<#${voiceChannelId}>` : '未設定'}`,
       ),
     )
     .addActionRowComponents(
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect),
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(voiceChannelSelect),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`**デフォルト話者:** ${speakerName}`),
+      new TextDisplayBuilder().setContent(
+        `**読み上げチャンネル**\n自動接続時に読み上げるテキストチャンネルを指定します。\n現在: ${textChannelId ? `<#${textChannelId}>` : '未設定'}`,
+      ),
     )
     .addActionRowComponents(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(speakerSelect),
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(textChannelSelect),
     );
 
   return container;
@@ -394,8 +410,31 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
   if (action === 'category' && interaction.isStringSelectMenu()) {
     const category = interaction.values[0] as Category;
     const settings = await getGuildSettings(guildId);
-    const { components } = buildSettingsMessage(settings, category, parsed.userId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const botName = getClient().user?.username ?? 'SumireVox';
+    const { components } = buildSettingsMessage(settings, category, parsed.userId, instanceSettings, botName);
     await interaction.update({ components });
+    return;
+  }
+
+  if (action === 'toggle_auto_join' && interaction.isButton()) {
+    const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    await updateInstanceAndRefresh(interaction, guildId, parsed.userId, {
+      autoJoin: !instanceSettings.autoJoin,
+    });
+    return;
+  }
+
+  if (action === 'connection_voice_channel' && interaction.isChannelSelectMenu()) {
+    const value = interaction.values[0] ?? null;
+    await updateInstanceAndRefresh(interaction, guildId, parsed.userId, { voiceChannelId: value });
+    return;
+  }
+
+  if (action === 'connection_text_channel' && interaction.isChannelSelectMenu()) {
+    const value = interaction.values[0] ?? null;
+    await updateInstanceAndRefresh(interaction, guildId, parsed.userId, { textChannelId: value });
     return;
   }
 
@@ -542,6 +581,22 @@ async function updateAndRefresh(
   category: Category,
 ): Promise<void> {
   const settings = await updateGuildSettings(guildId, updates);
-  const { components } = buildSettingsMessage(settings, category, userId);
+  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const botName = getClient().user?.username ?? 'SumireVox';
+  const { components } = buildSettingsMessage(settings, category, userId, instanceSettings, botName);
+  await interaction.update({ components });
+}
+
+async function updateInstanceAndRefresh(
+  interaction: ButtonInteraction | ChannelSelectMenuInteraction,
+  guildId: string,
+  userId: string,
+  updates: Partial<BotInstanceSettings>,
+): Promise<void> {
+  await updateBotInstanceSettings(guildId, config.botInstanceId, updates);
+  const settings = await getGuildSettings(guildId);
+  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const botName = getClient().user?.username ?? 'SumireVox';
+  const { components } = buildSettingsMessage(settings, 'connection', userId, instanceSettings, botName);
   await interaction.update({ components });
 }
