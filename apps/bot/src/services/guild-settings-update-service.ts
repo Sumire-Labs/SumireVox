@@ -8,7 +8,7 @@ import {
 import { setCachedGuildSettings, invalidateGuildSettingsCache } from '../infrastructure/settings-cache.js';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { getPrisma } from '../infrastructure/database.js';
-import { getGuildSettings } from './guild-settings-service.js';
+import { getGuildSettings, mapDbToGuildSettings } from './guild-settings-service.js';
 import { logger } from '../infrastructure/logger.js';
 
 /**
@@ -31,23 +31,7 @@ export async function updateGuildSettings(
     update: mapToDbUpdateFields(updates),
   });
 
-  const updated: GuildSettings = {
-    guildId: dbRecord.guildId,
-    maxReadLength: dbRecord.maxReadLength,
-    readUsername: dbRecord.readUsername,
-    addSanSuffix: dbRecord.addSanSuffix,
-    romajiReading: dbRecord.romajiReading,
-    joinLeaveNotification: dbRecord.joinLeaveNotification,
-    greetingOnJoin: dbRecord.greetingOnJoin,
-    customEmojiHandling: dbRecord.customEmojiHandling as GuildSettings['customEmojiHandling'],
-    readTargetType: dbRecord.readTargetType as GuildSettings['readTargetType'],
-    defaultTextChannelId: dbRecord.defaultTextChannelId,
-    defaultSpeakerId: dbRecord.defaultSpeakerId,
-    adminRoleId: dbRecord.adminRoleId,
-    dictionaryPermission: dbRecord.dictionaryPermission as GuildSettings['dictionaryPermission'],
-    manualPremium: dbRecord.manualPremium,
-    botInstanceSettings: (dbRecord.botInstanceSettings ?? {}) as unknown as GuildBotInstanceSettingsMap,
-  };
+  const updated = mapDbToGuildSettings(dbRecord);
 
   await setCachedGuildSettings(guildId, updated);
   await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));

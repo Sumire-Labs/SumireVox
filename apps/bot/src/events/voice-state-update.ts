@@ -19,13 +19,11 @@ export async function handleVoiceStateUpdate(
   const guildId = guild.id;
   const client = getClient();
 
-  // Bot 自身の状態変更は無視（Bot の接続/切断は vc-session-manager で管理）
-  if (newState.member?.id === client.user?.id) return;
-  if (oldState.member?.id === client.user?.id) return;
-
-  // 他の Bot のイベントも無視
   const member = newState.member ?? oldState.member;
-  const actorIsBot = member?.user.bot ?? false;
+  // 自 Bot は無視
+  if (member?.id === client.user?.id) return;
+  // 他 Bot も無視（auto-join の誤発動、Bot同士の join 誘発を防止）
+  if (member?.user.bot) return;
 
   const session = getVcSession(guildId);
 
@@ -53,14 +51,12 @@ export async function handleVoiceStateUpdate(
   // ミュート・画面共有等のイベント（チャンネル変更なし）は無視
   if (!joinedBotChannel && !leftBotChannel) return;
 
-  // ---- 入退室通知 (人間のみ) ----
-  if (!actorIsBot) {
-    await handleJoinLeaveNotification(
-      guildId,
-      newState.member?.displayName ?? oldState.member?.displayName ?? 'ユーザー',
-      joinedBotChannel ? 'join' : 'leave',
-    );
-  }
+  // ---- 入退室通知 ----
+  await handleJoinLeaveNotification(
+    guildId,
+    newState.member?.displayName ?? oldState.member?.displayName ?? 'ユーザー',
+    joinedBotChannel ? 'join' : 'leave',
+  );
 
   // ---- 自動退出タイマー ----
   await handleAutoDisconnect(guildId, botVoiceChannelId, guild);

@@ -14,6 +14,7 @@ import { convertWKusa } from './steps/convert-w-kusa.js';
 import { optimizeNumbersAndUnits } from './steps/optimize-numbers-and-units.js';
 import { handleRomaji } from './steps/handle-romaji.js';
 import { clampReadLength } from '@sumirevox/shared';
+import { truncateForSpeech } from './truncate.js';
 
 // パイプラインステップの順序（厳守）
 const pipelineSteps: PipelineStep[] = [
@@ -55,9 +56,5 @@ export function runPipeline(
 
   // 最大文字数でクランプ
   const maxLength = clampReadLength(context.guildSettings.maxReadLength, isPremium);
-  if (result.length > maxLength) {
-    result = result.substring(0, maxLength) + '以下省略';
-  }
-
-  return result;
+  return truncateForSpeech(result, maxLength, '以下省略');
 }
