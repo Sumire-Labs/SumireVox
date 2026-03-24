@@ -1,4 +1,9 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import {
+  SlashCommandBuilder,
+  ChatInputCommandInteraction,
+  GuildMember,
+  MessageFlags,
+} from 'discord.js';
 import { CommandDefinition } from './types.js';
 import { hasAdminPermission } from '../services/permission-service.js';
 import { getGuildSettings } from '../services/guild-settings-service.js';
@@ -22,8 +27,8 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
 
   const settings = await getGuildSettings(guildId);
-  const message = buildSettingsMessage(settings, 'reading', interaction.user.id);
-  await interaction.reply(message);
+  const { components } = buildSettingsMessage(settings, 'reading', interaction.user.id);
+  await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });
 }
 
 export const settingsCommand: CommandDefinition = { data, execute };

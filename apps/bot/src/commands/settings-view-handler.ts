@@ -1,6 +1,10 @@
 import {
   Interaction,
-  EmbedBuilder,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
   ActionRowBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
@@ -17,8 +21,6 @@ import {
   RoleSelectMenuInteraction,
   ChannelSelectMenuInteraction,
   StringSelectMenuInteraction,
-  InteractionReplyOptions,
-  InteractionUpdateOptions,
 } from 'discord.js';
 import { GuildSettings, buildCustomId, parseCustomId, LIMITS } from '@sumirevox/shared';
 import { getGuildSettings } from '../services/guild-settings-service.js';
@@ -42,7 +44,9 @@ export function buildSettingsMessage(
   settings: GuildSettings,
   category: Category,
   userId: string,
-): InteractionReplyOptions & InteractionUpdateOptions {
+): { components: ContainerBuilder[] } {
+  const mainContainer = new ContainerBuilder().setAccentColor(0x7c3aed);
+
   const categorySelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'category', userId))
     .setPlaceholder('カテゴリを選択')
@@ -56,20 +60,30 @@ export function buildSettingsMessage(
       ),
     );
 
-  const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect);
-  const { embed, components } = buildCategoryContent(settings, category, userId);
+  mainContainer
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('## ⚙️ サーバー設定'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        'カテゴリを選択して設定を変更してください。',
+      ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect),
+    );
 
-  return {
-    embeds: [embed],
-    components: [categoryRow, ...components],
-  };
+  const categoryContainer = buildCategoryContainer(settings, category, userId);
+
+  return { components: [mainContainer, categoryContainer] };
 }
 
-function buildCategoryContent(
+function buildCategoryContainer(
   settings: GuildSettings,
   category: Category,
   userId: string,
-): { embed: EmbedBuilder; components: ActionRowBuilder<never>[] } {
+): ContainerBuilder {
   switch (category) {
     case 'reading':
       return buildReadingCategory(settings, userId);
@@ -84,77 +98,123 @@ function buildCategoryContent(
   }
 }
 
-function buildReadingCategory(settings: GuildSettings, userId: string) {
-  const embed = new EmbedBuilder()
-    .setTitle('📖 読み上げ設定')
-    .addFields(
-      { name: '読み上げ最大文字数', value: `${settings.maxReadLength}`, inline: true },
-      { name: '名前の読み上げ', value: settings.readUsername ? 'ON' : 'OFF', inline: true },
-      { name: 'さん付け', value: settings.addSanSuffix ? 'ON' : 'OFF', inline: true },
-      { name: 'ローマ字読み', value: settings.romajiReading ? 'ON' : 'OFF', inline: true },
+function buildReadingCategory(settings: GuildSettings, userId: string): ContainerBuilder {
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 📖 読み上げ設定'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
-    .setColor(0x7c3aed);
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**読み上げ最大文字数:** ${settings.maxReadLength}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'edit_max_length', userId))
+            .setLabel('変更')
+            .setStyle(ButtonStyle.Primary),
+        ),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**名前の読み上げ:** ${settings.readUsername ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_read_username', userId))
+            .setLabel(settings.readUsername ? '✓ ON' : 'OFF')
+            .setStyle(settings.readUsername ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**さん付け:** ${settings.addSanSuffix ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_san_suffix', userId))
+            .setLabel(settings.addSanSuffix ? '✓ ON' : 'OFF')
+            .setStyle(settings.addSanSuffix ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**ローマ字読み:** ${settings.romajiReading ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_romaji', userId))
+            .setLabel(settings.romajiReading ? '✓ ON' : 'OFF')
+            .setStyle(settings.romajiReading ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
+    );
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'edit_max_length', userId))
-      .setLabel(`最大文字数: ${settings.maxReadLength}`)
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_read_username', userId))
-      .setLabel(`名前の読み上げ: ${settings.readUsername ? 'ON' : 'OFF'}`)
-      .setStyle(settings.readUsername ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_san_suffix', userId))
-      .setLabel(`さん付け: ${settings.addSanSuffix ? 'ON' : 'OFF'}`)
-      .setStyle(settings.addSanSuffix ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_romaji', userId))
-      .setLabel(`ローマ字読み: ${settings.romajiReading ? 'ON' : 'OFF'}`)
-      .setStyle(settings.romajiReading ? ButtonStyle.Success : ButtonStyle.Secondary),
-  );
-
-  return { embed, components: [row] as ActionRowBuilder<never>[] };
+  return container;
 }
 
-function buildNotificationCategory(settings: GuildSettings, userId: string) {
-  const embed = new EmbedBuilder()
-    .setTitle('🔔 通知設定')
-    .addFields(
-      { name: '入退室通知', value: settings.joinLeaveNotification ? 'ON' : 'OFF', inline: true },
-      { name: 'Bot入室時の挨拶', value: settings.greetingOnJoin ? 'ON' : 'OFF', inline: true },
+function buildNotificationCategory(settings: GuildSettings, userId: string): ContainerBuilder {
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔔 通知設定'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
-    .setColor(0x7c3aed);
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**入退室通知:** ${settings.joinLeaveNotification ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_join_leave', userId))
+            .setLabel(settings.joinLeaveNotification ? '✓ ON' : 'OFF')
+            .setStyle(
+              settings.joinLeaveNotification ? ButtonStyle.Success : ButtonStyle.Secondary,
+            ),
+        ),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**Bot 入室挨拶:** ${settings.greetingOnJoin ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_greeting', userId))
+            .setLabel(settings.greetingOnJoin ? '✓ ON' : 'OFF')
+            .setStyle(settings.greetingOnJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
+    );
 
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_join_leave', userId))
-      .setLabel(`入退室通知: ${settings.joinLeaveNotification ? 'ON' : 'OFF'}`)
-      .setStyle(settings.joinLeaveNotification ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_greeting', userId))
-      .setLabel(`Bot入室挨拶: ${settings.greetingOnJoin ? 'ON' : 'OFF'}`)
-      .setStyle(settings.greetingOnJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
-  );
-
-  return { embed, components: [row] as ActionRowBuilder<never>[] };
+  return container;
 }
 
-function buildFilterCategory(settings: GuildSettings, userId: string) {
+function buildFilterCategory(settings: GuildSettings, userId: string): ContainerBuilder {
   const emojiLabel = settings.customEmojiHandling === 'read_name' ? '名前を読み上げ' : '除去';
   const targetLabel = {
     text_only: 'テキストのみ',
     text_and_sticker: 'テキスト+スタンプ',
     text_sticker_and_attachment: 'テキスト+スタンプ+添付',
   }[settings.readTargetType];
-
-  const embed = new EmbedBuilder()
-    .setTitle('🔧 フィルタ設定')
-    .addFields(
-      { name: 'カスタム絵文字', value: emojiLabel, inline: true },
-      { name: '読み上げ対象', value: targetLabel, inline: true },
-    )
-    .setColor(0x7c3aed);
 
   const emojiSelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'emoji_handling', userId))
@@ -169,7 +229,11 @@ function buildFilterCategory(settings: GuildSettings, userId: string) {
     .setPlaceholder('読み上げ対象')
     .addOptions(
       { label: 'テキストのみ', value: 'text_only', default: settings.readTargetType === 'text_only' },
-      { label: 'テキスト+スタンプ', value: 'text_and_sticker', default: settings.readTargetType === 'text_and_sticker' },
+      {
+        label: 'テキスト+スタンプ',
+        value: 'text_and_sticker',
+        default: settings.readTargetType === 'text_and_sticker',
+      },
       {
         label: 'テキスト+スタンプ+添付',
         value: 'text_sticker_and_attachment',
@@ -177,16 +241,33 @@ function buildFilterCategory(settings: GuildSettings, userId: string) {
       },
     );
 
-  return {
-    embed,
-    components: [
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔧 フィルタ設定'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**カスタム絵文字:** ${emojiLabel}`),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(emojiSelect),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**読み上げ対象:** ${targetLabel}`),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(targetSelect),
-    ] as ActionRowBuilder<never>[],
-  };
+    );
+
+  return container;
 }
 
-function buildConnectionCategory(settings: GuildSettings, userId: string) {
+function buildConnectionCategory(settings: GuildSettings, userId: string): ContainerBuilder {
   const speakerName =
     settings.defaultSpeakerId !== null
       ? (getSpeakerStyleName(settings.defaultSpeakerId) ?? `ID: ${settings.defaultSpeakerId}`)
@@ -194,22 +275,6 @@ function buildConnectionCategory(settings: GuildSettings, userId: string) {
   const defaultChannelText = settings.defaultTextChannelId
     ? `<#${settings.defaultTextChannelId}>`
     : '未設定';
-
-  const embed = new EmbedBuilder()
-    .setTitle('🔗 接続設定')
-    .addFields(
-      { name: '自動接続', value: settings.autoJoin ? 'ON' : 'OFF', inline: true },
-      { name: 'デフォルト読み上げチャンネル', value: defaultChannelText, inline: true },
-      { name: 'デフォルト話者', value: speakerName, inline: true },
-    )
-    .setColor(0x7c3aed);
-
-  const toggleRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('settings', 'toggle_auto_join', userId))
-      .setLabel(`自動接続: ${settings.autoJoin ? 'ON' : 'OFF'}`)
-      .setStyle(settings.autoJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
-  );
 
   const channelSelect = new ChannelSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'default_channel', userId))
@@ -238,27 +303,51 @@ function buildConnectionCategory(settings: GuildSettings, userId: string) {
       })),
     );
 
-  return {
-    embed,
-    components: [
-      toggleRow,
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔗 接続設定'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**自動接続:** ${settings.autoJoin ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_auto_join', userId))
+            .setLabel(settings.autoJoin ? '✓ ON' : 'OFF')
+            .setStyle(settings.autoJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `**デフォルト読み上げチャンネル:** ${defaultChannelText}`,
+      ),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**デフォルト話者:** ${speakerName}`),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(speakerSelect),
-    ] as ActionRowBuilder<never>[],
-  };
+    );
+
+  return container;
 }
 
-function buildPermissionCategory(settings: GuildSettings, userId: string) {
+function buildPermissionCategory(settings: GuildSettings, userId: string): ContainerBuilder {
   const adminRoleText = settings.adminRoleId ? `<@&${settings.adminRoleId}>` : '未設定';
   const dictPermText = settings.dictionaryPermission === 'everyone' ? '全ユーザー' : '管理者のみ';
-
-  const embed = new EmbedBuilder()
-    .setTitle('🔒 権限設定')
-    .addFields(
-      { name: '管理ロール', value: adminRoleText, inline: true },
-      { name: '辞書追加権限', value: dictPermText, inline: true },
-    )
-    .setColor(0x7c3aed);
 
   const roleSelect = new RoleSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'admin_role', userId))
@@ -268,7 +357,11 @@ function buildPermissionCategory(settings: GuildSettings, userId: string) {
     .setCustomId(buildCustomId('settings', 'dict_permission', userId))
     .setPlaceholder('辞書追加権限')
     .addOptions(
-      { label: '全ユーザー', value: 'everyone', default: settings.dictionaryPermission === 'everyone' },
+      {
+        label: '全ユーザー',
+        value: 'everyone',
+        default: settings.dictionaryPermission === 'everyone',
+      },
       {
         label: '管理者 or 指定ロールのみ',
         value: 'admin_only',
@@ -276,13 +369,27 @@ function buildPermissionCategory(settings: GuildSettings, userId: string) {
       },
     );
 
-  return {
-    embed,
-    components: [
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔒 権限設定'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**管理ロール:** ${adminRoleText}`),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<RoleSelectMenuBuilder>().addComponents(roleSelect),
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`**辞書追加権限:** ${dictPermText}`),
+    )
+    .addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(dictPermSelect),
-    ] as ActionRowBuilder<never>[],
-  };
+    );
+
+  return container;
 }
 
 // ========================================
@@ -296,8 +403,8 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
   if (action === 'category' && interaction.isStringSelectMenu()) {
     const category = interaction.values[0] as Category;
     const settings = await getGuildSettings(guildId);
-    const message = buildSettingsMessage(settings, category, parsed.userId);
-    await interaction.update(message);
+    const { components } = buildSettingsMessage(settings, category, parsed.userId);
+    await interaction.update({ components });
     return;
   }
 
@@ -445,6 +552,6 @@ async function updateAndRefresh(
   category: Category,
 ): Promise<void> {
   const settings = await updateGuildSettings(guildId, updates);
-  const message = buildSettingsMessage(settings, category, userId);
-  await interaction.update(message);
+  const { components } = buildSettingsMessage(settings, category, userId);
+  await interaction.update({ components });
 }
