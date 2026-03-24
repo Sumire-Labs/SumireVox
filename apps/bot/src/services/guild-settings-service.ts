@@ -1,4 +1,10 @@
-import { GuildSettings, GUILD_SETTINGS_DEFAULTS } from '@sumirevox/shared';
+import {
+  GuildSettings,
+  GUILD_SETTINGS_DEFAULTS,
+  BotInstanceSettings,
+  GuildBotInstanceSettingsMap,
+  DEFAULT_BOT_INSTANCE_SETTINGS,
+} from '@sumirevox/shared';
 import { GuildSettings as PrismaGuildSettings } from '@prisma/client';
 import { getCachedGuildSettings, setCachedGuildSettings } from '../infrastructure/settings-cache.js';
 import { getPrisma } from '../infrastructure/database.js';
@@ -50,5 +56,14 @@ function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
     adminRoleId: db.adminRoleId,
     dictionaryPermission: db.dictionaryPermission as GuildSettings['dictionaryPermission'],
     manualPremium: db.manualPremium,
+    botInstanceSettings: ((db.botInstanceSettings ?? {}) as unknown) as GuildBotInstanceSettingsMap,
   };
+}
+
+/**
+ * サーバー設定から特定の Bot インスタンスの設定を取得する
+ */
+export function getInstanceSettings(guildSettings: GuildSettings, instanceId: number): BotInstanceSettings {
+  const map = (guildSettings.botInstanceSettings ?? {}) as GuildBotInstanceSettingsMap;
+  return map[String(instanceId)] ?? { ...DEFAULT_BOT_INSTANCE_SETTINGS };
 }

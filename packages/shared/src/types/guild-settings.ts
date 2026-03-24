@@ -1,3 +1,5 @@
+import type { GuildBotInstanceSettingsMap } from './bot-instance.js';
+
 export type CustomEmojiHandling = 'read_name' | 'remove';
 export type ReadTargetType = 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment';
 export type DictionaryPermission = 'everyone' | 'admin_only';
@@ -24,4 +26,6 @@ export interface GuildSettings {
   dictionaryPermission: DictionaryPermission;
   // PREMIUM
   manualPremium: boolean;
+  // マルチインスタンス設定
+  botInstanceSettings?: GuildBotInstanceSettingsMap;
 }

@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { updateGuildSettings } from '../services/guild-settings-service.js';
+import { getAllBotInstances, setBotInstanceActive } from '../services/bot-instance-service.js';
 import {
   getGlobalDictionaryEntries,
   addGlobalDictionaryEntry,
@@ -154,4 +155,40 @@ adminRouter.put('/dictionary/requests/:id/reject', async (c) => {
   const id = c.req.param('id');
   await rejectRequest(id);
   return c.json({ success: true, data: null });
+});
+
+// ========================================
+// Bot インスタンス管理
+// ========================================
+
+/**
+ * GET /api/admin/bot-instances
+ * 全 Bot インスタンス一覧
+ */
+adminRouter.get('/bot-instances', async (c) => {
+  const instances = await getAllBotInstances();
+  return c.json({ success: true, data: instances });
+});
+
+/**
+ * PUT /api/admin/bot-instances/:instanceId/active
+ * Bot インスタンスのアクティブ状態変更
+ * body: { isActive: boolean }
+ */
+adminRouter.put('/bot-instances/:instanceId/active', async (c) => {
+  const instanceId = parseInt(c.req.param('instanceId'), 10);
+  const body = await c.req.json<{ isActive: boolean }>();
+
+  if (typeof body.isActive !== 'boolean') {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'isActive は boolean で指定してください。' },
+      },
+      400,
+    );
+  }
+
+  const instance = await setBotInstanceActive(instanceId, body.isActive);
+  return c.json({ success: true, data: instance });
 });

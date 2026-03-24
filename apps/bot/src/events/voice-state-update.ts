@@ -1,6 +1,6 @@
 import { VoiceState, PermissionFlagsBits } from 'discord.js';
 import { getVcSession, createVcSession } from '../services/vc-session-manager.js';
-import { getGuildSettings } from '../services/guild-settings-service.js';
+import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
 import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
 import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
 import { startDisconnectTimer, cancelDisconnectTimer } from '../services/auto-disconnect-timer.js';
@@ -76,9 +76,16 @@ async function handleAutoJoin(
 
   try {
     const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
 
-    // 自動接続が OFF、またはデフォルトチャンネルが未設定
-    if (!settings.autoJoin || !settings.defaultTextChannelId) return;
+    // このインスタンスの自動接続が OFF
+    if (!instanceSettings.autoJoin) return;
+
+    // テキストチャンネルが未設定
+    if (!instanceSettings.textChannelId) return;
+
+    // 指定 VC チャンネルがある場合、そのチャンネルへの参加のみ対象
+    if (instanceSettings.voiceChannelId && newState.channelId !== instanceSettings.voiceChannelId) return;
 
     const guild = newState.guild;
     const voiceChannel = newState.channel;
@@ -106,12 +113,12 @@ async function handleAutoJoin(
     await createVcSession(
       guildId,
       voiceChannel.id,
-      settings.defaultTextChannelId,
+      instanceSettings.textChannelId,
       guild.voiceAdapterCreator,
     );
 
     logger.info(
-      { guildId, voiceChannelId: voiceChannel.id, textChannelId: settings.defaultTextChannelId },
+      { guildId, voiceChannelId: voiceChannel.id, textChannelId: instanceSettings.textChannelId },
       'Auto-joined VC',
     );
 

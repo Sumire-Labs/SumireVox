@@ -310,19 +310,10 @@ function buildConnectionCategory(settings: GuildSettings, userId: string): Conta
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
-    .addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent(
-            `**自動接続:** ${settings.autoJoin ? 'ON' : 'OFF'}`,
-          ),
-        )
-        .setButtonAccessory(
-          new ButtonBuilder()
-            .setCustomId(buildCustomId('settings', 'toggle_auto_join', userId))
-            .setLabel(settings.autoJoin ? '✓ ON' : 'OFF')
-            .setStyle(settings.autoJoin ? ButtonStyle.Success : ButtonStyle.Secondary),
-        ),
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        '> 💡 **自動接続はダッシュボードの Bot 管理から設定してください。**',
+      ),
     )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
@@ -480,7 +471,6 @@ async function handleToggle(
     toggle_romaji: { field: 'romajiReading', category: 'reading' },
     toggle_join_leave: { field: 'joinLeaveNotification', category: 'notification' },
     toggle_greeting: { field: 'greetingOnJoin', category: 'notification' },
-    toggle_auto_join: { field: 'autoJoin', category: 'connection' },
   };
 
   const mapping = toggleMap[action];
