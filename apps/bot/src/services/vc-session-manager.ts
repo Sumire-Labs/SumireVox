@@ -14,6 +14,7 @@ import {
 } from '../infrastructure/vc-session-store.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { logger } from '../infrastructure/logger.js';
+import { config } from '../infrastructure/config.js';
 import { deleteGuildQueue } from './speech-queue.js';
 import { initTrieSlot, destroyTrieSlot } from './text-pipeline/index.js';
 
@@ -29,7 +30,13 @@ export async function createVcSession(
   const client = getClient();
   const shardId = client.shard?.ids[0] ?? 0;
 
-  const session: VcSession = { guildId, voiceChannelId, textChannelId, shardId };
+  const session: VcSession = {
+    guildId,
+    voiceChannelId,
+    textChannelId,
+    shardId,
+    botInstanceId: config.botInstanceId,
+  };
 
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
@@ -68,7 +75,7 @@ export async function destroyVcSession(guildId: string): Promise<void> {
   destroyTrieSlot(guildId);
   sessions.delete(guildId);
   connections.delete(guildId);
-  await removeVcSessionFromRedis(guildId);
+  await removeVcSessionFromRedis(guildId, config.botInstanceId);
 
   logger.info({ guildId }, 'VC session destroyed');
 }
@@ -124,7 +131,7 @@ export async function restoreVcSessions(): Promise<void> {
           { guildId: session.guildId },
           'Guild not found during session restore, removing session',
         );
-        await removeVcSessionFromRedis(session.guildId);
+        await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
         continue;
       }
 
@@ -134,7 +141,7 @@ export async function restoreVcSessions(): Promise<void> {
           { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
           'Voice channel not found during session restore, removing session',
         );
-        await removeVcSessionFromRedis(session.guildId);
+        await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
         continue;
       }
 
@@ -151,7 +158,7 @@ export async function restoreVcSessions(): Promise<void> {
       );
     } catch (error) {
       logger.error({ err: error, guildId: session.guildId }, 'Failed to restore VC session');
-      await removeVcSessionFromRedis(session.guildId);
+      await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
     }
   }
 }
@@ -173,6 +180,6 @@ function setupConnectionListeners(connection: VoiceConnection, guildId: string):
     logger.info({ guildId }, 'Voice connection destroyed');
     sessions.delete(guildId);
     connections.delete(guildId);
-    removeVcSessionFromRedis(guildId).catch(() => {});
+    removeVcSessionFromRedis(guildId, config.botInstanceId).catch(() => {});
   });
 }

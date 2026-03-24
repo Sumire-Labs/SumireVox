@@ -18,6 +18,7 @@ import { handleMessageCreate } from './events/message-create.js';
 import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
+import { registerBotInstance, deactivateBotInstance } from './services/bot-instance-registry.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
@@ -65,6 +66,9 @@ async function bootstrap(): Promise<void> {
       { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
       `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
     );
+
+    // Bot インスタンス登録
+    await registerBotInstance();
 
     // VOICEVOX 話者一覧キャッシュ
     await loadSpeakers();
@@ -125,6 +129,9 @@ async function bootstrap(): Promise<void> {
 
     // 自動退出タイマー全クリア
     clearAllDisconnectTimers();
+
+    // Bot インスタンス非アクティブ化
+    await deactivateBotInstance();
 
     // 全 VC セッション破棄
     await destroyAllVcSessions();

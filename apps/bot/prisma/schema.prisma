@@ -29,6 +29,8 @@ model GuildSettings {
   dictionaryPermission  String   @default("admin_only") @map("dictionary_permission") // 'everyone' | 'admin_only'
   // PREMIUM
   manualPremium         Boolean  @default(false) @map("manual_premium")
+  // マルチインスタンス設定 (キー: botInstanceId文字列 "1","2",...)
+  botInstanceSettings   Json     @default("{}") @map("bot_instance_settings") @db.JsonB
   // タイムスタンプ
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -99,6 +101,18 @@ model Subscription {
 
   @@id([userId, stripeSubscriptionId])
   @@map("subscriptions")
+}
+
+model BotInstance {
+  instanceId Int      @id @map("instance_id")
+  botUserId  String   @map("bot_user_id") @db.VarChar(20)
+  clientId   String   @map("client_id") @db.VarChar(20)
+  name       String   @db.VarChar(50)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("bot_instances")
 }
 
 model Boost {
