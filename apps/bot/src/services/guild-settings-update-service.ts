@@ -46,6 +46,7 @@ export async function updateGuildSettings(
     adminRoleId: dbRecord.adminRoleId,
     dictionaryPermission: dbRecord.dictionaryPermission as GuildSettings['dictionaryPermission'],
     manualPremium: dbRecord.manualPremium,
+    botInstanceSettings: (dbRecord.botInstanceSettings ?? {}) as unknown as GuildBotInstanceSettingsMap,
   };
 
   await setCachedGuildSettings(guildId, updated);

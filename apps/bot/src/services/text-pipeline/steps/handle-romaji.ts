@@ -7,7 +7,7 @@ const ROMAJI_PATTERN = /[a-zA-Z]+/g;
 
 export const handleRomaji: PipelineStep = (text, context) => {
   // romajiRead ON 時はそのまま残す（VOICEVOX がローマ字を読む）
-  if (!(context?.guildSettings?.romajiReading)) return text;
+  if (context?.guildSettings?.romajiReading) return text;
 
   return text.replace(ROMAJI_PATTERN, (match) => {
     // 1文字の英字はスキップ（a, I 等は変換しない）

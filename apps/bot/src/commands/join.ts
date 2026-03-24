@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags } from 'discord.js';
 import { CommandDefinition } from './types.js';
 import { createVcSession, getVcSession, updateTextChannel } from '../services/vc-session-manager.js';
 import { getGuildSettings } from '../services/guild-settings-service.js';
@@ -9,9 +9,18 @@ import { logger } from '../infrastructure/logger.js';
 
 const data = new SlashCommandBuilder()
   .setName('join')
-  .setDescription('ボイスチャンネルに参加し、このチャンネルを読み上げ対象にします');
+  .setDescription('ボイスチャンネルに参加し、このチャンネルを読み上げ対象にします')
+  .setDMPermission(false);
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await interaction.reply({
+      content: 'このコマンドはサーバー内でのみ使用できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
   const guild = interaction.guild!;

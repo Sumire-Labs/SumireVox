@@ -5,6 +5,7 @@ import { isGuildPremium } from '../services/premium-service.js';
 import { resolveVoiceParams } from '../services/speaker-resolver.js';
 import { runPipeline, getDictionaryTrie, PipelineContext } from '../services/text-pipeline/index.js';
 import { enqueue } from '../services/speech-queue.js';
+import { LIMITS } from '@sumirevox/shared';
 import { logger } from '../infrastructure/logger.js';
 
 /**
@@ -81,11 +82,20 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     }
 
     // 8. 最終テキストの組み立て
-    const finalText =
+    let finalText =
       `${namePrefix}${processedText}${suffix ? (processedText ? '、' : '') + suffix : ''}`.trim();
 
     // テキストが空の場合はスキップ
     if (!finalText) return;
+
+    // 最終読み上げ文にも上限を適用（prefix/suffix で超過する可能性があるため）
+    const effectiveMax = Math.min(
+      guildSettings.maxReadLength,
+      isPremium ? LIMITS.PREMIUM_MAX_READ_LENGTH : LIMITS.FREE_MAX_READ_LENGTH,
+    );
+    if (finalText.length > effectiveMax) {
+      finalText = finalText.substring(0, effectiveMax) + '、以下省略';
+    }
 
     // 9. 音声パラメータの解決
     const voiceParams = await resolveVoiceParams(message.author.id, guildId, isPremium);

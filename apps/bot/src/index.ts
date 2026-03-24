@@ -1,5 +1,6 @@
 // ShardingManager でシャードを管理するエントリポイント
 // このファイルがメインプロセスとして動作し、bot.ts を子プロセスとして spawn する
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
@@ -12,10 +13,17 @@ import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 
 function main(): void {
-  const manager = new ShardingManager(resolve(__dirname, 'bot.ts'), {
+  const jsEntry = resolve(__dirname, 'bot.js');
+  const tsEntry = resolve(__dirname, 'bot.ts');
+  const botEntry = existsSync(jsEntry) ? jsEntry : tsEntry;
+  const isTs = botEntry.endsWith('.ts');
+
+  logger.info({ botEntry, isTs }, 'Resolving shard entry point');
+
+  const manager = new ShardingManager(botEntry, {
     token: config.discordToken,
     totalShards: 'auto',
-    execArgv: ['--import', 'tsx'],
+    execArgv: isTs ? ['--import', 'tsx'] : [],
   });
 
   manager.on('shardCreate', (shard) => {
@@ -43,7 +51,7 @@ function main(): void {
     });
   });
 
-  manager.spawn({ timeout: 30000 }).catch((error) => {
+  manager.spawn({ timeout: 30_000 }).catch((error) => {
     logger.fatal({ err: error }, 'Failed to spawn shards');
     process.exit(1);
   });

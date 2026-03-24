@@ -23,6 +23,10 @@ export async function handleVoiceStateUpdate(
   if (newState.member?.id === client.user?.id) return;
   if (oldState.member?.id === client.user?.id) return;
 
+  // 他の Bot のイベントも無視
+  const member = newState.member ?? oldState.member;
+  const actorIsBot = member?.user.bot ?? false;
+
   const session = getVcSession(guildId);
 
   // ==============================
@@ -49,12 +53,14 @@ export async function handleVoiceStateUpdate(
   // ミュート・画面共有等のイベント（チャンネル変更なし）は無視
   if (!joinedBotChannel && !leftBotChannel) return;
 
-  // ---- 入退室通知 ----
-  await handleJoinLeaveNotification(
-    guildId,
-    newState.member?.displayName ?? oldState.member?.displayName ?? 'ユーザー',
-    joinedBotChannel ? 'join' : 'leave',
-  );
+  // ---- 入退室通知 (人間のみ) ----
+  if (!actorIsBot) {
+    await handleJoinLeaveNotification(
+      guildId,
+      newState.member?.displayName ?? oldState.member?.displayName ?? 'ユーザー',
+      joinedBotChannel ? 'join' : 'leave',
+    );
+  }
 
   // ---- 自動退出タイマー ----
   await handleAutoDisconnect(guildId, botVoiceChannelId, guild);
@@ -181,10 +187,9 @@ async function handleAutoDisconnect(
     const voiceChannel = guild.channels.cache.get(botVoiceChannelId);
     if (!voiceChannel || !voiceChannel.isVoiceBased()) return;
 
-    const client = getClient();
-    const nonBotMembers = voiceChannel.members.filter((member) => member.id !== client.user?.id);
+    const humanMembers = voiceChannel.members.filter((member) => !member.user.bot);
 
-    if (nonBotMembers.size === 0) {
+    if (humanMembers.size === 0) {
       startDisconnectTimer(guildId);
     } else {
       cancelDisconnectTimer(guildId);

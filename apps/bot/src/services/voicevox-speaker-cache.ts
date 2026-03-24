@@ -10,23 +10,26 @@ const MAX_RETRIES = 3;
 let speakers: VoicevoxSpeaker[] = [];
 
 export async function loadSpeakers(): Promise<void> {
-  const targetUrl = getHealthyUrls()[0] ?? config.voicevoxUrls[0];
+  const candidates = [...new Set([...getHealthyUrls(), ...config.voicevoxUrls])];
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      if (!targetUrl) throw new Error('No VOICEVOX URL configured');
-      speakers = await fetchSpeakers(targetUrl);
-      return;
-    } catch (err) {
-      logger.warn({ err, attempt, url: targetUrl }, 'Failed to fetch VOICEVOX speakers, retrying...');
-      if (attempt < MAX_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+  for (const url of candidates) {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        speakers = await fetchSpeakers(url);
+        logger.info({ url, count: speakers.length }, 'VOICEVOX speakers loaded');
+        return;
+      } catch (err) {
+        logger.warn({ err, attempt, url }, 'Failed to fetch VOICEVOX speakers');
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+        }
       }
     }
+    logger.warn({ url }, 'All retries exhausted for this URL, trying next');
   }
 
-  logger.error('All attempts to fetch VOICEVOX speakers failed. Speaker cache will be empty.');
   speakers = [];
+  logger.error({ candidates }, 'All VOICEVOX URLs failed — speaker list is empty');
 }
 
 export function getSpeakers(): VoicevoxSpeaker[] {

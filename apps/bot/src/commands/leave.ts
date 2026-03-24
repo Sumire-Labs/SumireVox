@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags } from 'discord.js';
 import { CommandDefinition } from './types.js';
 import { destroyVcSession, getVcSession } from '../services/vc-session-manager.js';
 import { hasAdminPermission } from '../services/permission-service.js';
@@ -6,9 +6,18 @@ import { logger } from '../infrastructure/logger.js';
 
 const data = new SlashCommandBuilder()
   .setName('leave')
-  .setDescription('ボイスチャンネルから退出します');
+  .setDescription('ボイスチャンネルから退出します')
+  .setDMPermission(false);
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await interaction.reply({
+      content: 'このコマンドはサーバー内でのみ使用できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
 

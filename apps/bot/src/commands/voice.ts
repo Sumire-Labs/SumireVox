@@ -18,7 +18,8 @@ import { buildCustomId } from '@sumirevox/shared';
 
 const data = new SlashCommandBuilder()
   .setName('voice')
-  .setDescription('話者・速度・ピッチを設定します');
+  .setDescription('話者・速度・ピッチを設定します')
+  .setDMPermission(false);
 
 export function buildVoiceMessage(
   speakerName: string,
@@ -110,6 +111,14 @@ export function buildVoiceMessage(
 }
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await interaction.reply({
+      content: 'このコマンドはサーバー内でのみ使用できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   const userId = interaction.user.id;
   const setting = await getUserVoiceSetting(userId);
 
