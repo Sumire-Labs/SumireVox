@@ -67,19 +67,20 @@ export function ServerDictionaryPage() {
 
   const [error, setError] = useState<string | null>(null);
 
-  const fetchServerDict = useCallback(async (page: number) => {
+  const fetchServerDict = useCallback(async (page: number, signal?: AbortSignal) => {
     if (!guildId) return;
     setServerLoading(true);
     try {
       const data = await api.get<PaginatedResponse<DictEntry>>(
-        `/api/guilds/${guildId}/dictionary?page=${page}&perPage=${PER_PAGE}`
+        `/api/guilds/${guildId}/dictionary?page=${page}&perPage=${PER_PAGE}`,
+        signal ? { signal } : undefined,
       );
       setServerEntries(data.items);
       setServerTotal(data.total);
-    } catch {
-      // ignore
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
     } finally {
-      setServerLoading(false);
+      if (!signal?.aborted) setServerLoading(false);
     }
   }, [guildId]);
 
@@ -98,7 +99,11 @@ export function ServerDictionaryPage() {
     }
   }, []);
 
-  useEffect(() => { fetchServerDict(serverPage); }, [fetchServerDict, serverPage]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchServerDict(serverPage, controller.signal);
+    return () => controller.abort();
+  }, [fetchServerDict, serverPage]);
 
   const handleTabChange = (key: React.Key) => {
     if (key === 'global' && globalEntries.length === 0) {

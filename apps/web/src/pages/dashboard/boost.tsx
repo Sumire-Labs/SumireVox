@@ -47,7 +47,24 @@ export function BoostPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      api.get<BoostData>('/api/user/boosts', { signal: controller.signal }),
+      api.get<Guild[]>('/api/guilds', { signal: controller.signal }),
+    ])
+      .then(([boostData, guildData]) => {
+        setData(boostData);
+        setGuilds(guildData);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, []);
 
   const handleCheckout = async () => {
     setError(null);

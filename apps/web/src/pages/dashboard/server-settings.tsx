@@ -6,18 +6,18 @@ import { api, ApiError } from '../../lib/api';
 interface GuildSettings {
   guildId: string;
   maxReadLength: number;
-  readName: boolean;
-  honorific: boolean;
-  romajiRead: boolean;
-  joinLeaveNotify: boolean;
-  greeting: boolean;
-  customEmojiMode: 'READ_NAME' | 'REMOVE';
+  readUsername: boolean;
+  addSanSuffix: boolean;
+  romajiReading: boolean;
+  joinLeaveNotification: boolean;
+  greetingOnJoin: boolean;
+  customEmojiHandling: 'READ_NAME' | 'REMOVE';
   readTargetType: 'TEXT_ONLY' | 'TEXT_STICKER' | 'TEXT_STICKER_ATTACHMENT';
   autoJoin: boolean;
   defaultTextChannelId: string | null;
   defaultSpeakerId: number | null;
   adminRoleId: string | null;
-  dictPermission: 'ALL_USERS' | 'ADMIN_ONLY';
+  dictionaryPermission: 'ALL_USERS' | 'ADMIN_ONLY';
   manualPremium: boolean;
 }
 
@@ -44,9 +44,9 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
-function SettingSwitch({ isSelected, onChange, isDisabled }: { isSelected: boolean; onChange: (v: boolean) => void; isDisabled?: boolean }) {
+function SettingSwitch({ isSelected, onChange, isDisabled, label }: { isSelected: boolean; onChange: (v: boolean) => void; isDisabled?: boolean; label: string }) {
   return (
-    <Switch isSelected={isSelected} onChange={onChange} isDisabled={isDisabled}>
+    <Switch aria-label={label} isSelected={isSelected} onChange={onChange} isDisabled={isDisabled}>
       {({ isSelected: sel }) => (
         <Switch.Control className={sel ? 'bg-purple-600' : 'bg-white/20'}>
           <Switch.Thumb />
@@ -65,10 +65,16 @@ export function ServerSettingsPage() {
 
   useEffect(() => {
     if (!guildId) return;
-    api.get<GuildSettings>(`/api/guilds/${guildId}/settings`)
+    const controller = new AbortController();
+    api.get<GuildSettings>(`/api/guilds/${guildId}/settings`, { signal: controller.signal })
       .then(setSettings)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [guildId]);
 
   const save = useCallback(async (patch: Partial<GuildSettings>) => {
@@ -154,6 +160,7 @@ export function ServerSettingsPage() {
       <SectionCard title="読み上げ設定">
         <SettingRow label="最大文字数" description="FREE: 上限50 / PREMIUM: 上限200">
           <NumberField
+            aria-label="最大文字数"
             value={settings.maxReadLength}
             onChange={(val) => handleNumber('maxReadLength', val)}
             minValue={1}
@@ -167,23 +174,23 @@ export function ServerSettingsPage() {
           </NumberField>
         </SettingRow>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
-          <SettingSwitch isSelected={settings.readName} onChange={(v) => handleSwitch('readName', v)} />
+          <SettingSwitch label="名前読み上げ" isSelected={settings.readUsername} onChange={(v) => handleSwitch('readUsername', v)} />
         </SettingRow>
         <SettingRow label="さん付け" description="名前の後ろに「さん」を付ける">
-          <SettingSwitch isSelected={settings.honorific} onChange={(v) => handleSwitch('honorific', v)} />
+          <SettingSwitch label="さん付け" isSelected={settings.addSanSuffix} onChange={(v) => handleSwitch('addSanSuffix', v)} />
         </SettingRow>
         <SettingRow label="ローマ字読み" description="ローマ字パターンをそのまま読む">
-          <SettingSwitch isSelected={settings.romajiRead} onChange={(v) => handleSwitch('romajiRead', v)} />
+          <SettingSwitch label="ローマ字読み" isSelected={settings.romajiReading} onChange={(v) => handleSwitch('romajiReading', v)} />
         </SettingRow>
       </SectionCard>
 
       {/* 通知設定 */}
       <SectionCard title="通知設定">
         <SettingRow label="入退室通知" description="VC の参加・退出・移動を読み上げる">
-          <SettingSwitch isSelected={settings.joinLeaveNotify} onChange={(v) => handleSwitch('joinLeaveNotify', v)} />
+          <SettingSwitch label="入退室通知" isSelected={settings.joinLeaveNotification} onChange={(v) => handleSwitch('joinLeaveNotification', v)} />
         </SettingRow>
         <SettingRow label="Bot 入室時の挨拶" description="/join 時に「接続しました」を読み上げる">
-          <SettingSwitch isSelected={settings.greeting} onChange={(v) => handleSwitch('greeting', v)} />
+          <SettingSwitch label="Bot 入室時の挨拶" isSelected={settings.greetingOnJoin} onChange={(v) => handleSwitch('greetingOnJoin', v)} />
         </SettingRow>
       </SectionCard>
 
@@ -191,8 +198,9 @@ export function ServerSettingsPage() {
       <SectionCard title="フィルタ設定">
         <SettingRow label="カスタム絵文字の扱い">
           <Select
-            value={settings.customEmojiMode}
-            onChange={(val) => handleSelect('customEmojiMode', val as string)}
+            aria-label="カスタム絵文字の扱い"
+            value={settings.customEmojiHandling}
+            onChange={(val) => handleSelect('customEmojiHandling', val as string)}
           >
             <Select.Trigger className="min-w-[200px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
               <Select.Value />
@@ -208,6 +216,7 @@ export function ServerSettingsPage() {
         </SettingRow>
         <SettingRow label="読み上げ対象">
           <Select
+            aria-label="読み上げ対象"
             value={settings.readTargetType}
             onChange={(val) => handleSelect('readTargetType', val as string)}
           >
@@ -240,6 +249,7 @@ export function ServerSettingsPage() {
         </div>
         <SettingRow label="デフォルト話者 ID" description="ユーザー設定がない場合に使用する話者">
           <NumberField
+            aria-label="デフォルト話者 ID"
             defaultValue={settings.defaultSpeakerId ?? undefined}
             onChange={(val) => handleNumber('defaultSpeakerId', val)}
             minValue={0}
@@ -267,8 +277,9 @@ export function ServerSettingsPage() {
         </SettingRow>
         <SettingRow label="サーバー辞書追加権限">
           <Select
-            value={settings.dictPermission}
-            onChange={(val) => handleSelect('dictPermission', val as string)}
+            aria-label="サーバー辞書追加権限"
+            value={settings.dictionaryPermission}
+            onChange={(val) => handleSelect('dictionaryPermission', val as string)}
           >
             <Select.Trigger className="min-w-[220px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
               <Select.Value />
