@@ -16,7 +16,6 @@
 | greeting | Boolean | Bot 入室挨拶 |
 | customEmojiMode | Enum | READ_NAME / REMOVE |
 | readTargetType | Enum | TEXT_ONLY / TEXT_STICKER / TEXT_STICKER_ATTACHMENT |
-| autoJoin | Boolean | 自動接続 |
 | defaultTextChannelId | String? | デフォルト読み上げチャンネル |
 | defaultSpeakerId | Int? | デフォルト話者 |
 | adminRoleId | String? | 管理ロール |
