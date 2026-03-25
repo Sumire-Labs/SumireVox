@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Switch, Select, ListBox, NumberField, TextField, Label, Input } from '@heroui/react';
+import { Switch, Select, ListBox, NumberField } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 
@@ -19,6 +19,17 @@ interface GuildSettings {
   adminRoleId: string | null;
   dictionaryPermission: 'everyone' | 'admin_only';
   manualPremium: boolean;
+}
+
+interface Role {
+  id: string;
+  name: string;
+  color: number;
+}
+
+interface Speaker {
+  id: number;
+  name: string;
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
@@ -59,6 +70,8 @@ function SettingSwitch({ isSelected, onChange, isDisabled, label }: { isSelected
 export function ServerSettingsPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [settings, setSettings] = useState<GuildSettings | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,14 +79,28 @@ export function ServerSettingsPage() {
   useEffect(() => {
     if (!guildId) return;
     const controller = new AbortController();
-    api.get<GuildSettings>(`/api/guilds/${guildId}/settings`, { signal: controller.signal })
-      .then(setSettings)
+
+    Promise.all([
+      api.get<GuildSettings>(`/api/guilds/${guildId}/settings`, { signal: controller.signal }),
+      api.get<Role[]>(`/api/guilds/${guildId}/roles`, { signal: controller.signal }),
+      api.get<Speaker[]>('/api/voicevox/speakers', { signal: controller.signal }),
+    ])
+      .then(([s, r, sp]) => {
+        setSettings(s);
+        setRoles(r);
+        setSpeakers(sp);
+      })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
+        // roles/speakers 取得失敗は非致命的: settings だけでも表示する
+        api.get<GuildSettings>(`/api/guilds/${guildId}/settings`, { signal: controller.signal })
+          .then(setSettings)
+          .catch(() => {});
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+
     return () => controller.abort();
   }, [guildId]);
 
@@ -107,10 +134,6 @@ export function ServerSettingsPage() {
   const handleNumber = (field: keyof GuildSettings, value: number | undefined) => {
     if (!settings || value === undefined) return;
     save({ [field]: value });
-  };
-
-  const handleStringBlur = (field: keyof GuildSettings, value: string) => {
-    save({ [field]: value || null });
   };
 
   if (loading) {
@@ -247,33 +270,76 @@ export function ServerSettingsPage() {
           </Link>{' '}
           から行ってください。
         </div>
-        <SettingRow label="デフォルト話者 ID" description="ユーザー設定がない場合に使用する話者">
-          <NumberField
-            aria-label="デフォルト話者 ID"
-            defaultValue={settings.defaultSpeakerId ?? undefined}
-            onChange={(val) => handleNumber('defaultSpeakerId', val)}
-            minValue={0}
+        <SettingRow label="デフォルト話者" description="ユーザー設定がない場合に使用する話者">
+          <Select
+            aria-label="デフォルト話者"
+            value={settings.defaultSpeakerId !== null ? String(settings.defaultSpeakerId) : ''}
+            onChange={(val) => {
+              const v = val as string;
+              if (!settings) return;
+              const numVal = v ? Number(v) : null;
+              setSettings({ ...settings, defaultSpeakerId: numVal });
+              save({ defaultSpeakerId: numVal });
+            }}
           >
-            <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-              <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-              <NumberField.Input className="w-16 text-white text-center bg-transparent text-sm py-1.5 focus:outline-none" />
-              <NumberField.IncrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-            </NumberField.Group>
-          </NumberField>
+            <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
+              <ListBox>
+                {speakers.map((s) => (
+                  <ListBox.Item key={s.id} id={String(s.id)} textValue={s.name}>
+                    {s.name}
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </SettingRow>
       </SectionCard>
 
       {/* 権限設定 */}
       <SectionCard title="権限設定">
-        <SettingRow label="管理ロール ID" description="このロールのユーザーを管理者として扱う">
-          <TextField defaultValue={settings.adminRoleId ?? ''}>
-            <Label className="sr-only">管理ロール ID</Label>
-            <Input
-              placeholder="ロール ID"
-              className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-gray-600"
-              onBlur={(e: React.FocusEvent<HTMLInputElement>) => handleStringBlur('adminRoleId', e.currentTarget.value)}
-            />
-          </TextField>
+        <SettingRow label="管理ロール" description="このロールのユーザーを管理者として扱う">
+          <Select
+            aria-label="管理ロール"
+            value={settings.adminRoleId ?? ''}
+            onChange={(val) => {
+              const v = val as string;
+              if (!settings) return;
+              const roleVal = v || null;
+              setSettings({ ...settings, adminRoleId: roleVal });
+              save({ adminRoleId: roleVal });
+            }}
+          >
+            <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
+              <ListBox>
+                <ListBox.Item id="" textValue="未設定（サーバー管理者権限）">
+                  未設定（サーバー管理者権限）
+                </ListBox.Item>
+                {roles.map((role) => (
+                  <ListBox.Item key={role.id} id={role.id} textValue={role.name}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{
+                          backgroundColor: role.color
+                            ? `#${role.color.toString(16).padStart(6, '0')}`
+                            : '#99aab5',
+                        }}
+                      />
+                      {role.name}
+                    </div>
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </SettingRow>
         <SettingRow label="サーバー辞書追加権限">
           <Select

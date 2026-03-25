@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireGuildAdmin, guildAdminCacheKey } from '../middleware/require-guild-admin.js';
-import { fetchManagedGuilds } from '../services/discord-api.js';
+import { fetchManagedGuilds, fetchGuildChannels, fetchGuildRoles } from '../services/discord-api.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { getRedisClient } from '../infrastructure/redis.js';
@@ -178,6 +178,78 @@ guildsRouter.delete('/:guildId/dictionary/:word', requireGuildAdmin, async (c) =
   const word = decodeURIComponent(c.req.param('word'));
   await deleteServerDictionaryEntry(guildId, word);
   return c.json({ success: true, data: null });
+});
+
+// ========================================
+// Discord チャンネル・ロール
+// ========================================
+
+const CHANNEL_CACHE_TTL = 120;
+const ROLE_CACHE_TTL = 120;
+const channelCacheKey = (guildId: string) => `guild:${guildId}:channels`;
+const roleCacheKey = (guildId: string) => `guild:${guildId}:roles`;
+
+/**
+ * GET /api/guilds/:guildId/channels
+ * ギルドのチャンネル一覧 (テキスト・ボイス・カテゴリ別)
+ */
+guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
+  const guildId = c.req.param('guildId');
+  const redis = getRedisClient();
+  const cacheKey = channelCacheKey(guildId);
+
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    return c.json({ success: true, data: JSON.parse(cached) as unknown });
+  }
+
+  const channels = await fetchGuildChannels(guildId);
+
+  const categories = channels
+    .filter((ch) => ch.type === 4)
+    .sort((a, b) => a.position - b.position)
+    .map((ch) => ({ id: ch.id, name: ch.name }));
+
+  const textChannels = channels
+    .filter((ch) => ch.type === 0)
+    .sort((a, b) => a.position - b.position)
+    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
+
+  const voiceChannels = channels
+    .filter((ch) => ch.type === 2 || ch.type === 13)
+    .sort((a, b) => a.position - b.position)
+    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
+
+  const result = { textChannels, voiceChannels, categories };
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', CHANNEL_CACHE_TTL);
+
+  return c.json({ success: true, data: result });
+});
+
+/**
+ * GET /api/guilds/:guildId/roles
+ * ギルドのロール一覧 (@everyone・Bot 管理ロール除外)
+ */
+guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
+  const guildId = c.req.param('guildId');
+  const redis = getRedisClient();
+  const cacheKey = roleCacheKey(guildId);
+
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    return c.json({ success: true, data: JSON.parse(cached) as unknown });
+  }
+
+  const roles = await fetchGuildRoles(guildId);
+
+  const result = roles
+    .filter((r) => r.name !== '@everyone' && !r.managed)
+    .sort((a, b) => b.position - a.position)
+    .map((r) => ({ id: r.id, name: r.name, color: r.color }));
+
+  await redis.set(cacheKey, JSON.stringify(result), 'EX', ROLE_CACHE_TTL);
+
+  return c.json({ success: true, data: result });
 });
 
 // ========================================

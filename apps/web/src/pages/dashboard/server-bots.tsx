@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Switch } from '@heroui/react';
+import { Switch, Select, ListBox } from '@heroui/react';
 import { useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 
@@ -23,6 +23,23 @@ interface BotListResponse {
   instances: BotInstanceInfo[];
 }
 
+interface Channel {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface ChannelsData {
+  textChannels: Channel[];
+  voiceChannels: Channel[];
+  categories: Category[];
+}
+
 function StatusBadge({ label, variant }: { label: string; variant: 'active' | 'inactive' | 'unavailable' }) {
   const styles = {
     active: 'bg-green-500/20 text-green-400',
@@ -36,29 +53,57 @@ function StatusBadge({ label, variant }: { label: string; variant: 'active' | 'i
   );
 }
 
-function ChannelInput({
+function channelLabel(ch: Channel, categories: Category[]): string {
+  if (ch.parentId) {
+    const cat = categories.find((c) => c.id === ch.parentId);
+    if (cat) return `${cat.name} > ${ch.name}`;
+  }
+  return ch.name;
+}
+
+function ChannelSelect({
   label,
   value,
+  channels,
+  categories,
   placeholder,
-  onBlur,
   disabled,
+  onChange,
 }: {
   label: string;
-  value: string;
+  value: string | null;
+  channels: Channel[];
+  categories: Category[];
   placeholder: string;
-  onBlur: (v: string) => void;
   disabled?: boolean;
+  onChange: (v: string | null) => void;
 }) {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-gray-500">{label}</label>
-      <input
-        defaultValue={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        className="w-full bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
-        onBlur={(e) => onBlur(e.target.value)}
-      />
+      <Select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(val) => onChange((val as string) || null)}
+        isDisabled={disabled}
+      >
+        <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          <Select.Value placeholder={placeholder} />
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
+          <ListBox>
+            <ListBox.Item id="" textValue="未設定">
+              <span className="text-gray-500">未設定</span>
+            </ListBox.Item>
+            {channels.map((ch) => (
+              <ListBox.Item key={ch.id} id={ch.id} textValue={channelLabel(ch, categories)}>
+                {channelLabel(ch, categories)}
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
     </div>
   );
 }
@@ -66,6 +111,7 @@ function ChannelInput({
 export function ServerBotsPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [data, setData] = useState<BotListResponse | null>(null);
+  const [channels, setChannels] = useState<ChannelsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -73,14 +119,26 @@ export function ServerBotsPage() {
   useEffect(() => {
     if (!guildId) return;
     const controller = new AbortController();
-    api.get<BotListResponse>(`/api/guilds/${guildId}/bots`, { signal: controller.signal })
-      .then(setData)
+
+    Promise.all([
+      api.get<BotListResponse>(`/api/guilds/${guildId}/bots`, { signal: controller.signal }),
+      api.get<ChannelsData>(`/api/guilds/${guildId}/channels`, { signal: controller.signal }),
+    ])
+      .then(([bots, ch]) => {
+        setData(bots);
+        setChannels(ch);
+      })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
+        // channels 取得失敗は非致命的
+        api.get<BotListResponse>(`/api/guilds/${guildId}/bots`, { signal: controller.signal })
+          .then(setData)
+          .catch(() => {});
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+
     return () => controller.abort();
   }, [guildId]);
 
@@ -137,6 +195,9 @@ export function ServerBotsPage() {
   if (!data) return <p className="text-red-400">Bot 情報の読み込みに失敗しました。</p>;
 
   const totalSlots = 5; // MAX_BOT_INSTANCES
+  const cats = channels?.categories ?? [];
+  const textChannels = channels?.textChannels ?? [];
+  const voiceChannels = channels?.voiceChannels ?? [];
 
   return (
     <div className="flex flex-col gap-8">
@@ -246,24 +307,24 @@ export function ServerBotsPage() {
                   </Switch>
                 </div>
 
-                <ChannelInput
-                  label="VC チャンネル ID（未設定の場合は任意の VC に参加）"
-                  value={instance.settings.voiceChannelId ?? ''}
-                  placeholder="VC チャンネル ID"
+                <ChannelSelect
+                  label="VC チャンネル（未設定の場合は任意の VC に参加）"
+                  value={instance.settings.voiceChannelId}
+                  channels={voiceChannels}
+                  categories={cats}
+                  placeholder="VC チャンネルを選択"
                   disabled={!instance.isInGuild || isSaving}
-                  onBlur={(v) =>
-                    updateSettings(instance.instanceId, { voiceChannelId: v || null })
-                  }
+                  onChange={(v) => updateSettings(instance.instanceId, { voiceChannelId: v })}
                 />
 
-                <ChannelInput
-                  label="テキストチャンネル ID（読み上げ対象チャンネル）"
-                  value={instance.settings.textChannelId ?? ''}
-                  placeholder="テキストチャンネル ID"
+                <ChannelSelect
+                  label="テキストチャンネル（読み上げ対象チャンネル）"
+                  value={instance.settings.textChannelId}
+                  channels={textChannels}
+                  categories={cats}
+                  placeholder="テキストチャンネルを選択"
                   disabled={!instance.isInGuild || isSaving}
-                  onBlur={(v) =>
-                    updateSettings(instance.instanceId, { textChannelId: v || null })
-                  }
+                  onChange={(v) => updateSettings(instance.instanceId, { textChannelId: v })}
                 />
               </div>
 
