@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
-import { requireGuildAdmin } from '../middleware/require-guild-admin.js';
+import { requireGuildAdmin, guildAdminCacheKey } from '../middleware/require-guild-admin.js';
 import { fetchManagedGuilds } from '../services/discord-api.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
 import { AppError } from '../infrastructure/app-error.js';
@@ -8,6 +8,7 @@ import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
 const GUILD_CACHE_TTL = 60;
+const GUILD_ADMIN_CACHE_TTL = 300; // requireGuildAdmin と同じ TTL
 const guildCacheKey = (userId: string) => `user:${userId}:guilds`;
 import {
   getServerDictionaryEntries,
@@ -53,7 +54,14 @@ guildsRouter.get('/', async (c) => {
     const data = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
 
     try {
-      await getRedisClient().set(cacheKey, JSON.stringify(data), 'EX', GUILD_CACHE_TTL);
+      const redis = getRedisClient();
+      await redis.set(cacheKey, JSON.stringify(data), 'EX', GUILD_CACHE_TTL);
+      // 管理権限ありのギルドを個別にキャッシュし、requireGuildAdmin の Discord API 呼び出しを省略
+      await Promise.all(
+        guilds.map((g) =>
+          redis.set(guildAdminCacheKey(session.userId, g.id), 'true', 'EX', GUILD_ADMIN_CACHE_TTL),
+        ),
+      );
     } catch (err) {
       logger.warn({ err }, 'Failed to write guild cache');
     }
