@@ -208,8 +208,8 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="read_name">名前を読み上げる</ListBox.Item>
-                <ListBox.Item id="remove">除去する</ListBox.Item>
+                <ListBox.Item id="read_name" textValue="名前を読み上げる">名前を読み上げる</ListBox.Item>
+                <ListBox.Item id="remove" textValue="除去する">除去する</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -226,9 +226,9 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="text_only">テキストのみ</ListBox.Item>
-                <ListBox.Item id="text_and_sticker">テキスト + スタンプ</ListBox.Item>
-                <ListBox.Item id="text_sticker_and_attachment">テキスト + スタンプ + 添付</ListBox.Item>
+                <ListBox.Item id="text_only" textValue="テキストのみ">テキストのみ</ListBox.Item>
+                <ListBox.Item id="text_and_sticker" textValue="テキスト + スタンプ">テキスト + スタンプ</ListBox.Item>
+                <ListBox.Item id="text_sticker_and_attachment" textValue="テキスト + スタンプ + 添付">テキスト + スタンプ + 添付</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -287,8 +287,8 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="everyone">全ユーザー</ListBox.Item>
-                <ListBox.Item id="admin_only">管理者 / 指定ロールのみ</ListBox.Item>
+                <ListBox.Item id="everyone" textValue="全ユーザー">全ユーザー</ListBox.Item>
+                <ListBox.Item id="admin_only" textValue="管理者 / 指定ロールのみ">管理者 / 指定ロールのみ</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
