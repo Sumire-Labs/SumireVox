@@ -22,6 +22,12 @@ interface Guild {
   id: string;
   name: string;
   icon: string | null;
+  botJoined: boolean;
+}
+
+interface GuildsResponse {
+  guilds: Guild[];
+  mainBotClientId: string;
 }
 
 export function BoostPage() {
@@ -34,12 +40,12 @@ export function BoostPage() {
 
   const fetchData = async () => {
     try {
-      const [boostData, guildData] = await Promise.all([
+      const [boostData, guildsRes] = await Promise.all([
         api.get<BoostData>('/api/user/boosts'),
-        api.get<Guild[]>('/api/guilds'),
+        api.get<GuildsResponse>('/api/guilds'),
       ]);
       setData(boostData);
-      setGuilds(guildData);
+      setGuilds(guildsRes.guilds);
     } catch {
       // ignore
     } finally {
@@ -51,11 +57,11 @@ export function BoostPage() {
     const controller = new AbortController();
     Promise.all([
       api.get<BoostData>('/api/user/boosts', { signal: controller.signal }),
-      api.get<Guild[]>('/api/guilds', { signal: controller.signal }),
+      api.get<GuildsResponse>('/api/guilds', { signal: controller.signal }),
     ])
-      .then(([boostData, guildData]) => {
+      .then(([boostData, guildsRes]) => {
         setData(boostData);
-        setGuilds(guildData);
+        setGuilds(guildsRes.guilds);
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;

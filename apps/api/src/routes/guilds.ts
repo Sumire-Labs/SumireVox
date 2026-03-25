@@ -6,6 +6,7 @@ import { getGuildSettings, updateGuildSettings } from '../services/guild-setting
 import { AppError } from '../infrastructure/app-error.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
+import { config } from '../infrastructure/config.js';
 
 const GUILD_CACHE_TTL = 60;
 const GUILD_ADMIN_CACHE_TTL = 300; // requireGuildAdmin と同じ TTL
@@ -40,42 +41,67 @@ guildsRouter.get('/', async (c) => {
   const session = c.get('session')!;
   const cacheKey = guildCacheKey(session.userId);
 
+  let guilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
+
   try {
     const cached = await getRedisClient().get(cacheKey);
     if (cached) {
-      return c.json({ success: true, data: JSON.parse(cached) });
+      guilds = JSON.parse(cached) as Array<{ id: string; name: string; icon: string | null }>;
     }
   } catch (err) {
     logger.warn({ err }, 'Failed to read guild cache');
   }
 
-  try {
-    const guilds = await fetchManagedGuilds(session.accessToken);
-    const data = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
-
+  if (!guilds) {
     try {
-      const redis = getRedisClient();
-      await redis.set(cacheKey, JSON.stringify(data), 'EX', GUILD_CACHE_TTL);
-      // 管理権限ありのギルドを個別にキャッシュし、requireGuildAdmin の Discord API 呼び出しを省略
-      await Promise.all(
-        guilds.map((g) =>
-          redis.set(guildAdminCacheKey(session.userId, g.id), 'true', 'EX', GUILD_ADMIN_CACHE_TTL),
-        ),
-      );
-    } catch (err) {
-      logger.warn({ err }, 'Failed to write guild cache');
-    }
+      const managed = await fetchManagedGuilds(session.accessToken);
+      guilds = managed.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
 
-    return c.json({ success: true, data });
-  } catch (err) {
-    if (err instanceof AppError && err.statusCode === 429) {
-      return c.json(
-        { success: false, error: { code: 'RATE_LIMITED', message: err.message } },
-        503,
-      );
+      try {
+        const redis = getRedisClient();
+        await redis.set(cacheKey, JSON.stringify(guilds), 'EX', GUILD_CACHE_TTL);
+        // 管理権限ありのギルドを個別にキャッシュし、requireGuildAdmin の Discord API 呼び出しを省略
+        await Promise.all(
+          managed.map((g) =>
+            redis.set(guildAdminCacheKey(session.userId, g.id), 'true', 'EX', GUILD_ADMIN_CACHE_TTL),
+          ),
+        );
+      } catch (err) {
+        logger.warn({ err }, 'Failed to write guild cache');
+      }
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 429) {
+        return c.json(
+          { success: false, error: { code: 'RATE_LIMITED', message: err.message } },
+          503,
+        );
+      }
+      throw err;
     }
-    throw err;
   }
+
+  // Bot 参加状態をチェック（Redis から直接参照、常に最新値を返す）
+  const botInstances = await getActiveBotInstances();
+  const guildsWithBotStatus = await Promise.all(
+    guilds.map(async (guild) => {
+      let botJoined = false;
+      for (const instance of botInstances) {
+        if (await isBotInGuild(instance.instanceId, guild.id)) {
+          botJoined = true;
+          break;
+        }
+      }
+      return { ...guild, botJoined };
+    }),
+  );
+
+  return c.json({
+    success: true,
+    data: {
+      guilds: guildsWithBotStatus,
+      mainBotClientId: config.discordClientId,
+    },
+  });
 });
 
 /**
