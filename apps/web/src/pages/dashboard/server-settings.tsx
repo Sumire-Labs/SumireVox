@@ -11,13 +11,13 @@ interface GuildSettings {
   romajiReading: boolean;
   joinLeaveNotification: boolean;
   greetingOnJoin: boolean;
-  customEmojiHandling: 'READ_NAME' | 'REMOVE';
-  readTargetType: 'TEXT_ONLY' | 'TEXT_STICKER' | 'TEXT_STICKER_ATTACHMENT';
+  customEmojiHandling: 'read_name' | 'remove';
+  readTargetType: 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment';
   autoJoin: boolean;
   defaultTextChannelId: string | null;
   defaultSpeakerId: number | null;
   adminRoleId: string | null;
-  dictionaryPermission: 'ALL_USERS' | 'ADMIN_ONLY';
+  dictionaryPermission: 'everyone' | 'admin_only';
   manualPremium: boolean;
 }
 
@@ -208,8 +208,8 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="READ_NAME">名前を読み上げる</ListBox.Item>
-                <ListBox.Item id="REMOVE">除去する</ListBox.Item>
+                <ListBox.Item id="read_name">名前を読み上げる</ListBox.Item>
+                <ListBox.Item id="remove">除去する</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -226,9 +226,9 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="TEXT_ONLY">テキストのみ</ListBox.Item>
-                <ListBox.Item id="TEXT_STICKER">テキスト + スタンプ</ListBox.Item>
-                <ListBox.Item id="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</ListBox.Item>
+                <ListBox.Item id="text_only">テキストのみ</ListBox.Item>
+                <ListBox.Item id="text_and_sticker">テキスト + スタンプ</ListBox.Item>
+                <ListBox.Item id="text_sticker_and_attachment">テキスト + スタンプ + 添付</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
@@ -287,8 +287,8 @@ export function ServerSettingsPage() {
             </Select.Trigger>
             <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
               <ListBox>
-                <ListBox.Item id="ALL_USERS">全ユーザー</ListBox.Item>
-                <ListBox.Item id="ADMIN_ONLY">管理者 / 指定ロールのみ</ListBox.Item>
+                <ListBox.Item id="everyone">全ユーザー</ListBox.Item>
+                <ListBox.Item id="admin_only">管理者 / 指定ロールのみ</ListBox.Item>
               </ListBox>
             </Select.Popover>
           </Select>
