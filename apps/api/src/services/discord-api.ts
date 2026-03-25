@@ -1,4 +1,5 @@
 import { logger } from '../infrastructure/logger.js';
+import { AppError } from '../infrastructure/app-error.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
@@ -17,6 +18,11 @@ export async function fetchUserGuilds(accessToken: string): Promise<DiscordGuild
   const response = await fetch(`${DISCORD_API_BASE}/users/@me/guilds`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
+
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After') ?? '5';
+    throw new AppError('RATE_LIMITED', `Discord API rate limited. Retry after ${retryAfter}s`, 429);
+  }
 
   if (!response.ok) {
     logger.error({ status: response.status }, 'Failed to fetch user guilds');

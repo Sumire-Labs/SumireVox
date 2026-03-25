@@ -3,6 +3,12 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { requireGuildAdmin } from '../middleware/require-guild-admin.js';
 import { fetchManagedGuilds } from '../services/discord-api.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
+import { AppError } from '../infrastructure/app-error.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { logger } from '../infrastructure/logger.js';
+
+const GUILD_CACHE_TTL = 60;
+const guildCacheKey = (userId: string) => `user:${userId}:guilds`;
 import {
   getServerDictionaryEntries,
   addServerDictionaryEntry,
@@ -31,15 +37,37 @@ guildsRouter.use('*', requireAuth);
  */
 guildsRouter.get('/', async (c) => {
   const session = c.get('session')!;
-  const guilds = await fetchManagedGuilds(session.accessToken);
-  return c.json({
-    success: true,
-    data: guilds.map((g) => ({
-      id: g.id,
-      name: g.name,
-      icon: g.icon,
-    })),
-  });
+  const cacheKey = guildCacheKey(session.userId);
+
+  try {
+    const cached = await getRedisClient().get(cacheKey);
+    if (cached) {
+      return c.json({ success: true, data: JSON.parse(cached) });
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to read guild cache');
+  }
+
+  try {
+    const guilds = await fetchManagedGuilds(session.accessToken);
+    const data = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
+
+    try {
+      await getRedisClient().set(cacheKey, JSON.stringify(data), 'EX', GUILD_CACHE_TTL);
+    } catch (err) {
+      logger.warn({ err }, 'Failed to write guild cache');
+    }
+
+    return c.json({ success: true, data });
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 429) {
+      return c.json(
+        { success: false, error: { code: 'RATE_LIMITED', message: err.message } },
+        503,
+      );
+    }
+    throw err;
+  }
 });
 
 /**
