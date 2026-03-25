@@ -4,24 +4,25 @@
 
 サーバー単位の設定。
 
-| カラム | 型 | 備考 |
-|---|---|---|
-| guildId | String @id | |
-| manualPremium | Boolean | デフォルト false。Bot 管理者手動 PREMIUM |
-| maxReadLength | Int | デフォルト 50。読み上げ時に PREMIUM 状態でクランプ (FREE:50, PREMIUM:200) |
-| readName | Boolean | 名前読み上げ。デフォルト OFF |
-| honorific | Boolean | さん付け |
-| romajiRead | Boolean | ローマ字読み |
-| joinLeaveNotify | Boolean | 入退室通知 |
-| greeting | Boolean | Bot 入室挨拶 |
-| customEmojiMode | Enum | READ_NAME / REMOVE |
-| readTargetType | Enum | TEXT_ONLY / TEXT_STICKER / TEXT_STICKER_ATTACHMENT |
+| カラム                  | 型 | 備考 |
+|----------------------|---|---|
+| guildId              | String @id | |
+| manualPremium        | Boolean | デフォルト false。Bot 管理者手動 PREMIUM |
+| maxReadLength        | Int | デフォルト 50。読み上げ時に PREMIUM 状態でクランプ (FREE:50, PREMIUM:200) |
+| readName             | Boolean | 名前読み上げ。デフォルト OFF |
+| honorific            | Boolean | さん付け |
+| romajiRead           | Boolean | ローマ字読み |
+| joinLeaveNotify      | Boolean | 入退室通知 |
+| greeting             | Boolean | Bot 入室挨拶 |
+| customEmojiMode      | Enum | READ_NAME / REMOVE |
+| readTargetType       | Enum | TEXT_ONLY / TEXT_STICKER / TEXT_STICKER_ATTACHMENT |
 | defaultTextChannelId | String? | デフォルト読み上げチャンネル |
-| defaultSpeakerId | Int? | デフォルト話者 |
-| adminRoleId | String? | 管理ロール |
-| dictPermission | Enum | ALL_USERS / ADMIN_ONLY。デフォルト ADMIN_ONLY |
-| createdAt | DateTime | |
-| updatedAt | DateTime | |
+| defaultSpeakerId     | Int? | デフォルト話者 |
+| adminRoleId          | String? | 管理ロール |
+| dictPermission       | Enum | ALL_USERS / ADMIN_ONLY。デフォルト ADMIN_ONLY |
+| createdAt            | DateTime | |
+| updatedAt            | DateTime | |
+| botInstanceSettings  | JsonB | インスタンスごとの自動接続設定 |
 
 ## UserVoiceSetting
 
