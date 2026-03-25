@@ -11,15 +11,24 @@ export const authRouter = new Hono();
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const REDIRECT_URI_PATH = '/auth/callback';
 
-function getRedirectUri(): string {
-  return `${config.webDomain}${REDIRECT_URI_PATH}`;
+function getRedirectUri(from: string | undefined): string {
+  const baseDomain = from === 'admin' ? config.adminDomain : config.webDomain;
+  return `${baseDomain}${REDIRECT_URI_PATH}`;
 }
 
 /**
  * GET /auth/login
  * Discord OAuth2 認可 URL にリダイレクトする
+ * ?from=admin を付与すると Admin ダッシュボード用のコールバック URL を使用する
+ *
+ * NOTE: Discord Developer Portal の Redirect URLs に以下を登録すること:
+ *   - http://localhost:5173/auth/callback  (web 開発用)
+ *   - http://localhost:5174/auth/callback  (admin 開発用)
+ *   - https://sumirevox.com/auth/callback  (本番 web)
+ *   - https://admin.sumirevox.com/auth/callback  (本番 admin)
  */
 authRouter.get('/login', async (c) => {
+  const from = c.req.query('from');
   const state = crypto.randomUUID();
 
   setCookie(c, 'oauth_state', state, {
@@ -30,9 +39,17 @@ authRouter.get('/login', async (c) => {
     path: '/',
   });
 
+  setCookie(c, 'oauth_from', from === 'admin' ? 'admin' : 'web', {
+    httpOnly: true,
+    secure: config.nodeEnv === 'production',
+    sameSite: 'Lax',
+    maxAge: 300, // 5分
+    path: '/',
+  });
+
   const params = new URLSearchParams({
     client_id: config.discordClientId,
-    redirect_uri: getRedirectUri(),
+    redirect_uri: getRedirectUri(from),
     response_type: 'code',
     scope: 'identify guilds',
     state,
@@ -64,6 +81,9 @@ authRouter.get('/callback', async (c) => {
 
   deleteCookie(c, 'oauth_state', { path: '/' });
 
+  const from = getCookie(c, 'oauth_from');
+  deleteCookie(c, 'oauth_from', { path: '/' });
+
   if (!code) {
     return c.json(
       { success: false, error: { code: 'VALIDATION_ERROR', message: '認証コードが見つかりません。' } },
@@ -80,7 +100,7 @@ authRouter.get('/callback', async (c) => {
         client_secret: config.discordClientSecret,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: getRedirectUri(),
+        redirect_uri: getRedirectUri(from),
       }),
     });
 
@@ -138,7 +158,8 @@ authRouter.get('/callback', async (c) => {
     });
 
     logger.info({ userId: userData.id, username: userData.username }, 'User logged in');
-    return c.redirect(`${config.webDomain}/dashboard`);
+    const redirectDomain = from === 'admin' ? config.adminDomain : config.webDomain;
+    return c.redirect(`${redirectDomain}/`);
   } catch (error) {
     logger.error({ err: error }, 'OAuth callback error');
     return c.json(
