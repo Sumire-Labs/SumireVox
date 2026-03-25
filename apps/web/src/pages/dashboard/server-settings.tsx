@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Switch, Select, ListBox, NumberField } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
+import { Toast, useToast } from '../../components/toast';
 
 interface GuildSettings {
   guildId: string;
@@ -31,8 +32,6 @@ interface Speaker {
   id: number;
   name: string;
 }
-
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -73,8 +72,7 @@ export function ServerSettingsPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   useEffect(() => {
     if (!guildId) return;
@@ -106,18 +104,16 @@ export function ServerSettingsPage() {
 
   const save = useCallback(async (patch: Partial<GuildSettings>) => {
     if (!guildId) return;
-    setSaveStatus('saving');
-    setErrorMessage(null);
+    showSaving();
     try {
       const updated = await api.put<GuildSettings>(`/api/guilds/${guildId}/settings`, patch);
       setSettings(updated);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      showSuccess();
     } catch (err) {
-      setSaveStatus('error');
-      if (err instanceof ApiError) setErrorMessage(err.message);
+      showError();
+      if (!(err instanceof ApiError)) throw err;
     }
-  }, [guildId]);
+  }, [guildId, showSaving, showSuccess, showError]);
 
   const handleSwitch = (field: keyof GuildSettings, value: boolean) => {
     if (!settings) return;
@@ -153,17 +149,6 @@ export function ServerSettingsPage() {
           <p className="text-gray-400">読み上げ・通知・フィルタ・権限の設定</p>
         </div>
         <div className="flex items-center gap-3 pt-1">
-          {saveStatus === 'saving' && (
-            <span className="text-sm text-gray-400">保存中…</span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-sm bg-green-500/20 text-green-400 px-3 py-1 rounded-full">保存しました</span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-sm bg-red-500/20 text-red-400 px-3 py-1 rounded-full">
-              {errorMessage ?? '保存に失敗しました'}
-            </span>
-          )}
           <Link
             to={`/dashboard/servers/${guildId}/bots`}
             className="text-sm border border-white/20 bg-white/5 hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all"
@@ -360,6 +345,7 @@ export function ServerSettingsPage() {
           </Select>
         </SettingRow>
       </SectionCard>
+      <Toast state={toastState} />
     </div>
   );
 }

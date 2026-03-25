@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Switch, Select, ListBox } from '@heroui/react';
 import { useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
+import { Toast, useToast } from '../../components/toast';
 
 interface BotInstanceSettings {
   autoJoin: boolean;
@@ -88,7 +89,7 @@ function ChannelSelect({
         isDisabled={disabled}
       >
         <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
-          <Select.Value placeholder={placeholder} />
+          <Select.Value>{value ? undefined : placeholder}</Select.Value>
           <Select.Indicator />
         </Select.Trigger>
         <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
@@ -114,7 +115,7 @@ export function ServerBotsPage() {
   const [channels, setChannels] = useState<ChannelsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   useEffect(() => {
     if (!guildId) return;
@@ -146,7 +147,7 @@ export function ServerBotsPage() {
     async (instanceId: number, patch: Partial<BotInstanceSettings>) => {
       if (!guildId) return;
       setSavingId(instanceId);
-      setErrorMessage(null);
+      showSaving();
       try {
         await api.put(`/api/guilds/${guildId}/bots/${instanceId}/settings`, patch);
         setData((prev) => {
@@ -160,13 +161,15 @@ export function ServerBotsPage() {
             ),
           };
         });
+        showSuccess();
       } catch (err) {
-        if (err instanceof ApiError) setErrorMessage(err.message);
+        showError();
+        if (!(err instanceof ApiError)) throw err;
       } finally {
         setSavingId(null);
       }
     },
-    [guildId],
+    [guildId, showSaving, showSuccess, showError],
   );
 
   const handleInvite = useCallback(
@@ -178,10 +181,11 @@ export function ServerBotsPage() {
         );
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (err) {
-        if (err instanceof ApiError) setErrorMessage(err.message);
+        showError();
+        if (!(err instanceof ApiError)) throw err;
       }
     },
-    [guildId],
+    [guildId, showError],
   );
 
   if (loading) {
@@ -212,12 +216,6 @@ export function ServerBotsPage() {
           </span>
         </div>
       </div>
-
-      {errorMessage && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-xl">
-          {errorMessage}
-        </div>
-      )}
 
       <div className="flex flex-col gap-4">
         {Array.from({ length: totalSlots }, (_, i) => i + 1).map((slot) => {
@@ -328,13 +326,11 @@ export function ServerBotsPage() {
                 />
               </div>
 
-              {isSaving && (
-                <p className="text-xs text-gray-500">保存中…</p>
-              )}
             </div>
           );
         })}
       </div>
+      <Toast state={toastState} />
     </div>
   );
 }
