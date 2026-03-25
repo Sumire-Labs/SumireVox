@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Select, ListBox, Spinner } from '@heroui/react';
 import { api, ApiError } from '../../lib/api';
+import { useToast, Toast } from '../../components/toast';
 
 interface BoostData {
   boosts: Array<{
@@ -35,8 +36,8 @@ export function BoostPage() {
   const [guilds, setGuilds] = useState<Guild[]>([]);
   const [loading, setLoading] = useState(true);
   const [boostCount, setBoostCount] = useState('1');
-  const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const fetchData = async () => {
     try {
@@ -73,25 +74,28 @@ export function BoostPage() {
   }, []);
 
   const handleCheckout = async () => {
-    setError(null);
+    showSaving('購入処理中...');
     try {
       const result = await api.post<{ url: string }>('/api/user/boosts/checkout', {
         boostCount: parseInt(boostCount, 10),
       });
       window.location.href = result.url;
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
+      if (err instanceof ApiError) showError(err.message);
+      else showError();
     }
   };
 
   const handleAssign = async (boostId: string, guildId: string) => {
     setActionLoading(boostId);
-    setError(null);
+    showSaving('割り当て中...');
     try {
       await api.put(`/api/user/boosts/${boostId}/assign`, { guildId });
       await fetchData();
+      showSuccess('割り当てました');
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
+      if (err instanceof ApiError) showError(err.message);
+      else showError('割り当てに失敗しました');
     } finally {
       setActionLoading(null);
     }
@@ -99,12 +103,14 @@ export function BoostPage() {
 
   const handleUnassign = async (boostId: string) => {
     setActionLoading(boostId);
-    setError(null);
+    showSaving('解除中...');
     try {
       await api.put(`/api/user/boosts/${boostId}/unassign`);
       await fetchData();
+      showSuccess('割り当てを解除しました');
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
+      if (err instanceof ApiError) showError(err.message);
+      else showError('解除に失敗しました');
     } finally {
       setActionLoading(null);
     }
@@ -112,11 +118,14 @@ export function BoostPage() {
 
   const handleCancel = async () => {
     if (!confirm('サブスクリプションを解約しますか？現在の請求期間の終了まではブーストが有効です。')) return;
+    showSaving('解約処理中...');
     try {
       await api.post('/api/user/subscription/cancel');
       await fetchData();
+      showSuccess('解約しました');
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
+      if (err instanceof ApiError) showError(err.message);
+      else showError('解約に失敗しました');
     }
   };
 
@@ -134,12 +143,6 @@ export function BoostPage() {
         <h1 className="text-3xl font-bold text-white mb-2">ブースト管理</h1>
         <p className="text-gray-400">ブーストの購入・割り当て・解約を管理します</p>
       </div>
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4">
-          <p className="text-red-400 text-sm">{error}</p>
-        </div>
-      )}
 
       {/* 購入 */}
       <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
@@ -245,6 +248,7 @@ export function BoostPage() {
           </button>
         </div>
       )}
+      <Toast state={toastState} />
     </div>
   );
 }
