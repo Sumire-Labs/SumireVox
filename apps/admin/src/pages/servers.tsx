@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Switch, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
+import { useToast, Toast } from '../components/toast';
 
 interface ServerItem {
   guildId: string;
+  name: string;
+  icon: string | null;
   manualPremium: boolean;
   createdAt: string;
 }
@@ -45,6 +48,7 @@ export function AdminServersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const fetchServers = useCallback((p: number) => {
     setLoading(true);
@@ -62,13 +66,15 @@ export function AdminServersPage() {
   }, [page, fetchServers]);
 
   const togglePremium = (guildId: string, current: boolean) => {
+    showSaving();
     api.put(`/api/admin/servers/${guildId}/premium`, { manualPremium: !current })
       .then(() => {
         setServers((prev) =>
           prev.map((s) => s.guildId === guildId ? { ...s, manualPremium: !current } : s)
         );
+        showSuccess();
       })
-      .catch(() => {});
+      .catch(() => showError());
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -87,7 +93,7 @@ export function AdminServersPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/5">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Guild ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">サーバー</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Manual PREMIUM</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">作成日時</th>
                   </tr>
@@ -100,7 +106,23 @@ export function AdminServersPage() {
                   ) : servers.map((server) => (
                     <tr key={server.guildId} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-mono text-sm text-gray-300">{server.guildId}</span>
+                        <div className="flex items-center gap-3">
+                          {server.icon ? (
+                            <img
+                              src={`https://cdn.discordapp.com/icons/${server.guildId}/${server.icon}.png?size=64`}
+                              alt={server.name}
+                              className="w-8 h-8 rounded-full flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="bg-gray-700 rounded-full w-8 h-8 flex items-center justify-center text-sm flex-shrink-0">
+                              {server.name.charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-semibold text-white text-sm">{server.name}</div>
+                            <div className="font-mono text-xs text-gray-500">{server.guildId}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <Switch
@@ -133,6 +155,7 @@ export function AdminServersPage() {
           )}
         </>
       )}
+      <Toast state={toastState} />
     </div>
   );
 }

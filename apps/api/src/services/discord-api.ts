@@ -1,5 +1,6 @@
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
+import { config } from '../infrastructure/config.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
@@ -64,4 +65,62 @@ export async function fetchManagedGuilds(accessToken: string): Promise<DiscordGu
     const ADMINISTRATOR = BigInt(0x8);
     return (permissions & MANAGE_GUILD) !== BigInt(0) || (permissions & ADMINISTRATOR) !== BigInt(0);
   });
+}
+
+export interface DiscordChannel {
+  id: string;
+  name: string;
+  type: number; // 0=テキスト, 2=ボイス, 4=カテゴリ, 13=ステージ
+  parent_id: string | null;
+  position: number;
+}
+
+export interface DiscordRole {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+  managed: boolean;
+}
+
+/**
+ * Bot トークンでギルドのチャンネル一覧を取得する
+ */
+export async function fetchGuildChannels(guildId: string): Promise<DiscordChannel[]> {
+  if (!config.discordBotToken) {
+    throw new AppError('DISCORD_API_ERROR', 'Bot token not configured', 503);
+  }
+  const response = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
+    headers: { Authorization: `Bot ${config.discordBotToken}` },
+  });
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After') ?? '5';
+    throw new AppError('RATE_LIMITED', `Discord API rate limited. Retry after ${retryAfter}s`, 429);
+  }
+  if (!response.ok) {
+    logger.error({ status: response.status, guildId }, 'Failed to fetch guild channels');
+    throw new AppError('DISCORD_API_ERROR', 'Failed to fetch guild channels', 500);
+  }
+  return response.json() as Promise<DiscordChannel[]>;
+}
+
+/**
+ * Bot トークンでギルドのロール一覧を取得する
+ */
+export async function fetchGuildRoles(guildId: string): Promise<DiscordRole[]> {
+  if (!config.discordBotToken) {
+    throw new AppError('DISCORD_API_ERROR', 'Bot token not configured', 503);
+  }
+  const response = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/roles`, {
+    headers: { Authorization: `Bot ${config.discordBotToken}` },
+  });
+  if (response.status === 429) {
+    const retryAfter = response.headers.get('Retry-After') ?? '5';
+    throw new AppError('RATE_LIMITED', `Discord API rate limited. Retry after ${retryAfter}s`, 429);
+  }
+  if (!response.ok) {
+    logger.error({ status: response.status, guildId }, 'Failed to fetch guild roles');
+    throw new AppError('DISCORD_API_ERROR', 'Failed to fetch guild roles', 500);
+  }
+  return response.json() as Promise<DiscordRole[]>;
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button, Chip, Select, ListBox, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
+import { useToast, Toast } from '../components/toast';
 
 type RequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -66,6 +67,7 @@ export function AdminRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<RequestStatus>('PENDING');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const fetchItems = useCallback((p: number, status: RequestStatus) => {
     setLoading(true);
@@ -86,17 +88,25 @@ export function AdminRequestsPage() {
 
   const handleApprove = (id: number) => {
     setProcessingId(id);
+    showSaving();
     api.put(`/api/admin/dictionary/requests/${id}/approve`)
-      .then(() => fetchItems(page, statusFilter))
-      .catch(() => {})
+      .then(() => {
+        fetchItems(page, statusFilter);
+        showSuccess('承認しました');
+      })
+      .catch(() => showError())
       .finally(() => setProcessingId(null));
   };
 
   const handleReject = (id: number) => {
     setProcessingId(id);
+    showSaving();
     api.put(`/api/admin/dictionary/requests/${id}/reject`)
-      .then(() => fetchItems(page, statusFilter))
-      .catch(() => {})
+      .then(() => {
+        fetchItems(page, statusFilter);
+        showSuccess('却下しました');
+      })
+      .catch(() => showError())
       .finally(() => setProcessingId(null));
   };
 
@@ -211,6 +221,7 @@ export function AdminRequestsPage() {
           )}
         </>
       )}
+      <Toast state={toastState} />
     </div>
   );
 }

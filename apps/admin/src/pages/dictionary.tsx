@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button, Modal, TextField, Label, Input, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
+import { useToast, Toast } from '../components/toast';
 
 interface DictItem {
   word: string;
@@ -46,6 +47,7 @@ export function AdminDictionaryPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -75,38 +77,44 @@ export function AdminDictionaryPage() {
 
   const handleAdd = () => {
     setSubmitting(true);
+    showSaving();
     api.post('/api/admin/dictionary/global', { word: addWord, reading: addReading })
       .then(() => {
         setAddWord('');
         setAddReading('');
         setAddOpen(false);
         fetchItems(page);
+        showSuccess();
       })
-      .catch(() => {})
+      .catch(() => showError())
       .finally(() => setSubmitting(false));
   };
 
   const handleEdit = () => {
     if (!editTarget) return;
     setSubmitting(true);
+    showSaving();
     api.put(`/api/admin/dictionary/global/${encodeURIComponent(editTarget.word)}`, { reading: editReading })
       .then(() => {
         setEditOpen(false);
         fetchItems(page);
+        showSuccess();
       })
-      .catch(() => {})
+      .catch(() => showError())
       .finally(() => setSubmitting(false));
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
     setSubmitting(true);
+    showSaving();
     api.delete(`/api/admin/dictionary/global/${encodeURIComponent(deleteTarget)}`)
       .then(() => {
         setDeleteOpen(false);
         fetchItems(page);
+        showSuccess('削除しました');
       })
-      .catch(() => {})
+      .catch(() => showError())
       .finally(() => setSubmitting(false));
   };
 
@@ -254,6 +262,8 @@ export function AdminDictionaryPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+
+      <Toast state={toastState} />
     </div>
   );
 }

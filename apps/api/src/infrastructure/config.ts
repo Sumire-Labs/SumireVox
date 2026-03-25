@@ -2,8 +2,10 @@ interface AppConfig {
   nodeEnv: string;
   discordClientId: string;
   discordClientSecret: string;
+  discordBotToken: string;
   databaseUrl: string;
   redisUrl: string;
+  voicevoxUrls: string[];
   botAdminUserIds: string[];
   apiPort: number;
   sessionSecret: string;
@@ -47,7 +49,12 @@ function buildConfig(): AppConfig {
     nodeEnv: process.env['NODE_ENV'] ?? 'production',
     discordClientId: requireEnv('DISCORD_CLIENT_ID'),
     discordClientSecret: requireEnv('DISCORD_CLIENT_SECRET'),
+    discordBotToken: process.env['DISCORD_TOKEN_1'] ?? '',
     databaseUrl: requireEnv('DATABASE_URL'),
+    voicevoxUrls: (process.env['VOICEVOX_URLS'] ?? 'http://voicevox:50021')
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean),
     redisUrl: requireEnv('REDIS_URL'),
     botAdminUserIds: (process.env['BOT_ADMIN_USER_IDS'] ?? '')
       .split(',')

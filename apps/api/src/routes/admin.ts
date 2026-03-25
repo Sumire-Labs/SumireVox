@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
+import { getGuildInfo } from '../infrastructure/discord-guild-info.js';
 import { updateGuildSettings } from '../services/guild-settings-service.js';
 import { getAllBotInstances, setBotInstanceActive } from '../services/bot-instance-service.js';
 import {
@@ -35,11 +36,16 @@ adminRouter.get('/servers', async (c) => {
     }),
     prisma.guildSettings.count(),
   ]);
+
+  const guildInfos = await Promise.all(servers.map((s) => getGuildInfo(s.guildId)));
+
   return c.json({
     success: true,
     data: {
-      items: servers.map((s) => ({
+      items: servers.map((s, i) => ({
         guildId: s.guildId,
+        name: guildInfos[i]!.name,
+        icon: guildInfos[i]!.icon,
         manualPremium: s.manualPremium,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,

@@ -35,7 +35,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen gap-4">
         <p className="text-lg text-gray-400">ログインが必要です</p>
-        <a href="/auth/login" className="text-purple-400 hover:underline">
+        <a href="/auth/login?from=admin" className="text-purple-400 hover:underline">
           Discord でログイン
         </a>
       </div>
