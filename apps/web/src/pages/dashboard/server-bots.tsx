@@ -230,9 +230,14 @@ export function ServerBotsPage() {
                   <Switch
                     isSelected={instance.settings.autoJoin}
                     isDisabled={!instance.isInGuild || isSaving}
-                    onValueChange={(v) => updateSettings(instance.instanceId, { autoJoin: v })}
-                    classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-                  />
+                    onChange={(v) => updateSettings(instance.instanceId, { autoJoin: v })}
+                  >
+                    {({ isSelected }) => (
+                      <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    )}
+                  </Switch>
                 </div>
 
                 <ChannelInput

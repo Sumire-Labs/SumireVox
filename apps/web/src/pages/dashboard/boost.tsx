@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Select, SelectItem, Spinner } from '@heroui/react';
+import { Select, ListBox, Spinner } from '@heroui/react';
 import { api, ApiError } from '../../lib/api';
 
 interface BoostData {
@@ -171,7 +171,7 @@ export function BoostPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {actionLoading === boost.id ? (
-                    <Spinner size="sm" color="secondary" />
+                    <Spinner size="sm" />
                   ) : boost.guildId ? (
                     <button
                       onClick={() => handleUnassign(boost.id)}
@@ -181,21 +181,24 @@ export function BoostPage() {
                     </button>
                   ) : !boost.isOnCooldown ? (
                     <Select
-                      size="sm"
                       placeholder="サーバーを選択"
-                      className="min-w-[200px]"
-                      classNames={{
-                        trigger: 'bg-white/5 border-white/10',
-                      }}
-                      onChange={(e) => {
-                        if (e.target.value) handleAssign(boost.id, e.target.value);
+                      onChange={(val) => {
+                        if (val) handleAssign(boost.id, val as string);
                       }}
                     >
-                      {guilds.map((guild) => (
-                        <SelectItem key={guild.id}>
-                          {guild.name}
-                        </SelectItem>
-                      ))}
+                      <Select.Trigger className="min-w-[200px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
+                        <ListBox>
+                          {guilds.map((guild) => (
+                            <ListBox.Item key={guild.id} id={guild.id}>
+                              {guild.name}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
                     </Select>
                   ) : null}
                 </div>

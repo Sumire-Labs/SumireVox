@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
-  Pagination, Button, Modal, ModalContent, ModalHeader, ModalBody, ModalFooter,
-  Input, Spinner, useDisclosure,
-} from '@heroui/react';
+import { Button, Modal, TextField, Label, Input, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
 
 interface DictItem {
@@ -22,15 +18,38 @@ interface PaginatedResponse<T> {
 
 const PER_PAGE = 20;
 
+function SimplePagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  if (total <= 1) return null;
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        className="px-3 py-1.5 text-sm border border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+      >
+        ← 前
+      </button>
+      <span className="text-sm text-gray-400">{page} / {total}</span>
+      <button
+        disabled={page >= total}
+        onClick={() => onChange(page + 1)}
+        className="px-3 py-1.5 text-sm border border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+      >
+        次 →
+      </button>
+    </div>
+  );
+}
+
 export function AdminDictionaryPage() {
   const [items, setItems] = useState<DictItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const addModal = useDisclosure();
-  const editModal = useDisclosure();
-  const deleteModal = useDisclosure();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const [addWord, setAddWord] = useState('');
   const [addReading, setAddReading] = useState('');
@@ -60,7 +79,7 @@ export function AdminDictionaryPage() {
       .then(() => {
         setAddWord('');
         setAddReading('');
-        addModal.onClose();
+        setAddOpen(false);
         fetchItems(page);
       })
       .catch(() => {})
@@ -72,7 +91,7 @@ export function AdminDictionaryPage() {
     setSubmitting(true);
     api.put(`/api/admin/dictionary/global/${encodeURIComponent(editTarget.word)}`, { reading: editReading })
       .then(() => {
-        editModal.onClose();
+        setEditOpen(false);
         fetchItems(page);
       })
       .catch(() => {})
@@ -84,7 +103,7 @@ export function AdminDictionaryPage() {
     setSubmitting(true);
     api.delete(`/api/admin/dictionary/global/${encodeURIComponent(deleteTarget)}`)
       .then(() => {
-        deleteModal.onClose();
+        setDeleteOpen(false);
         fetchItems(page);
       })
       .catch(() => {})
@@ -94,12 +113,12 @@ export function AdminDictionaryPage() {
   const openEdit = (item: DictItem) => {
     setEditTarget(item);
     setEditReading(item.reading);
-    editModal.onOpen();
+    setEditOpen(true);
   };
 
   const openDelete = (word: string) => {
     setDeleteTarget(word);
-    deleteModal.onOpen();
+    setDeleteOpen(true);
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -108,86 +127,132 @@ export function AdminDictionaryPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">グローバル辞書</h1>
-        <Button color="primary" size="sm" onPress={addModal.onOpen}>追加</Button>
+        <Button variant="primary" size="sm" onPress={() => setAddOpen(true)}>追加</Button>
       </div>
 
       {loading ? (
         <div className="flex justify-center items-center min-h-[40vh]">
-          <Spinner size="lg" color="primary" />
+          <Spinner size="lg" className="text-purple-500" />
         </div>
       ) : (
-        <Table aria-label="グローバル辞書" bottomContent={
-          totalPages > 1 ? (
-            <div className="flex justify-center">
-              <Pagination total={totalPages} page={page} onChange={setPage} color="primary" />
+        <>
+          <div className="bg-[#12121a] border border-white/5 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">単語</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">読み</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">登録者</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-gray-500">辞書エントリがありません</td>
+                    </tr>
+                  ) : items.map((item) => (
+                    <tr key={item.word} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3 text-white">{item.word}</td>
+                      <td className="px-4 py-3 text-gray-300">{item.reading}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-500">{item.registeredBy}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="secondary" onPress={() => openEdit(item)}>編集</Button>
+                          <Button size="sm" variant="danger" onPress={() => openDelete(item.word)}>削除</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : undefined
-        }>
-          <TableHeader>
-            <TableColumn>単語</TableColumn>
-            <TableColumn>読み</TableColumn>
-            <TableColumn>登録者</TableColumn>
-            <TableColumn>操作</TableColumn>
-          </TableHeader>
-          <TableBody emptyContent="辞書エントリがありません">
-            {items.map((item) => (
-              <TableRow key={item.word}>
-                <TableCell>{item.word}</TableCell>
-                <TableCell>{item.reading}</TableCell>
-                <TableCell><span className="text-sm text-default-500">{item.registeredBy}</span></TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="flat" onPress={() => openEdit(item)}>編集</Button>
-                    <Button size="sm" variant="flat" color="danger" onPress={() => openDelete(item.word)}>削除</Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-4">
+              <SimplePagination page={page} total={totalPages} onChange={setPage} />
+            </div>
+          )}
+        </>
       )}
 
       {/* 追加モーダル */}
-      <Modal isOpen={addModal.isOpen} onOpenChange={addModal.onOpenChange}>
-        <ModalContent>
-          <ModalHeader>辞書エントリを追加</ModalHeader>
-          <ModalBody>
-            <Input label="単語" value={addWord} onValueChange={setAddWord} />
-            <Input label="読み (ひらがな・カタカナ)" value={addReading} onValueChange={setAddReading} />
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="flat" onPress={addModal.onClose}>キャンセル</Button>
-            <Button color="primary" isLoading={submitting} onPress={handleAdd}>追加</Button>
-          </ModalFooter>
-        </ModalContent>
+      <Modal>
+        <Modal.Backdrop isOpen={addOpen} onOpenChange={setAddOpen}>
+          <Modal.Container>
+            <Modal.Dialog className="bg-[#1a1a2e] border border-white/10">
+              <Modal.Header>
+                <Modal.Heading className="text-white">辞書エントリを追加</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="flex flex-col gap-4">
+                <TextField value={addWord} onChange={setAddWord}>
+                  <Label className="text-sm text-gray-300">単語</Label>
+                  <Input
+                    className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50"
+                  />
+                </TextField>
+                <TextField value={addReading} onChange={setAddReading}>
+                  <Label className="text-sm text-gray-300">読み（ひらがな・カタカナ）</Label>
+                  <Input
+                    className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50"
+                  />
+                </TextField>
+              </Modal.Body>
+              <Modal.Footer className="border-t border-white/5">
+                <Button variant="secondary" onPress={() => setAddOpen(false)}>キャンセル</Button>
+                <Button variant="primary" isPending={submitting} onPress={handleAdd}>追加</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* 編集モーダル */}
-      <Modal isOpen={editModal.isOpen} onOpenChange={editModal.onOpenChange}>
-        <ModalContent>
-          <ModalHeader>読みを編集: {editTarget?.word}</ModalHeader>
-          <ModalBody>
-            <Input label="読み (ひらがな・カタカナ)" value={editReading} onValueChange={setEditReading} />
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="flat" onPress={editModal.onClose}>キャンセル</Button>
-            <Button color="primary" isLoading={submitting} onPress={handleEdit}>保存</Button>
-          </ModalFooter>
-        </ModalContent>
+      <Modal>
+        <Modal.Backdrop isOpen={editOpen} onOpenChange={setEditOpen}>
+          <Modal.Container>
+            <Modal.Dialog className="bg-[#1a1a2e] border border-white/10">
+              <Modal.Header>
+                <Modal.Heading className="text-white">読みを編集: {editTarget?.word}</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <TextField value={editReading} onChange={setEditReading}>
+                  <Label className="text-sm text-gray-300">読み（ひらがな・カタカナ）</Label>
+                  <Input
+                    className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50"
+                  />
+                </TextField>
+              </Modal.Body>
+              <Modal.Footer className="border-t border-white/5">
+                <Button variant="secondary" onPress={() => setEditOpen(false)}>キャンセル</Button>
+                <Button variant="primary" isPending={submitting} onPress={handleEdit}>保存</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
 
       {/* 削除確認モーダル */}
-      <Modal isOpen={deleteModal.isOpen} onOpenChange={deleteModal.onOpenChange}>
-        <ModalContent>
-          <ModalHeader>削除の確認</ModalHeader>
-          <ModalBody>
-            <p>「{deleteTarget}」を辞書から削除しますか？この操作は元に戻せません。</p>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="flat" onPress={deleteModal.onClose}>キャンセル</Button>
-            <Button color="danger" isLoading={submitting} onPress={handleDelete}>削除</Button>
-          </ModalFooter>
-        </ModalContent>
+      <Modal>
+        <Modal.Backdrop isOpen={deleteOpen} onOpenChange={setDeleteOpen}>
+          <Modal.Container>
+            <Modal.Dialog className="bg-[#1a1a2e] border border-white/10">
+              <Modal.Header>
+                <Modal.Heading className="text-white">削除の確認</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-gray-300">「{deleteTarget}」を辞書から削除しますか？この操作は元に戻せません。</p>
+              </Modal.Body>
+              <Modal.Footer className="border-t border-white/5">
+                <Button variant="secondary" onPress={() => setDeleteOpen(false)}>キャンセル</Button>
+                <Button variant="danger" isPending={submitting} onPress={handleDelete}>削除</Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
       </Modal>
     </div>
   );

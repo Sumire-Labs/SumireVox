@@ -8,7 +8,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
-        <Spinner size="lg" color="primary" />
+        <Spinner size="lg" className="text-purple-500" />
       </div>
     );
   }
