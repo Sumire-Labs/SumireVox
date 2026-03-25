@@ -11,6 +11,9 @@ export async function handleStripeWebhook(
   signature: string,
   webhookSecret: string,
 ): Promise<void> {
+  if (!stripe) {
+    throw new Error('Stripe is not configured');
+  }
   let event: Stripe.Event;
 
   try {
@@ -55,7 +58,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
   }
 
   const prisma = getPrisma();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  // stripe is guaranteed non-null here: handleStripeWebhook guards at entry
+  const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
   await prisma.subscription.create({
     data: {
@@ -81,7 +85,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   if (!subscriptionId) return;
 
   const prisma = getPrisma();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
   await prisma.subscription.updateMany({
     where: { stripeSubscriptionId: subscriptionId },
