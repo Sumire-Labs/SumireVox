@@ -12,7 +12,7 @@ const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const REDIRECT_URI_PATH = '/auth/callback';
 
 function getRedirectUri(): string {
-  return `https://${config.webDomain}${REDIRECT_URI_PATH}`;
+  return `${config.webDomain}${REDIRECT_URI_PATH}`;
 }
 
 /**
@@ -138,7 +138,7 @@ authRouter.get('/callback', async (c) => {
     });
 
     logger.info({ userId: userData.id, username: userData.username }, 'User logged in');
-    return c.redirect(`https://${config.webDomain}/dashboard`);
+    return c.redirect(`${config.webDomain}/dashboard`);
   } catch (error) {
     logger.error({ err: error }, 'OAuth callback error');
     return c.json(

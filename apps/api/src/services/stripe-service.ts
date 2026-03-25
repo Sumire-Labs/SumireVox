@@ -30,8 +30,8 @@ export async function createCheckoutSession(
         quantity: boostCount,
       },
     ],
-    success_url: `https://${config.webDomain}/dashboard/boost?success=true`,
-    cancel_url: `https://${config.webDomain}/dashboard/boost?canceled=true`,
+    success_url: `${config.webDomain}/dashboard/boost?success=true`,
+    cancel_url: `${config.webDomain}/dashboard/boost?canceled=true`,
     metadata: {
       userId,
       boostCount: boostCount.toString(),
