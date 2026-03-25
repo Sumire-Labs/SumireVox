@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Switch } from '@heroui/react';
 import { api, ApiError } from '../lib/api';
+import { useToast, Toast } from '../components/toast';
 
 interface BotInstance {
   instanceId: number;
@@ -16,7 +17,7 @@ export function BotInstancesPage() {
   const [instances, setInstances] = useState<BotInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<number | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   useEffect(() => {
     api.get<BotInstance[]>('/api/admin/bot-instances')
@@ -27,7 +28,7 @@ export function BotInstancesPage() {
 
   const handleToggleActive = async (instanceId: number, isActive: boolean) => {
     setTogglingId(instanceId);
-    setErrorMessage(null);
+    showSaving();
     try {
       const updated = await api.put<BotInstance>(
         `/api/admin/bot-instances/${instanceId}/active`,
@@ -36,8 +37,9 @@ export function BotInstancesPage() {
       setInstances((prev) =>
         prev.map((inst) => (inst.instanceId === updated.instanceId ? updated : inst)),
       );
+      showSuccess();
     } catch (err) {
-      if (err instanceof ApiError) setErrorMessage(err.message);
+      showError(err instanceof ApiError ? err.message : undefined);
     } finally {
       setTogglingId(null);
     }
@@ -57,12 +59,6 @@ export function BotInstancesPage() {
         <h1 className="text-2xl font-bold mb-1">Bot インスタンス</h1>
         <p className="text-default-400 text-sm">登録済みの Bot インスタンスの一覧と管理</p>
       </div>
-
-      {errorMessage && (
-        <div className="bg-danger-50 border border-danger-200 text-danger text-sm px-4 py-3 rounded-xl">
-          {errorMessage}
-        </div>
-      )}
 
       {instances.length === 0 ? (
         <p className="text-default-400 text-sm">Bot インスタンスが登録されていません。</p>
@@ -109,6 +105,7 @@ export function BotInstancesPage() {
           </table>
         </div>
       )}
+      <Toast state={toastState} />
     </div>
   );
 }

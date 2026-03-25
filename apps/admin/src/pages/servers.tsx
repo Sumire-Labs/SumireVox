@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Switch, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
+import { useToast, Toast } from '../components/toast';
 
 interface ServerItem {
   guildId: string;
@@ -45,6 +46,7 @@ export function AdminServersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const fetchServers = useCallback((p: number) => {
     setLoading(true);
@@ -62,13 +64,15 @@ export function AdminServersPage() {
   }, [page, fetchServers]);
 
   const togglePremium = (guildId: string, current: boolean) => {
+    showSaving();
     api.put(`/api/admin/servers/${guildId}/premium`, { manualPremium: !current })
       .then(() => {
         setServers((prev) =>
           prev.map((s) => s.guildId === guildId ? { ...s, manualPremium: !current } : s)
         );
+        showSuccess();
       })
-      .catch(() => {});
+      .catch(() => showError());
   };
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -133,6 +137,7 @@ export function AdminServersPage() {
           )}
         </>
       )}
+      <Toast state={toastState} />
     </div>
   );
 }
