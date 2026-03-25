@@ -6,6 +6,7 @@ import { removeSpoiler } from './steps/remove-spoiler.js';
 import { removeUrl } from './steps/remove-url.js';
 import { convertTimestamp } from './steps/convert-timestamp.js';
 import { handleCustomEmoji } from './steps/handle-custom-emoji.js';
+import { handleStandardEmoji } from './steps/handle-standard-emoji.js';
 import { convertUserMention } from './steps/convert-user-mention.js';
 import { convertRoleMention } from './steps/convert-role-mention.js';
 import { convertChannelMention } from './steps/convert-channel-mention.js';
@@ -14,6 +15,7 @@ import { convertWKusa } from './steps/convert-w-kusa.js';
 import { optimizeNumbersAndUnits } from './steps/optimize-numbers-and-units.js';
 import { handleRomaji } from './steps/handle-romaji.js';
 import { clampReadLength } from '@sumirevox/shared';
+import { truncateForSpeech } from './truncate.js';
 
 // パイプラインステップの順序（厳守）
 const pipelineSteps: PipelineStep[] = [
@@ -24,6 +26,7 @@ const pipelineSteps: PipelineStep[] = [
   removeUrl,               // 5. URL除去
   convertTimestamp,        // 6. タイムスタンプ変換
   handleCustomEmoji,       // 7. カスタム絵文字
+  handleStandardEmoji,     // 7.5. 標準絵文字 → 日本語ラベル
   convertUserMention,      // 8. ユーザーメンション変換
   convertRoleMention,      // 9. ロールメンション変換
   convertChannelMention,   // 10. チャンネルメンション変換
@@ -55,9 +58,5 @@ export function runPipeline(
 
   // 最大文字数でクランプ
   const maxLength = clampReadLength(context.guildSettings.maxReadLength, isPremium);
-  if (result.length > maxLength) {
-    result = result.substring(0, maxLength) + '以下省略';
-  }
-
-  return result;
+  return truncateForSpeech(result, maxLength, '以下省略');
 }

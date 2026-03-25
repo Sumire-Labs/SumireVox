@@ -1,23 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Switch, Select, SelectItem } from '@heroui/react';
+import { Switch, Select, ListBox, NumberField, TextField, Label, Input } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 
 interface GuildSettings {
   guildId: string;
   maxReadLength: number;
-  readName: boolean;
-  honorific: boolean;
-  romajiRead: boolean;
-  joinLeaveNotify: boolean;
-  greeting: boolean;
-  customEmojiMode: 'READ_NAME' | 'REMOVE';
-  readTargetType: 'TEXT_ONLY' | 'TEXT_STICKER' | 'TEXT_STICKER_ATTACHMENT';
+  readUsername: boolean;
+  addSanSuffix: boolean;
+  romajiReading: boolean;
+  joinLeaveNotification: boolean;
+  greetingOnJoin: boolean;
+  customEmojiHandling: 'read_name' | 'remove';
+  readTargetType: 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment';
   autoJoin: boolean;
   defaultTextChannelId: string | null;
   defaultSpeakerId: number | null;
   adminRoleId: string | null;
-  dictPermission: 'ALL_USERS' | 'ADMIN_ONLY';
+  dictionaryPermission: 'everyone' | 'admin_only';
   manualPremium: boolean;
 }
 
@@ -44,6 +44,18 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
+function SettingSwitch({ isSelected, onChange, isDisabled, label }: { isSelected: boolean; onChange: (v: boolean) => void; isDisabled?: boolean; label: string }) {
+  return (
+    <Switch aria-label={label} isSelected={isSelected} onChange={onChange} isDisabled={isDisabled}>
+      {({ isSelected: sel }) => (
+        <Switch.Control className={sel ? 'bg-purple-600' : 'bg-white/20'}>
+          <Switch.Thumb />
+        </Switch.Control>
+      )}
+    </Switch>
+  );
+}
+
 export function ServerSettingsPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [settings, setSettings] = useState<GuildSettings | null>(null);
@@ -53,10 +65,16 @@ export function ServerSettingsPage() {
 
   useEffect(() => {
     if (!guildId) return;
-    api.get<GuildSettings>(`/api/guilds/${guildId}/settings`)
+    const controller = new AbortController();
+    api.get<GuildSettings>(`/api/guilds/${guildId}/settings`, { signal: controller.signal })
       .then(setSettings)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [guildId]);
 
   const save = useCallback(async (patch: Partial<GuildSettings>) => {
@@ -86,10 +104,9 @@ export function ServerSettingsPage() {
     save({ [field]: value });
   };
 
-  const handleNumberBlur = (field: keyof GuildSettings, value: string) => {
-    const num = parseInt(value, 10);
-    if (isNaN(num)) return;
-    save({ [field]: num });
+  const handleNumber = (field: keyof GuildSettings, value: number | undefined) => {
+    if (!settings || value === undefined) return;
+    save({ [field]: value });
   };
 
   const handleStringBlur = (field: keyof GuildSettings, value: string) => {
@@ -142,53 +159,38 @@ export function ServerSettingsPage() {
       {/* 読み上げ設定 */}
       <SectionCard title="読み上げ設定">
         <SettingRow label="最大文字数" description="FREE: 上限50 / PREMIUM: 上限200">
-          <input
-            type="number"
-            min={1}
-            max={settings.manualPremium ? 200 : 50}
-            defaultValue={String(settings.maxReadLength)}
-            className="w-20 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 text-right"
-            onBlur={(e) => handleNumberBlur('maxReadLength', e.target.value)}
-          />
+          <NumberField
+            aria-label="最大文字数"
+            value={settings.maxReadLength}
+            onChange={(val) => handleNumber('maxReadLength', val)}
+            minValue={1}
+            maxValue={settings.manualPremium ? 200 : 50}
+          >
+            <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+              <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
+              <NumberField.Input className="w-14 text-white text-center bg-transparent text-sm py-1.5 focus:outline-none" />
+              <NumberField.IncrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
+            </NumberField.Group>
+          </NumberField>
         </SettingRow>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
-          <Switch
-            isSelected={settings.readName}
-            onValueChange={(v) => handleSwitch('readName', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
+          <SettingSwitch label="名前読み上げ" isSelected={settings.readUsername} onChange={(v) => handleSwitch('readUsername', v)} />
         </SettingRow>
         <SettingRow label="さん付け" description="名前の後ろに「さん」を付ける">
-          <Switch
-            isSelected={settings.honorific}
-            onValueChange={(v) => handleSwitch('honorific', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
+          <SettingSwitch label="さん付け" isSelected={settings.addSanSuffix} onChange={(v) => handleSwitch('addSanSuffix', v)} />
         </SettingRow>
         <SettingRow label="ローマ字読み" description="ローマ字パターンをそのまま読む">
-          <Switch
-            isSelected={settings.romajiRead}
-            onValueChange={(v) => handleSwitch('romajiRead', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
+          <SettingSwitch label="ローマ字読み" isSelected={settings.romajiReading} onChange={(v) => handleSwitch('romajiReading', v)} />
         </SettingRow>
       </SectionCard>
 
       {/* 通知設定 */}
       <SectionCard title="通知設定">
         <SettingRow label="入退室通知" description="VC の参加・退出・移動を読み上げる">
-          <Switch
-            isSelected={settings.joinLeaveNotify}
-            onValueChange={(v) => handleSwitch('joinLeaveNotify', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
+          <SettingSwitch label="入退室通知" isSelected={settings.joinLeaveNotification} onChange={(v) => handleSwitch('joinLeaveNotification', v)} />
         </SettingRow>
         <SettingRow label="Bot 入室時の挨拶" description="/join 時に「接続しました」を読み上げる">
-          <Switch
-            isSelected={settings.greeting}
-            onValueChange={(v) => handleSwitch('greeting', v)}
-            classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-          />
+          <SettingSwitch label="Bot 入室時の挨拶" isSelected={settings.greetingOnJoin} onChange={(v) => handleSwitch('greetingOnJoin', v)} />
         </SettingRow>
       </SectionCard>
 
@@ -196,27 +198,39 @@ export function ServerSettingsPage() {
       <SectionCard title="フィルタ設定">
         <SettingRow label="カスタム絵文字の扱い">
           <Select
-            size="sm"
-            className="min-w-[200px]"
-            classNames={{ trigger: 'bg-white/5 border-white/10' }}
-            selectedKeys={[settings.customEmojiMode]}
-            onChange={(e) => handleSelect('customEmojiMode', e.target.value)}
+            aria-label="カスタム絵文字の扱い"
+            value={settings.customEmojiHandling}
+            onChange={(val) => handleSelect('customEmojiHandling', val as string)}
           >
-            <SelectItem key="READ_NAME">名前を読み上げる</SelectItem>
-            <SelectItem key="REMOVE">除去する</SelectItem>
+            <Select.Trigger className="min-w-[200px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
+              <ListBox>
+                <ListBox.Item id="read_name" textValue="名前を読み上げる">名前を読み上げる</ListBox.Item>
+                <ListBox.Item id="remove" textValue="除去する">除去する</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
         </SettingRow>
         <SettingRow label="読み上げ対象">
           <Select
-            size="sm"
-            className="min-w-[240px]"
-            classNames={{ trigger: 'bg-white/5 border-white/10' }}
-            selectedKeys={[settings.readTargetType]}
-            onChange={(e) => handleSelect('readTargetType', e.target.value)}
+            aria-label="読み上げ対象"
+            value={settings.readTargetType}
+            onChange={(val) => handleSelect('readTargetType', val as string)}
           >
-            <SelectItem key="TEXT_ONLY">テキストのみ</SelectItem>
-            <SelectItem key="TEXT_STICKER">テキスト + スタンプ</SelectItem>
-            <SelectItem key="TEXT_STICKER_ATTACHMENT">テキスト + スタンプ + 添付</SelectItem>
+            <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
+              <ListBox>
+                <ListBox.Item id="text_only" textValue="テキストのみ">テキストのみ</ListBox.Item>
+                <ListBox.Item id="text_and_sticker" textValue="テキスト + スタンプ">テキスト + スタンプ</ListBox.Item>
+                <ListBox.Item id="text_sticker_and_attachment" textValue="テキスト + スタンプ + 添付">テキスト + スタンプ + 添付</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
         </SettingRow>
       </SectionCard>
@@ -234,36 +248,49 @@ export function ServerSettingsPage() {
           から行ってください。
         </div>
         <SettingRow label="デフォルト話者 ID" description="ユーザー設定がない場合に使用する話者">
-          <input
-            type="number"
-            placeholder="話者 ID"
-            defaultValue={settings.defaultSpeakerId != null ? String(settings.defaultSpeakerId) : ''}
-            className="w-28 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600 text-right"
-            onBlur={(e) => handleNumberBlur('defaultSpeakerId', e.target.value)}
-          />
+          <NumberField
+            aria-label="デフォルト話者 ID"
+            defaultValue={settings.defaultSpeakerId ?? undefined}
+            onChange={(val) => handleNumber('defaultSpeakerId', val)}
+            minValue={0}
+          >
+            <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+              <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
+              <NumberField.Input className="w-16 text-white text-center bg-transparent text-sm py-1.5 focus:outline-none" />
+              <NumberField.IncrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
+            </NumberField.Group>
+          </NumberField>
         </SettingRow>
       </SectionCard>
 
       {/* 権限設定 */}
       <SectionCard title="権限設定">
         <SettingRow label="管理ロール ID" description="このロールのユーザーを管理者として扱う">
-          <input
-            placeholder="ロール ID"
-            defaultValue={settings.adminRoleId ?? ''}
-            className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder-gray-600"
-            onBlur={(e) => handleStringBlur('adminRoleId', e.target.value)}
-          />
+          <TextField defaultValue={settings.adminRoleId ?? ''}>
+            <Label className="sr-only">管理ロール ID</Label>
+            <Input
+              placeholder="ロール ID"
+              className="w-48 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50 placeholder:text-gray-600"
+              onBlur={(e: React.FocusEvent<HTMLInputElement>) => handleStringBlur('adminRoleId', e.currentTarget.value)}
+            />
+          </TextField>
         </SettingRow>
         <SettingRow label="サーバー辞書追加権限">
           <Select
-            size="sm"
-            className="min-w-[220px]"
-            classNames={{ trigger: 'bg-white/5 border-white/10' }}
-            selectedKeys={[settings.dictPermission]}
-            onChange={(e) => handleSelect('dictPermission', e.target.value)}
+            aria-label="サーバー辞書追加権限"
+            value={settings.dictionaryPermission}
+            onChange={(val) => handleSelect('dictionaryPermission', val as string)}
           >
-            <SelectItem key="ALL_USERS">全ユーザー</SelectItem>
-            <SelectItem key="ADMIN_ONLY">管理者 / 指定ロールのみ</SelectItem>
+            <Select.Trigger className="min-w-[220px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
+              <ListBox>
+                <ListBox.Item id="everyone" textValue="全ユーザー">全ユーザー</ListBox.Item>
+                <ListBox.Item id="admin_only" textValue="管理者 / 指定ロールのみ">管理者 / 指定ロールのみ</ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
         </SettingRow>
       </SectionCard>

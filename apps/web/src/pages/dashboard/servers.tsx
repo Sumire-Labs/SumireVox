@@ -13,10 +13,16 @@ export function ServersPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<Guild[]>('/api/guilds')
+    const controller = new AbortController();
+    api.get<Guild[]>('/api/guilds', { signal: controller.signal })
       .then(setGuilds)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   if (loading) {

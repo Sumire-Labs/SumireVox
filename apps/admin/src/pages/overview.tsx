@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, CardBody, Spinner } from '@heroui/react';
+import { Card, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
 
 interface PaginatedResponse<T> {
@@ -41,7 +41,7 @@ export function OverviewPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[40vh]">
-        <Spinner size="lg" color="primary" />
+        <Spinner size="lg" className="text-purple-500" />
       </div>
     );
   }
@@ -51,16 +51,16 @@ export function OverviewPage() {
       <h1 className="text-2xl font-bold mb-6">概要</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
         <Card>
-          <CardBody className="text-center py-6">
-            <p className="text-4xl font-bold text-primary">{serverTotal ?? '—'}</p>
-            <p className="text-default-500 mt-2 text-sm">登録サーバー数</p>
-          </CardBody>
+          <Card.Content className="text-center py-6">
+            <p className="text-4xl font-bold text-purple-400">{serverTotal ?? '—'}</p>
+            <p className="text-gray-500 mt-2 text-sm">登録サーバー数</p>
+          </Card.Content>
         </Card>
         <Card>
-          <CardBody className="text-center py-6">
-            <p className="text-4xl font-bold text-warning">{pendingTotal ?? '—'}</p>
-            <p className="text-default-500 mt-2 text-sm">未処理の辞書申請</p>
-          </CardBody>
+          <Card.Content className="text-center py-6">
+            <p className="text-4xl font-bold text-yellow-400">{pendingTotal ?? '—'}</p>
+            <p className="text-gray-500 mt-2 text-sm">未処理の辞書申請</p>
+          </Card.Content>
         </Card>
       </div>
     </div>

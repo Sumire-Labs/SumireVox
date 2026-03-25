@@ -21,7 +21,7 @@ type DbGuildSettings = {
   manualPremium: boolean;
 };
 
-function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
+export function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
   return {
     guildId: db.guildId,
     maxReadLength: db.maxReadLength,

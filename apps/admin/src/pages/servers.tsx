@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
-  Pagination, Switch, Spinner,
-} from '@heroui/react';
+import { Switch, Spinner } from '@heroui/react';
 import { api } from '../lib/api';
 
 interface ServerItem {
@@ -19,6 +16,29 @@ interface PaginatedResponse<T> {
 }
 
 const PER_PAGE = 20;
+
+function SimplePagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  if (total <= 1) return null;
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        className="px-3 py-1.5 text-sm border border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+      >
+        ← 前
+      </button>
+      <span className="text-sm text-gray-400">{page} / {total}</span>
+      <button
+        disabled={page >= total}
+        onClick={() => onChange(page + 1)}
+        className="px-3 py-1.5 text-sm border border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+      >
+        次 →
+      </button>
+    </div>
+  );
+}
 
 export function AdminServersPage() {
   const [servers, setServers] = useState<ServerItem[]>([]);
@@ -58,45 +78,59 @@ export function AdminServersPage() {
       <h1 className="text-2xl font-bold mb-6">サーバー一覧</h1>
       {loading ? (
         <div className="flex justify-center items-center min-h-[40vh]">
-          <Spinner size="lg" color="primary" />
+          <Spinner size="lg" className="text-purple-500" />
         </div>
       ) : (
         <>
-          <Table aria-label="サーバー一覧" bottomContent={
-            totalPages > 1 ? (
-              <div className="flex justify-center">
-                <Pagination total={totalPages} page={page} onChange={setPage} color="primary" />
-              </div>
-            ) : undefined
-          }>
-            <TableHeader>
-              <TableColumn>Guild ID</TableColumn>
-              <TableColumn>Manual PREMIUM</TableColumn>
-              <TableColumn>作成日時</TableColumn>
-            </TableHeader>
-            <TableBody emptyContent="サーバーがありません">
-              {servers.map((server) => (
-                <TableRow key={server.guildId}>
-                  <TableCell>
-                    <span className="font-mono text-sm">{server.guildId}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      isSelected={server.manualPremium}
-                      onValueChange={() => togglePremium(server.guildId, server.manualPremium)}
-                      color="primary"
-                      size="sm"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-default-500">
-                      {new Date(server.createdAt).toLocaleDateString('ja-JP')}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="bg-[#12121a] border border-white/5 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Guild ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Manual PREMIUM</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">作成日時</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {servers.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-gray-500">サーバーがありません</td>
+                    </tr>
+                  ) : servers.map((server) => (
+                    <tr key={server.guildId} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-sm text-gray-300">{server.guildId}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Switch
+                          isSelected={server.manualPremium}
+                          onChange={() => togglePremium(server.guildId, server.manualPremium)}
+                          size="sm"
+                        >
+                          {({ isSelected }) => (
+                            <Switch.Control className={isSelected ? 'bg-purple-500' : 'bg-gray-600'}>
+                              <Switch.Thumb />
+                            </Switch.Control>
+                          )}
+                        </Switch>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-500">
+                          {new Date(server.createdAt).toLocaleDateString('ja-JP')}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-4">
+              <SimplePagination page={page} total={totalPages} onChange={setPage} />
+            </div>
+          )}
         </>
       )}
     </div>

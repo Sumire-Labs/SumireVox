@@ -91,8 +91,14 @@ export function BotInstancesPage() {
                       isSelected={instance.isActive}
                       isDisabled={togglingId === instance.instanceId}
                       size="sm"
-                      onValueChange={(v) => handleToggleActive(instance.instanceId, v)}
-                    />
+                      onChange={(v) => handleToggleActive(instance.instanceId, v)}
+                    >
+                      {({ isSelected }) => (
+                        <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      )}
+                    </Switch>
                   </td>
                   <td className="py-3 px-4 text-default-400">
                     {new Date(instance.updatedAt).toLocaleString('ja-JP')}

@@ -39,7 +39,7 @@ export async function getGuildSettings(guildId: string): Promise<GuildSettings> 
   return defaults;
 }
 
-function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
+export function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
   return {
     guildId: db.guildId,
     maxReadLength: db.maxReadLength,

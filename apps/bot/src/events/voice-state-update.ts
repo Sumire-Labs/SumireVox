@@ -19,9 +19,11 @@ export async function handleVoiceStateUpdate(
   const guildId = guild.id;
   const client = getClient();
 
-  // Bot 自身の状態変更は無視（Bot の接続/切断は vc-session-manager で管理）
-  if (newState.member?.id === client.user?.id) return;
-  if (oldState.member?.id === client.user?.id) return;
+  const member = newState.member ?? oldState.member;
+  // 自 Bot は無視
+  if (member?.id === client.user?.id) return;
+  // 他 Bot も無視（auto-join の誤発動、Bot同士の join 誘発を防止）
+  if (member?.user.bot) return;
 
   const session = getVcSession(guildId);
 
@@ -181,10 +183,9 @@ async function handleAutoDisconnect(
     const voiceChannel = guild.channels.cache.get(botVoiceChannelId);
     if (!voiceChannel || !voiceChannel.isVoiceBased()) return;
 
-    const client = getClient();
-    const nonBotMembers = voiceChannel.members.filter((member) => member.id !== client.user?.id);
+    const humanMembers = voiceChannel.members.filter((member) => !member.user.bot);
 
-    if (nonBotMembers.size === 0) {
+    if (humanMembers.size === 0) {
       startDisconnectTimer(guildId);
     } else {
       cancelDisconnectTimer(guildId);

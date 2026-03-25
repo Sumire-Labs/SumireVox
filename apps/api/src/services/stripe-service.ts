@@ -12,6 +12,9 @@ export async function createCheckoutSession(
   userId: string,
   boostCount: number,
 ): Promise<string> {
+  if (!stripe) {
+    throw new AppError('INTERNAL_ERROR', 'Stripe is not configured', 503);
+  }
   const prisma = getPrisma();
 
   const existingSub = await prisma.subscription.findFirst({
@@ -27,8 +30,8 @@ export async function createCheckoutSession(
         quantity: boostCount,
       },
     ],
-    success_url: `https://${config.webDomain}/dashboard/boost?success=true`,
-    cancel_url: `https://${config.webDomain}/dashboard/boost?canceled=true`,
+    success_url: `${config.webDomain}/dashboard/boost?success=true`,
+    cancel_url: `${config.webDomain}/dashboard/boost?canceled=true`,
     metadata: {
       userId,
       boostCount: boostCount.toString(),
@@ -59,6 +62,9 @@ export async function createCheckoutSession(
  * サブスクリプションを解約する（期末解約）
  */
 export async function cancelSubscription(userId: string): Promise<void> {
+  if (!stripe) {
+    throw new AppError('INTERNAL_ERROR', 'Stripe is not configured', 503);
+  }
   const prisma = getPrisma();
 
   const sub = await prisma.subscription.findFirst({

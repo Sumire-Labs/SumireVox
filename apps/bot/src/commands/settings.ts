@@ -13,9 +13,18 @@ import { config } from '../infrastructure/config.js';
 
 const data = new SlashCommandBuilder()
   .setName('settings')
-  .setDescription('サーバー設定を管理します');
+  .setDescription('サーバー設定を管理します')
+  .setDMPermission(false);
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  if (!interaction.inGuild()) {
+    await interaction.reply({
+      content: 'このコマンドはサーバー内でのみ使用できます。',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
 

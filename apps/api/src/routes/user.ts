@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { getUserBoosts, assignBoost, unassignBoost } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription } from '../services/stripe-service.js';
+import { stripe } from '../infrastructure/stripe-client.js';
 
 export const userRouter = new Hono();
 
@@ -21,6 +22,13 @@ userRouter.get('/boosts', async (c) => {
  * body: { boostCount: number }
  */
 userRouter.post('/boosts/checkout', async (c) => {
+  if (!stripe) {
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
+      503,
+    );
+  }
+
   const session = c.get('session')!;
   const body = await c.req.json<{ boostCount?: number }>();
   const boostCount = body.boostCount ?? 1;
@@ -83,6 +91,13 @@ userRouter.get('/subscription', async (c) => {
  * POST /api/user/subscription/cancel
  */
 userRouter.post('/subscription/cancel', async (c) => {
+  if (!stripe) {
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
+      503,
+    );
+  }
+
   const session = c.get('session')!;
   await cancelSubscription(session.userId);
   return c.json({ success: true, data: null });

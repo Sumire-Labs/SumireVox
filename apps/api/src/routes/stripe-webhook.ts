@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { handleStripeWebhook } from '../services/stripe-webhook-handler.js';
+import { stripe } from '../infrastructure/stripe-client.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -10,6 +11,13 @@ export const stripeWebhookRouter = new Hono();
  * Stripe Webhook 受信。署名検証には raw body が必要。
  */
 stripeWebhookRouter.post('/webhook', async (c) => {
+  if (!stripe) {
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
+      503,
+    );
+  }
+
   const signature = c.req.header('stripe-signature');
 
   if (!signature) {

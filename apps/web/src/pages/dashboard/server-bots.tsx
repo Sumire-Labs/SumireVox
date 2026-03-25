@@ -72,10 +72,16 @@ export function ServerBotsPage() {
 
   useEffect(() => {
     if (!guildId) return;
-    api.get<BotListResponse>(`/api/guilds/${guildId}/bots`)
+    const controller = new AbortController();
+    api.get<BotListResponse>(`/api/guilds/${guildId}/bots`, { signal: controller.signal })
       .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [guildId]);
 
   const updateSettings = useCallback(
@@ -230,9 +236,14 @@ export function ServerBotsPage() {
                   <Switch
                     isSelected={instance.settings.autoJoin}
                     isDisabled={!instance.isInGuild || isSaving}
-                    onValueChange={(v) => updateSettings(instance.instanceId, { autoJoin: v })}
-                    classNames={{ wrapper: 'bg-white/10 group-data-[selected=true]:bg-purple-600' }}
-                  />
+                    onChange={(v) => updateSettings(instance.instanceId, { autoJoin: v })}
+                  >
+                    {({ isSelected }) => (
+                      <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    )}
+                  </Switch>
                 </div>
 
                 <ChannelInput
