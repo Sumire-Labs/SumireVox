@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { getUserBoosts, assignBoost, unassignBoost } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription } from '../services/stripe-service.js';
+import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
 import { stripe } from '../infrastructure/stripe-client.js';
 
 export const userRouter = new Hono();
@@ -13,6 +14,7 @@ userRouter.use('*', requireAuth);
  */
 userRouter.get('/boosts', async (c) => {
   const session = c.get('session')!;
+  await syncUserSubscriptionsIfStale(session.userId);
   const result = await getUserBoosts(session.userId);
   return c.json({ success: true, data: result });
 });

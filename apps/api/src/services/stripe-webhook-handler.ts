@@ -115,16 +115,46 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
   const prisma = getPrisma();
   const status = mapStripeStatus(subscription.status);
+  const boostCount = subscription.items.data[0]?.quantity ?? 0;
+
+  const existing = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscription.id },
+    include: { boosts: true },
+  });
 
   await prisma.subscription.updateMany({
     where: { stripeSubscriptionId: subscription.id },
     data: {
       status,
       currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+      boostCount,
     },
   });
 
-  logger.info({ subscriptionId: subscription.id, status }, 'Subscription updated');
+  // ブースト枠数が変化した場合に DB レコードを増減
+  if (existing) {
+    const currentCount = existing.boosts.length;
+    if (boostCount > currentCount) {
+      const toAdd = boostCount - currentCount;
+      const boostData = Array.from({ length: toAdd }, () => ({ subscriptionId: subscription.id }));
+      await prisma.boost.createMany({ data: boostData });
+      logger.info({ subscriptionId: subscription.id, added: toAdd }, 'Boost slots added');
+    } else if (boostCount < currentCount) {
+      const toRemove = currentCount - boostCount;
+      const unassigned = existing.boosts.filter((b) => !b.guildId).slice(0, toRemove);
+      for (const boost of unassigned) {
+        await prisma.boost.delete({ where: { id: boost.id } });
+      }
+      if (unassigned.length < toRemove) {
+        logger.warn(
+          { subscriptionId: subscription.id, needed: toRemove, removed: unassigned.length },
+          'Could not remove all excess boost slots — some are still assigned',
+        );
+      }
+    }
+  }
+
+  logger.info({ subscriptionId: subscription.id, status, boostCount }, 'Subscription updated');
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {

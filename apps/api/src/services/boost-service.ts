@@ -39,22 +39,27 @@ export async function getUserBoosts(userId: string): Promise<{
     return { boosts: [], subscription: null };
   }
 
-  const sub = subscriptions[0];
   const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
 
-  const boosts: BoostWithStatus[] = sub.boosts.map((boost) => {
-    const cooldownEndsAt = boost.unassignedAt
-      ? new Date(boost.unassignedAt.getTime() + cooldownMs)
-      : null;
-    return {
-      id: boost.id,
-      guildId: boost.guildId,
-      assignedAt: boost.assignedAt,
-      unassignedAt: boost.unassignedAt,
-      cooldownEndsAt,
-      isOnCooldown: cooldownEndsAt !== null && Date.now() < cooldownEndsAt.getTime(),
-    };
-  });
+  // 全サブスクリプションのブーストをフラットに収集
+  const boosts: BoostWithStatus[] = subscriptions.flatMap((sub) =>
+    sub.boosts.map((boost) => {
+      const cooldownEndsAt = boost.unassignedAt
+        ? new Date(boost.unassignedAt.getTime() + cooldownMs)
+        : null;
+      return {
+        id: boost.id,
+        guildId: boost.guildId,
+        assignedAt: boost.assignedAt,
+        unassignedAt: boost.unassignedAt,
+        cooldownEndsAt,
+        isOnCooldown: cooldownEndsAt !== null && Date.now() < cooldownEndsAt.getTime(),
+      };
+    }),
+  );
+
+  const sub = subscriptions[0]; // 最新のサブスクリプションを代表値として使用
+  const totalBoostCount = subscriptions.reduce((sum, s) => sum + s.boostCount, 0);
 
   return {
     boosts,
@@ -62,7 +67,7 @@ export async function getUserBoosts(userId: string): Promise<{
       stripeSubscriptionId: sub.stripeSubscriptionId,
       status: sub.status as Subscription['status'],
       currentPeriodEnd: sub.currentPeriodEnd,
-      boostCount: sub.boostCount,
+      boostCount: totalBoostCount,
     },
   };
 }
