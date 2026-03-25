@@ -6,6 +6,7 @@ import { removeSpoiler } from './steps/remove-spoiler.js';
 import { removeUrl } from './steps/remove-url.js';
 import { convertTimestamp } from './steps/convert-timestamp.js';
 import { handleCustomEmoji } from './steps/handle-custom-emoji.js';
+import { handleStandardEmoji } from './steps/handle-standard-emoji.js';
 import { convertUserMention } from './steps/convert-user-mention.js';
 import { convertRoleMention } from './steps/convert-role-mention.js';
 import { convertChannelMention } from './steps/convert-channel-mention.js';
@@ -25,6 +26,7 @@ const pipelineSteps: PipelineStep[] = [
   removeUrl,               // 5. URL除去
   convertTimestamp,        // 6. タイムスタンプ変換
   handleCustomEmoji,       // 7. カスタム絵文字
+  handleStandardEmoji,     // 7.5. 標準絵文字 → 日本語ラベル
   convertUserMention,      // 8. ユーザーメンション変換
   convertRoleMention,      // 9. ロールメンション変換
   convertChannelMention,   // 10. チャンネルメンション変換
