@@ -3,6 +3,8 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { Menu, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 
+const DISCORD_SUPPORT_URL = import.meta.env.VITE_DISCORD_SUPPORT_URL || '#';
+
 const NAV_LINKS = [
   { to: '/', label: 'ホーム' },
   { to: '/commands', label: 'コマンド' },
@@ -217,7 +219,9 @@ export function Layout() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">外部リンク</p>
             <div className="flex flex-col gap-2">
               <a
-                href="#"
+                href={DISCORD_SUPPORT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
               >
                 <ExternalLink size={13} />
