@@ -16,8 +16,14 @@ interface BoostAllocation {
 interface BoostData {
   totalBoosts: number;
   usedBoosts: number;
+  cooldownBoosts: number;
   availableBoosts: number;
   allocations: BoostAllocation[];
+  cooldowns: Array<{
+    boostId: string;
+    unassignedAt: string;
+    availableAt: string;
+  }>;
   subscription: {
     status: string;
     currentPeriodEnd: string;
@@ -94,6 +100,7 @@ export function BoostPage() {
         allocations: newAllocations,
         usedBoosts: data.usedBoosts + delta,
         availableBoosts: data.availableBoosts - delta,
+        cooldownBoosts: delta < 0 ? data.cooldownBoosts + Math.abs(delta) : data.cooldownBoosts,
       });
     }
 
@@ -132,7 +139,12 @@ export function BoostPage() {
 
   const totalBoosts = data?.totalBoosts ?? 0;
   const usedBoosts = data?.usedBoosts ?? 0;
+  const cooldownBoosts = data?.cooldownBoosts ?? 0;
   const availableBoosts = data?.availableBoosts ?? 0;
+  const cooldowns = data?.cooldowns ?? [];
+  const earliestAvailableAt = cooldowns.length > 0
+    ? cooldowns.reduce((min, c) => c.availableAt < min ? c.availableAt : min, cooldowns[0].availableAt)
+    : null;
   const allocationMap = new Map((data?.allocations ?? []).map((a) => [a.guildId, a.boostCount]));
 
   return (
@@ -154,6 +166,11 @@ export function BoostPage() {
           <div className="flex flex-col gap-0.5">
             <span className="text-sm text-gray-500">使用中</span>
             <span className="text-2xl font-bold text-purple-400">{usedBoosts}</span>
+          </div>
+          <div className="w-px h-10 bg-white/10 hidden sm:block" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-gray-500">クールダウン中</span>
+            <span className="text-2xl font-bold text-orange-400">{cooldownBoosts}</span>
           </div>
           <div className="w-px h-10 bg-white/10 hidden sm:block" />
           <div className="flex flex-col gap-0.5">
@@ -179,6 +196,18 @@ export function BoostPage() {
             </button>
           </div>
         </div>
+        {cooldownBoosts > 0 && earliestAvailableAt && (
+          <p className="text-sm text-orange-400/80">
+            ⏳ {cooldownBoosts}ブーストがクールダウン中です（最短解除:{' '}
+            {new Date(earliestAvailableAt).toLocaleString('ja-JP', {
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}）
+          </p>
+        )}
       </div>
 
       {/* 購入フォーム */}

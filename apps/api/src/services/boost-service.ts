@@ -28,13 +28,21 @@ export interface BoostAllocation {
 /**
  * ユーザーのブースト枠一覧を取得する
  */
+export interface BoostCooldownInfo {
+  boostId: string;
+  unassignedAt: string;
+  availableAt: string;
+}
+
 export async function getUserBoosts(userId: string): Promise<{
   boosts: BoostWithStatus[];
   subscription: SubscriptionInfo | null;
   totalBoosts: number;
   usedBoosts: number;
+  cooldownBoosts: number;
   availableBoosts: number;
   allocations: BoostAllocation[];
+  cooldowns: BoostCooldownInfo[];
 }> {
   const prisma = getPrisma();
 
@@ -45,7 +53,7 @@ export async function getUserBoosts(userId: string): Promise<{
   });
 
   if (subscriptions.length === 0) {
-    return { boosts: [], subscription: null, totalBoosts: 0, usedBoosts: 0, availableBoosts: 0, allocations: [] };
+    return { boosts: [], subscription: null, totalBoosts: 0, usedBoosts: 0, cooldownBoosts: 0, availableBoosts: 0, allocations: [], cooldowns: [] };
   }
 
   const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
@@ -79,7 +87,15 @@ export async function getUserBoosts(userId: string): Promise<{
       allocationMap.set(boost.guildId, (allocationMap.get(boost.guildId) ?? 0) + 1);
     }
   }
+  const cooldownBoosts = boosts.filter((b) => !b.guildId && b.isOnCooldown).length;
   const availableBoosts = boosts.filter((b) => !b.guildId && !b.isOnCooldown).length;
+  const cooldowns: BoostCooldownInfo[] = boosts
+    .filter((b) => !b.guildId && b.isOnCooldown && b.unassignedAt !== null && b.cooldownEndsAt !== null)
+    .map((b) => ({
+      boostId: b.id,
+      unassignedAt: b.unassignedAt!.toISOString(),
+      availableAt: b.cooldownEndsAt!.toISOString(),
+    }));
   const allocations: BoostAllocation[] = Array.from(allocationMap.entries()).map(([guildId, boostCount]) => ({
     guildId,
     boostCount,
@@ -95,8 +111,10 @@ export async function getUserBoosts(userId: string): Promise<{
     },
     totalBoosts: boosts.length,
     usedBoosts,
+    cooldownBoosts,
     availableBoosts,
     allocations,
+    cooldowns,
   };
 }
 
