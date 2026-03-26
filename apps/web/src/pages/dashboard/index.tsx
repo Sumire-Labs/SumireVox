@@ -16,15 +16,35 @@ interface BoostData {
   } | null;
 }
 
+interface Guild {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
 export function DashboardPage() {
   const [data, setData] = useState<BoostData | null>(null);
+  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const guildMap = new Map(guilds.map((g) => [g.id, g]));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<BoostData>('/api/user/boosts')
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const controller = new AbortController();
+    Promise.all([
+      api.get<BoostData>('/api/user/boosts', { signal: controller.signal }),
+      api.get<Guild[]>('/api/user/guilds', { signal: controller.signal }),
+    ])
+      .then(([boostData, guildsData]) => {
+        setData(boostData);
+        setGuilds(guildsData);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
   if (loading) {
@@ -80,14 +100,41 @@ export function DashboardPage() {
                 key={boost.id}
                 className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
               >
-                <span className="text-gray-300">
-                  {boost.guildId ? `サーバー: ${boost.guildId}` : '未割り当て'}
-                </span>
-                {boost.isOnCooldown && (
-                  <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full">
-                    クールダウン中
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {boost.guildId ? (
+                    <span className="flex items-center gap-2 text-gray-300">
+                      {(() => {
+                        const guild = guildMap.get(boost.guildId);
+                        if (!guild) {
+                          return <span className="text-gray-400">不明なサーバー ({boost.guildId})</span>;
+                        }
+                        return (
+                          <>
+                            {guild.icon ? (
+                              <img
+                                src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
+                                alt=""
+                                className="w-6 h-6 rounded-full shrink-0"
+                              />
+                            ) : (
+                              <span className="bg-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs text-white shrink-0">
+                                {guild.name.charAt(0)}
+                              </span>
+                            )}
+                            <span>{guild.name}</span>
+                          </>
+                        );
+                      })()}
+                    </span>
+                  ) : (
+                    <span className="text-gray-500">未割り当て</span>
+                  )}
+                  {boost.isOnCooldown && (
+                    <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full">
+                      クールダウン中
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
