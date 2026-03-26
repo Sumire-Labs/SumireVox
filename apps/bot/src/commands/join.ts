@@ -4,6 +4,7 @@ import { createVcSession, getVcSession, updateTextChannel } from '../services/vc
 import { getGuildSettings } from '../services/guild-settings-service.js';
 import { enqueuePreSynthesized } from '../services/speech-queue.js';
 import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
+import { canInstanceConnect, getGuildActiveBoostCount } from '../services/premium-service.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -34,6 +35,19 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       ephemeral: true,
     });
     return;
+  }
+
+  // インスタンス接続制限チェック (2号機以降はブースト数が必要)
+  if (config.botInstanceId > 1) {
+    const allowed = await canInstanceConnect(guildId, config.botInstanceId);
+    if (!allowed) {
+      const boostCount = await getGuildActiveBoostCount(guildId);
+      await interaction.reply({
+        content: `このBotを利用するにはブーストが${config.botInstanceId}つ以上必要です。現在のブースト数: ${boostCount}`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
   }
 
   // 既存のセッションを確認
