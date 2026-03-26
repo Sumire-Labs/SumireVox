@@ -129,8 +129,11 @@ guildsRouter.put('/:guildId/settings', requireGuildAdmin, async (c) => {
   delete body['guildId'];
   delete body['manualPremium'];
 
-  const updated = await updateGuildSettings(guildId, body);
-  return c.json({ success: true, data: updated });
+  const [updated, isPremium] = await Promise.all([
+    updateGuildSettings(guildId, body),
+    isGuildPremium(guildId),
+  ]);
+  return c.json({ success: true, data: { ...updated, isPremium } });
 });
 
 /**

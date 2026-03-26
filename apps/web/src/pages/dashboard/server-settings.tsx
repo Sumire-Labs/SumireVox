@@ -167,7 +167,7 @@ export function ServerSettingsPage() {
 
       {/* 読み上げ設定 */}
       <SectionCard title="読み上げ設定">
-        <SettingRow label="最大文字数" description="FREE: 上限50 / PREMIUM: 上限200">
+        <SettingRow label="最大文字数" description={settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}>
           <NumberField
             aria-label="最大文字数"
             value={settings.maxReadLength}
