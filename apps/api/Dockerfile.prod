@@ -18,7 +18,7 @@ COPY --from=deps /app/apps/bot/node_modules ./apps/bot/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY . .
 RUN pnpm --filter @sumirevox/shared build
-RUN cd apps/api && npx prisma generate --schema=../bot/prisma/schema.prisma
+RUN ./node_modules/.bin/prisma generate --schema=apps/bot/prisma/schema.prisma
 RUN pnpm --filter @sumirevox/api build
 
 FROM base AS production
