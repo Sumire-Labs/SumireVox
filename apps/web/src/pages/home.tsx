@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Terminal, Sparkles, Check, MonitorSpeakerIcon } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
+import { API_BASE } from '../lib/api';
 
 const BOT_INVITE_URL =
   import.meta.env.VITE_BOT_INVITE_URL ||
@@ -272,7 +273,7 @@ export function HomePage() {
                 </Link>
               ) : (
                 <a
-                  href="/auth/login"
+                  href={`${API_BASE}/auth/login`}
                   className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
                 >
                   ログインしてブーストを購入

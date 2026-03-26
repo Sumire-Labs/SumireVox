@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { Menu, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
+import { API_BASE } from '../lib/api';
 
 const DISCORD_SUPPORT_URL = import.meta.env.VITE_DISCORD_SUPPORT_URL || '#';
 
@@ -116,7 +117,7 @@ export function Layout() {
                 </div>
               ) : (
                 <a
-                  href="/auth/login"
+                  href={`${API_BASE}/auth/login`}
                   className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
                 >
                   ログイン
@@ -176,7 +177,7 @@ export function Layout() {
                 </>
               ) : (
                 <a
-                  href="/auth/login"
+                  href={`${API_BASE}/auth/login`}
                   className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
                 >
                   ログイン
