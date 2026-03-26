@@ -110,8 +110,11 @@ guildsRouter.get('/', async (c) => {
  */
 guildsRouter.get('/:guildId/settings', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
-  const settings = await getGuildSettings(guildId);
-  return c.json({ success: true, data: settings });
+  const [settings, isPremium] = await Promise.all([
+    getGuildSettings(guildId),
+    isGuildPremium(guildId),
+  ]);
+  return c.json({ success: true, data: { ...settings, isPremium } });
 });
 
 /**

@@ -20,6 +20,7 @@ interface GuildSettings {
   adminRoleId: string | null;
   dictionaryPermission: 'everyone' | 'admin_only';
   manualPremium: boolean;
+  isPremium: boolean;
 }
 
 interface Role {
@@ -172,7 +173,7 @@ export function ServerSettingsPage() {
             value={settings.maxReadLength}
             onChange={(val) => handleNumber('maxReadLength', val)}
             minValue={1}
-            maxValue={settings.manualPremium ? 200 : 50}
+            maxValue={settings.isPremium ? 200 : 50}
           >
             <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
               <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
