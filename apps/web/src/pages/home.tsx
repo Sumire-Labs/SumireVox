@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { Mic, BookOpen, Terminal, Sparkles, Check } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
 
 const FEATURES = [
   {
@@ -56,6 +57,8 @@ const fadeUp = {
 };
 
 export function HomePage() {
+  const { user, loading } = useAuth();
+
   return (
     <div className="flex flex-col">
       {/* ── Hero ── */}
@@ -125,18 +128,24 @@ export function HomePage() {
             variants={fadeUp}
             className="flex gap-4 flex-wrap justify-center"
           >
-            <a
-              href="#"
-              className="gradient-bg text-white font-semibold px-8 py-3 rounded-xl transition-all hover:opacity-90 hover:scale-105"
-            >
-              Bot を導入する
-            </a>
-            <Link
-              to="/dashboard"
-              className="text-white font-medium px-8 py-3 rounded-xl transition-all hover:bg-white/10 border border-white/20 bg-white/5"
-            >
-              ダッシュボード
-            </Link>
+            {!loading && (
+              <>
+                <a
+                  href="#"
+                  className="gradient-bg text-white font-semibold px-8 py-3 rounded-xl transition-all hover:opacity-90 hover:scale-105"
+                >
+                  Bot を導入する
+                </a>
+                {user && (
+                  <Link
+                    to="/dashboard"
+                    className="text-white font-medium px-8 py-3 rounded-xl transition-all hover:bg-white/10 border border-white/20 bg-white/5"
+                  >
+                    ダッシュボード
+                  </Link>
+                )}
+              </>
+            )}
           </motion.div>
         </div>
       </section>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { Menu, X, ExternalLink } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
 
 const NAV_LINKS = [
   { to: '/', label: 'ホーム' },
@@ -12,6 +13,8 @@ export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -56,14 +59,36 @@ export function Layout() {
             ))}
           </div>
 
-          {/* Login button + mobile toggle */}
+          {/* Auth area + mobile toggle */}
           <div className="flex items-center gap-3">
-            <a
-              href="/auth/login"
-              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
-            >
-              ログイン
-            </a>
+            {!loading && (
+              user ? (
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  {user.avatar ? (
+                    <img
+                      src={`https://cdn.discordapp.com/avatars/${user.userId}/${user.avatar}.png?size=64`}
+                      alt={user.username}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="bg-purple-600 rounded-full w-8 h-8 flex items-center justify-center text-white text-sm">
+                      {user.username.charAt(0)}
+                    </span>
+                  )}
+                  <span className="text-sm text-gray-300">{user.username}</span>
+                </button>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
+                >
+                  ログイン
+                </a>
+              )
+            )}
             <button
               className="sm:hidden text-gray-400 hover:text-white p-1"
               onClick={() => setMenuOpen((v) => !v)}
@@ -88,12 +113,34 @@ export function Layout() {
                 {link.label}
               </Link>
             ))}
-            <a
-              href="/auth/login"
-              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
-            >
-              ログイン
-            </a>
+            {!loading && (
+              user ? (
+                <button
+                  onClick={() => { setMenuOpen(false); navigate('/dashboard'); }}
+                  className="flex items-center gap-2 py-2"
+                >
+                  {user.avatar ? (
+                    <img
+                      src={`https://cdn.discordapp.com/avatars/${user.userId}/${user.avatar}.png?size=64`}
+                      alt={user.username}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="bg-purple-600 rounded-full w-8 h-8 flex items-center justify-center text-white text-sm">
+                      {user.username.charAt(0)}
+                    </span>
+                  )}
+                  <span className="text-sm text-gray-300">{user.username}</span>
+                </button>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
+                >
+                  ログイン
+                </a>
+              )
+            )}
           </div>
         )}
       </nav>
