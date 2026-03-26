@@ -255,12 +255,21 @@ export function HomePage() {
                   </li>
                 ))}
               </ul>
-              <a
-                href="/auth/login"
-                className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
-              >
-                ログインしてブーストを購入
-              </a>
+              {user ? (
+                <Link
+                  to="/dashboard/boost"
+                  className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
+                >
+                  ブーストを購入
+                </Link>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
+                >
+                  ログインしてブーストを購入
+                </a>
+              )}
             </motion.div>
           </div>
         </div>
