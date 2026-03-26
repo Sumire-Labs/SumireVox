@@ -28,6 +28,7 @@ interface Guild {
 export function BoostPage() {
   const [data, setData] = useState<BoostData | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
+  const guildMap = new Map(guilds.map((g) => [g.id, g]));
   const [loading, setLoading] = useState(true);
   const [boostCount, setBoostCount] = useState('1');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -178,8 +179,30 @@ export function BoostPage() {
               >
                 <div className="flex items-center gap-3">
                   {boost.guildId ? (
-                    <span className="text-gray-300">
-                      割り当て先: {guilds.find((g) => g.id === boost.guildId)?.name ?? boost.guildId}
+                    <span className="flex items-center gap-2 text-gray-300">
+                      {(() => {
+                        const guild = guildMap.get(boost.guildId);
+                        if (!guild) {
+                          return <span className="text-gray-400">不明なサーバー ({boost.guildId})</span>;
+                        }
+                        return (
+                          <>
+                            {guild.icon ? (
+                              <img
+                                src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
+                                alt=""
+                                className="w-6 h-6 rounded-full shrink-0"
+                              />
+                            ) : (
+                              <span className="bg-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs text-white shrink-0">
+                                {guild.name.charAt(0)}
+                              </span>
+                            )}
+                            <span>{guild.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">{guild.id}</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   ) : (
                     <span className="text-gray-500">未割り当て</span>
