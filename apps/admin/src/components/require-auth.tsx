@@ -1,7 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { Spinner } from '@heroui/react';
 import { useAuth } from '../lib/auth-context';
-import { api, ApiError } from '../lib/api';
+import { api, ApiError, API_BASE } from '../lib/api';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -35,7 +35,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen gap-4">
         <p className="text-lg text-gray-400">ログインが必要です</p>
-        <a href="/auth/login?from=admin" className="text-purple-400 hover:underline">
+        <a href={`${API_BASE}/auth/login?from=admin`} className="text-purple-400 hover:underline">
           Discord でログイン
         </a>
       </div>
