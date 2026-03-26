@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Switch, Select, ListBox } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
@@ -55,21 +55,22 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
-function RangeSlider({ value, min, max, step, onChange }: {
+function RangeSlider({ value, min, max, step, onChange, onChangeEnd }: {
   value: number; min: number; max: number; step: number;
   onChange: (value: number) => void;
+  onChangeEnd: (value: number) => void;
 }) {
-  const trackRef = useRef<HTMLInputElement>(null);
   const progress = ((value - min) / (max - min)) * 100;
   return (
     <input
-      ref={trackRef}
       type="range"
       min={min}
       max={max}
       step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
+      onMouseUp={(e) => onChangeEnd(Number((e.target as HTMLInputElement).value))}
+      onTouchEnd={(e) => onChangeEnd(Number((e.target as HTMLInputElement).value))}
       className="slider-purple w-full h-2 rounded-full appearance-none cursor-pointer"
       style={{ '--slider-progress': `${progress}%` } as React.CSSProperties}
     />
@@ -202,7 +203,8 @@ export function ServerSettingsPage() {
             min={10}
             max={settings.isPremium ? 200 : 50}
             step={10}
-            onChange={(val) => handleSettingChange('maxReadLength', val)}
+            onChange={(val) => setSettings(prev => prev ? { ...prev, maxReadLength: val } : prev)}
+            onChangeEnd={(val) => handleSettingChange('maxReadLength', val)}
           />
         </div>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
