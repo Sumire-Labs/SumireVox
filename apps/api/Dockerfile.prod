@@ -1,8 +1,10 @@
 FROM node:22-slim AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS deps
+RUN apt-get update && apt-get install -y python3 make g++ libopus-dev && rm -rf /var/lib/apt/lists/*
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/bot/package.json apps/bot/
@@ -14,24 +16,25 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/apps/bot/node_modules ./apps/bot/node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY packages/shared/ packages/shared/
-COPY apps/bot/prisma/ apps/bot/prisma/
-COPY apps/api/ apps/api/
-RUN pnpm --filter @sumirevox/shared build
-RUN cd apps/api && npx prisma generate --schema=../bot/prisma/schema.prisma
+COPY . .
 RUN pnpm --filter @sumirevox/api build
+RUN npx prisma generate --schema=apps/bot/prisma/schema.prisma
 
-FROM base AS runner
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=build /app/packages/shared/dist ./packages/shared/dist
-COPY --from=build /app/packages/shared/package.json ./packages/shared/
+FROM base AS production
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/apps/bot/node_modules ./apps/bot/node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/package.json ./apps/api/
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
-COPY apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
-RUN chmod +x ./apps/api/docker-entrypoint.sh
-ENV NODE_ENV=production
-WORKDIR /app/apps/api
+COPY --from=build /app/packages/shared ./packages/shared
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY apps/api/package.json apps/api/
+COPY apps/bot/package.json apps/bot/
+COPY packages/shared/package.json packages/shared/
+COPY package.json pnpm-workspace.yaml ./
+COPY apps/api/docker-entrypoint.sh apps/api/
+RUN chmod +x apps/api/docker-entrypoint.sh
 EXPOSE 3000
-CMD ["sh", "docker-entrypoint.sh"]
+CMD ["sh", "apps/api/docker-entrypoint.sh"]
