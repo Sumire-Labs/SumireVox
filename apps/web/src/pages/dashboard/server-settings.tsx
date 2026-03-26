@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Switch, Select, ListBox, NumberField } from '@heroui/react';
+import { Switch, Select, ListBox, Slider } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 import { Toast, useToast } from '../../components/toast';
@@ -128,11 +128,6 @@ export function ServerSettingsPage() {
     save({ [field]: value });
   };
 
-  const handleNumber = (field: keyof GuildSettings, value: number | undefined) => {
-    if (!settings || value === undefined) return;
-    save({ [field]: value });
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center mt-20">
@@ -167,21 +162,30 @@ export function ServerSettingsPage() {
 
       {/* 読み上げ設定 */}
       <SectionCard title="読み上げ設定">
-        <SettingRow label="最大文字数" description={settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}>
-          <NumberField
+        <div className="py-3 border-b border-white/5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-white">最大文字数</p>
+              <p className="text-xs text-gray-500 mt-0.5">{settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}</p>
+            </div>
+            <span className="text-sm font-semibold text-white shrink-0">{settings.maxReadLength}文字</span>
+          </div>
+          <Slider
             aria-label="最大文字数"
-            value={settings.maxReadLength}
-            onChange={(val) => handleNumber('maxReadLength', val)}
-            minValue={1}
+            step={10}
+            minValue={10}
             maxValue={settings.isPremium ? 200 : 50}
+            value={settings.maxReadLength}
+            onChange={(value) => setSettings({ ...settings, maxReadLength: value as number })}
+            onChangeEnd={(value) => save({ maxReadLength: value as number })}
+            className="max-w-md"
           >
-            <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-              <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-              <NumberField.Input className="w-14 text-white text-center bg-transparent text-sm py-1.5 focus:outline-none" />
-              <NumberField.IncrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-            </NumberField.Group>
-          </NumberField>
-        </SettingRow>
+            <Slider.Track>
+              <Slider.Fill />
+              <Slider.Thumb />
+            </Slider.Track>
+          </Slider>
+        </div>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
           <SettingSwitch label="名前読み上げ" isSelected={settings.readUsername} onChange={(v) => handleSwitch('readUsername', v)} />
         </SettingRow>
