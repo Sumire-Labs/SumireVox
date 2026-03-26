@@ -116,16 +116,17 @@ export function BoostPage() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!confirm('サブスクリプションを解約しますか？現在の請求期間の終了まではブーストが有効です。')) return;
-    showSaving('解約処理中...');
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const handlePortal = async () => {
+    setPortalLoading(true);
     try {
-      await api.post('/api/user/subscription/cancel');
-      await fetchData();
-      showSuccess('解約しました');
+      const result = await api.post<{ url: string }>('/api/user/billing-portal');
+      window.location.href = result.url;
     } catch (err) {
       if (err instanceof ApiError) showError(err.message);
-      else showError('解約に失敗しました');
+      else showError('ポータルの読み込みに失敗しました');
+      setPortalLoading(false);
     }
   };
 
@@ -234,17 +235,18 @@ export function BoostPage() {
         </div>
       )}
 
-      {/* 解約 */}
-      {data?.subscription?.status === 'ACTIVE' && (
+      {/* サブスクリプション管理 */}
+      {data?.subscription && (
         <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex items-center justify-between gap-4">
           <p className="text-sm text-gray-400">
-            解約すると、現在の請求期間（{new Date(data.subscription.currentPeriodEnd).toLocaleDateString('ja-JP')}）の終了後にブーストが無効になります。
+            サブスクリプションの管理・解約はStripeカスタマーポータルから行えます。
           </p>
           <button
-            onClick={handleCancel}
-            className="shrink-0 text-sm bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 px-5 py-2 rounded-xl transition-all"
+            onClick={handlePortal}
+            disabled={portalLoading}
+            className="shrink-0 text-sm border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2 rounded-xl transition-all"
           >
-            解約する
+            {portalLoading ? '読み込み中...' : 'カスタマーポータルを開く'}
           </button>
         </div>
       )}

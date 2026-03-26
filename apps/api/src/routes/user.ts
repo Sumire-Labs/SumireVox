@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { getUserBoosts, assignBoost, unassignBoost } from '../services/boost-service.js';
-import { createCheckoutSession, cancelSubscription } from '../services/stripe-service.js';
+import { createCheckoutSession, cancelSubscription, createBillingPortalSession } from '../services/stripe-service.js';
 import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
 import { stripe } from '../infrastructure/stripe-client.js';
+import { getPrisma } from '../infrastructure/database.js';
+import { config } from '../infrastructure/config.js';
 
 export const userRouter = new Hono();
 
@@ -87,6 +89,39 @@ userRouter.get('/subscription', async (c) => {
   const session = c.get('session')!;
   const result = await getUserBoosts(session.userId);
   return c.json({ success: true, data: { subscription: result.subscription } });
+});
+
+/**
+ * POST /api/user/billing-portal
+ */
+userRouter.post('/billing-portal', async (c) => {
+  if (!stripe) {
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
+      503,
+    );
+  }
+
+  const session = c.get('session')!;
+  const prisma = getPrisma();
+
+  const sub = await prisma.subscription.findFirst({
+    where: { userId: session.userId },
+    select: { stripeCustomerId: true },
+  });
+
+  if (!sub?.stripeCustomerId) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'サブスクリプションが見つかりません。' } },
+      404,
+    );
+  }
+
+  const url = await createBillingPortalSession(
+    sub.stripeCustomerId,
+    `${config.webDomain}/dashboard/boost`,
+  );
+  return c.json({ success: true, data: { url } });
 });
 
 /**
