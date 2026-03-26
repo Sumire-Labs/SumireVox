@@ -16,7 +16,7 @@ const articles: Article[] = [
   {
     id: "article-1",
     title: "第1条（はじめに）",
-    content: "この利用規約（以下「本規約」といいます）は、Sumire-Labs（以下「当方」といいます）が提供するSumireVoxサービス（Discord読み上げBot「SumireVoxBot」、Webダッシュボード「SumireVoxFrontend」、およびバックエンドAPI「SumireVoxBackend」を含む、以下「本サービス」といいます）の利用条件を定めるものです。本サービスをご利用いただくユーザー（以下「ユーザー」といいます）は、本規約に同意したものとみなされます。"
+    content: "この利用規約（以下「本規約」といいます）は、Sumire-Labs（以下「当方」といいます）が提供するSumireVoxサービス（Discord読み上げBot「SumireVox」および関連Webサービス全般、以下「本サービス」といいます）の利用条件を定めるものです。本サービスをご利用いただくユーザー（以下「ユーザー」といいます）は、本規約に同意したものとみなされます。"
   },
   {
     id: "article-2",
