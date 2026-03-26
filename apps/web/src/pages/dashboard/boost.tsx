@@ -23,12 +23,6 @@ interface Guild {
   id: string;
   name: string;
   icon: string | null;
-  botJoined: boolean;
-}
-
-interface GuildsResponse {
-  guilds: Guild[];
-  mainBotClientId: string;
 }
 
 export function BoostPage() {
@@ -41,12 +35,12 @@ export function BoostPage() {
 
   const fetchData = async () => {
     try {
-      const [boostData, guildsRes] = await Promise.all([
+      const [boostData, guildsData] = await Promise.all([
         api.get<BoostData>('/api/user/boosts'),
-        api.get<GuildsResponse>('/api/guilds'),
+        api.get<Guild[]>('/api/user/guilds'),
       ]);
       setData(boostData);
-      setGuilds(guildsRes.guilds);
+      setGuilds(guildsData);
     } catch {
       // ignore
     } finally {
@@ -58,11 +52,11 @@ export function BoostPage() {
     const controller = new AbortController();
     Promise.all([
       api.get<BoostData>('/api/user/boosts', { signal: controller.signal }),
-      api.get<GuildsResponse>('/api/guilds', { signal: controller.signal }),
+      api.get<Guild[]>('/api/user/guilds', { signal: controller.signal }),
     ])
-      .then(([boostData, guildsRes]) => {
+      .then(([boostData, guildsData]) => {
         setData(boostData);
-        setGuilds(guildsRes.guilds);
+        setGuilds(guildsData);
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
@@ -221,7 +215,20 @@ export function BoostPage() {
                         <ListBox>
                           {guilds.map((guild) => (
                             <ListBox.Item key={guild.id} id={guild.id}>
-                              {guild.name}
+                              <span className="flex items-center gap-2">
+                                {guild.icon ? (
+                                  <img
+                                    src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=32`}
+                                    alt=""
+                                    className="w-5 h-5 rounded-full"
+                                  />
+                                ) : (
+                                  <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs text-gray-400">
+                                    {guild.name.charAt(0)}
+                                  </span>
+                                )}
+                                {guild.name}
+                              </span>
                             </ListBox.Item>
                           ))}
                         </ListBox>

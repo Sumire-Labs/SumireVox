@@ -6,10 +6,68 @@ import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { config } from '../infrastructure/config.js';
+import { fetchUserGuilds } from '../services/discord-api.js';
+import { getActiveBotInstances, isBotInGuild } from '../services/bot-instance-service.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { logger } from '../infrastructure/logger.js';
+
+const USER_GUILDS_CACHE_TTL = 60;
+const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
 
 export const userRouter = new Hono();
 
 userRouter.use('*', requireAuth);
+
+/**
+ * GET /api/user/guilds
+ * Bot が参加しているサーバーの一覧（管理権限チェックなし）
+ */
+userRouter.get('/guilds', async (c) => {
+  const session = c.get('session')!;
+  const cacheKey = userGuildsCacheKey(session.userId);
+
+  let allGuilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
+
+  try {
+    const cached = await getRedisClient().get(cacheKey);
+    if (cached) {
+      allGuilds = JSON.parse(cached) as Array<{ id: string; name: string; icon: string | null }>;
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to read user all-guilds cache');
+  }
+
+  if (!allGuilds) {
+    try {
+      const guilds = await fetchUserGuilds(session.accessToken);
+      allGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
+      try {
+        await getRedisClient().set(cacheKey, JSON.stringify(allGuilds), 'EX', USER_GUILDS_CACHE_TTL);
+      } catch (err) {
+        logger.warn({ err }, 'Failed to write user all-guilds cache');
+      }
+    } catch (err) {
+      logger.error({ err }, 'Failed to fetch user guilds');
+      return c.json(
+        { success: false, error: { code: 'INTERNAL_ERROR', message: 'ギルド一覧の取得に失敗しました。' } },
+        500,
+      );
+    }
+  }
+
+  const botInstances = await getActiveBotInstances();
+  const result: Array<{ id: string; name: string; icon: string | null }> = [];
+  for (const guild of allGuilds) {
+    for (const instance of botInstances) {
+      if (await isBotInGuild(instance.instanceId, guild.id)) {
+        result.push(guild);
+        break;
+      }
+    }
+  }
+
+  return c.json({ success: true, data: result });
+});
 
 /**
  * GET /api/user/boosts
