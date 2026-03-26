@@ -30,7 +30,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
 COPY --from=build /app/packages/shared ./packages/shared
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+RUN ./apps/bot/node_modules/.bin/prisma generate --schema=apps/bot/prisma/schema.prisma
 COPY apps/api/package.json apps/api/
 COPY apps/bot/package.json apps/bot/
 COPY packages/shared/package.json packages/shared/
