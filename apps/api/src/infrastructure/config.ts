@@ -15,6 +15,7 @@ interface AppConfig {
   stripeWebhookSecret: string;
   stripePriceId: string;
   boostCooldownDays: number;
+  apiDomain: string;
   webDomain: string;
   adminDomain: string;
   settingsCacheTtlSeconds: number;
@@ -71,6 +72,7 @@ function buildConfig(): AppConfig {
     stripeWebhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] ?? '',
     stripePriceId: process.env['STRIPE_PRICE_ID'] ?? '',
     boostCooldownDays: requireInt('BOOST_COOLDOWN_DAYS', 7),
+    apiDomain: process.env['API_DOMAIN'] ?? 'http://localhost:3000',
     webDomain: process.env['WEB_DOMAIN'] ?? 'http://localhost:5173',
     adminDomain: process.env['ADMIN_DOMAIN'] ?? 'http://localhost:5174',
     settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS', 300),

@@ -9,23 +9,19 @@ import crypto from 'node:crypto';
 export const authRouter = new Hono();
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
-const REDIRECT_URI_PATH = '/auth/callback';
 
-function getRedirectUri(from: string | undefined): string {
-  const baseDomain = from === 'admin' ? config.adminDomain : config.webDomain;
-  return `${baseDomain}${REDIRECT_URI_PATH}`;
+function getRedirectUri(): string {
+  return `${config.apiDomain}/auth/callback`;
 }
 
 /**
  * GET /auth/login
  * Discord OAuth2 認可 URL にリダイレクトする
- * ?from=admin を付与すると Admin ダッシュボード用のコールバック URL を使用する
+ * ?from=admin を付与すると、ログイン後に Admin ダッシュボードへリダイレクトする
  *
  * NOTE: Discord Developer Portal の Redirect URLs に以下を登録すること:
- *   - http://localhost:5173/auth/callback  (web 開発用)
- *   - http://localhost:5174/auth/callback  (admin 開発用)
- *   - https://sumirevox.com/auth/callback  (本番 web)
- *   - https://admin.sumirevox.com/auth/callback  (本番 admin)
+ *   - http://localhost:3000/auth/callback  (開発用)
+ *   - https://api.sumirevox.com/auth/callback  (本番)
  */
 authRouter.get('/login', async (c) => {
   const from = c.req.query('from');
@@ -49,7 +45,7 @@ authRouter.get('/login', async (c) => {
 
   const params = new URLSearchParams({
     client_id: config.discordClientId,
-    redirect_uri: getRedirectUri(from),
+    redirect_uri: getRedirectUri(),
     response_type: 'code',
     scope: 'identify guilds',
     state,
@@ -100,7 +96,7 @@ authRouter.get('/callback', async (c) => {
         client_secret: config.discordClientSecret,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: getRedirectUri(from),
+        redirect_uri: getRedirectUri(),
       }),
     });
 
