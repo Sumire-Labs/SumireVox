@@ -3,12 +3,16 @@ import { motion } from 'framer-motion';
 import { Mic, BookOpen, Terminal, Sparkles, Check } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 
+const BOT_INVITE_URL =
+  import.meta.env.VITE_BOT_INVITE_URL ||
+  'https://discord.com/oauth2/authorize?client_id=1484868242945343649&permissions=36727824&scope=bot';
+
 const FEATURES = [
   {
     icon: Mic,
-    title: '高品質な音声合成',
+    title: '高速なGPU生成',
     description:
-      'VOICEVOX エンジンによる自然な日本語音声。複数の話者から好みの声を選べます。速度やピッチも細かく調整可能です。',
+      '音声生成はすべて高速なGPU生成。 FREE プランでも音声生成はすべてGPUサーバーで行われます。',
   },
   {
     icon: BookOpen,
@@ -131,7 +135,9 @@ export function HomePage() {
             {!loading && (
               <>
                 <a
-                  href="#"
+                  href={BOT_INVITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="gradient-bg text-white font-semibold px-8 py-3 rounded-xl transition-all hover:opacity-90 hover:scale-105"
                 >
                   Bot を導入する
@@ -220,7 +226,9 @@ export function HomePage() {
                 ))}
               </ul>
               <a
-                href="#"
+                href={BOT_INVITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="block text-center text-white border border-white/20 bg-white/5 hover:bg-white/10 font-medium px-6 py-3 rounded-xl transition-all"
               >
                 Bot を導入する
@@ -295,7 +303,9 @@ export function HomePage() {
           <p className="text-gray-400">完全無料で始められます</p>
           <div className="flex flex-col items-center gap-3">
             <a
-              href="#"
+              href={BOT_INVITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="gradient-bg text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:opacity-90 hover:scale-105"
             >
               Bot を導入する
