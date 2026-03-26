@@ -1,3 +1,5 @@
+const DISCORD_SUPPORT_URL = import.meta.env.VITE_DISCORD_SUPPORT_URL || '#';
+
 interface SubSection {
   title: string;
   content: string;
@@ -19,7 +21,7 @@ const sections: Section[] = [
   {
     id: "section-1",
     title: "1. はじめに",
-    content: "Sumire-Labs（以下「当方」といいます）は、SumireVoxサービス（Discord読み上げBot「SumireVoxBot」、Webダッシュボード「SumireVoxFrontend」、およびバックエンドAPI「SumireVoxBackend」を含む、以下「本サービス」といいます）を提供するにあたり、ユーザーの個人情報の保護を重要な責務と認識しています。",
+    content: "Sumire-Labs（以下「当方」といいます）は、SumireVoxサービス（Discord読み上げBot「SumireVox」および関連Webサービス全般、以下「本サービス」といいます）を提供するにあたり、ユーザーの個人情報の保護を重要な責務と認識しています。",
     subContent: "本個人情報保護方針（以下「本ポリシー」といいます）は、当方が収集する情報の種類、利用目的、管理方法、およびユーザーの権利について説明するものです。本サービスをご利用いただくことで、ユーザーは本ポリシーに同意したものとみなされます。"
   },
   {
@@ -228,7 +230,7 @@ const sections: Section[] = [
     operatorInfo: "運営者: Sumire-Labs",
     contactInfo: {
       email: "sumirevox@gmail.com",
-      discord: "https://discord.gg/8RzjWAvUUt"
+      discord: ""
     }
   }
 ];
@@ -306,8 +308,8 @@ function SectionContent({ section }: { section: Section }) {
           </p>
           <p className="text-gray-300">
             Discord サポートサーバー：
-            <a href={section.contactInfo.discord} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">
-              {section.contactInfo.discord}
+            <a href={DISCORD_SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">
+              {DISCORD_SUPPORT_URL}
             </a>
           </p>
         </div>
