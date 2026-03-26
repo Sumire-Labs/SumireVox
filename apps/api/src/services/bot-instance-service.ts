@@ -10,6 +10,32 @@ import { getRedisClient } from '../infrastructure/redis.js';
 import { REDIS_KEYS } from '@sumirevox/shared';
 import { AppError } from '../infrastructure/app-error.js';
 
+const ACTIVE_INSTANCE_COUNT_CACHE_KEY = 'bot:instances:active:count';
+const ACTIVE_INSTANCE_COUNT_CACHE_TTL = 300;
+
+/**
+ * アクティブな Bot インスタンス数を取得（Redis キャッシュ付き）
+ */
+export async function getActiveInstanceCount(): Promise<number> {
+  try {
+    const cached = await getRedisClient().get(ACTIVE_INSTANCE_COUNT_CACHE_KEY);
+    if (cached !== null) return parseInt(cached, 10);
+  } catch {
+    // Redis 読み取り失敗時は DB にフォールバック
+  }
+
+  const prisma = getPrisma();
+  const count = await prisma.botInstance.count({ where: { isActive: true } });
+
+  try {
+    await getRedisClient().set(ACTIVE_INSTANCE_COUNT_CACHE_KEY, String(count), 'EX', ACTIVE_INSTANCE_COUNT_CACHE_TTL);
+  } catch {
+    // キャッシュ書き込み失敗は無視
+  }
+
+  return count;
+}
+
 /**
  * 全アクティブな Bot インスタンスを取得
  */

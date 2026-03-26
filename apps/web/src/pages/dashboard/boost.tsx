@@ -18,6 +18,7 @@ interface BoostData {
   usedBoosts: number;
   cooldownBoosts: number;
   availableBoosts: number;
+  maxBoostsPerGuild: number;
   allocations: BoostAllocation[];
   cooldowns: Array<{
     boostId: string;
@@ -141,6 +142,7 @@ export function BoostPage() {
   const usedBoosts = data?.usedBoosts ?? 0;
   const cooldownBoosts = data?.cooldownBoosts ?? 0;
   const availableBoosts = data?.availableBoosts ?? 0;
+  const maxBoostsPerGuild = data?.maxBoostsPerGuild ?? 0;
   const cooldowns = data?.cooldowns ?? [];
   const earliestAvailableAt = cooldowns.length > 0
     ? cooldowns.reduce((min, c) => c.availableAt < min ? c.availableAt : min, cooldowns[0].availableAt)
@@ -266,7 +268,8 @@ export function BoostPage() {
             {guilds.map((guild) => {
               const currentCount = allocationMap.get(guild.id) ?? 0;
               const isLoading = actionLoading === guild.id;
-              const canIncrease = availableBoosts > 0 && totalBoosts > 0;
+              const atMax = maxBoostsPerGuild > 0 && currentCount >= maxBoostsPerGuild;
+              const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !atMax;
               const canDecrease = currentCount > 0;
 
               return (
@@ -307,6 +310,9 @@ export function BoostPage() {
                       >
                         {currentCount}
                       </span>
+                      {atMax && (
+                        <span className="text-xs text-gray-400">(最大)</span>
+                      )}
                       <button
                         onClick={() => handleSetCount(guild.id, currentCount + 1)}
                         disabled={!canIncrease || isLoading}

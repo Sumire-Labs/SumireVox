@@ -7,7 +7,7 @@ import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { config } from '../infrastructure/config.js';
 import { fetchUserGuilds } from '../services/discord-api.js';
-import { getActiveBotInstances, isBotInGuild } from '../services/bot-instance-service.js';
+import { getActiveBotInstances, isBotInGuild, getActiveInstanceCount } from '../services/bot-instance-service.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -75,8 +75,11 @@ userRouter.get('/guilds', async (c) => {
 userRouter.get('/boosts', async (c) => {
   const session = c.get('session')!;
   await syncUserSubscriptionsIfStale(session.userId);
-  const result = await getUserBoosts(session.userId);
-  return c.json({ success: true, data: result });
+  const [result, maxBoostsPerGuild] = await Promise.all([
+    getUserBoosts(session.userId),
+    getActiveInstanceCount(),
+  ]);
+  return c.json({ success: true, data: { ...result, maxBoostsPerGuild } });
 });
 
 /**
@@ -132,10 +135,18 @@ userRouter.post('/boosts/assign', async (c) => {
     );
   }
 
+  const maxBoostsPerGuild = await getActiveInstanceCount();
+  if (body.count > maxBoostsPerGuild) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: '1サーバーあたりの最大ブースト数を超えています。' } },
+      400,
+    );
+  }
+
   await setGuildBoostCount(session.userId, body.guildId, body.count);
   await syncUserSubscriptionsIfStale(session.userId);
   const result = await getUserBoosts(session.userId);
-  return c.json({ success: true, data: result });
+  return c.json({ success: true, data: { ...result, maxBoostsPerGuild } });
 });
 
 /**
