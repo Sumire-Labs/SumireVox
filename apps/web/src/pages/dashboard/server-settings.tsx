@@ -180,7 +180,7 @@ export function ServerSettingsPage() {
             onChangeEnd={(value) => save({ maxReadLength: value as number })}
             className="max-w-md"
           >
-            <Slider.Track className="data-[fill-start=true]:!border-s-purple-600 data-[fill-end=true]:!border-e-purple-600">
+            <Slider.Track className="!border-x-0">
               <Slider.Fill className="!bg-purple-600" />
               <Slider.Thumb />
             </Slider.Track>
