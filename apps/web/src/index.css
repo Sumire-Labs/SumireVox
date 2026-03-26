@@ -35,3 +35,38 @@ body {
 .gradient-bg:hover {
   background: linear-gradient(135deg, #8B5CF6, #7C3AED);
 }
+
+.slider-purple {
+  background: linear-gradient(
+    to right,
+    #7C3AED 0%,
+    #7C3AED var(--slider-progress, 50%),
+    rgba(255, 255, 255, 0.1) var(--slider-progress, 50%),
+    rgba(255, 255, 255, 0.1) 100%
+  );
+}
+.slider-purple::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: 2px solid #7C3AED;
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
+}
+.slider-purple::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: 2px solid #7C3AED;
+  box-shadow: 0 0 6px rgba(124, 58, 237, 0.4);
+}
+.slider-purple::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: transparent;
+}

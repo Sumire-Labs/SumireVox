@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Switch, Select, ListBox, Slider } from '@heroui/react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Switch, Select, ListBox } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 import { Toast, useToast } from '../../components/toast';
@@ -52,6 +52,27 @@ function SettingRow({ label, description, children }: { label: string; descripti
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  );
+}
+
+function RangeSlider({ value, min, max, step, onChange }: {
+  value: number; min: number; max: number; step: number;
+  onChange: (value: number) => void;
+}) {
+  const trackRef = useRef<HTMLInputElement>(null);
+  const progress = ((value - min) / (max - min)) * 100;
+  return (
+    <input
+      ref={trackRef}
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="slider-purple w-full h-2 rounded-full appearance-none cursor-pointer"
+      style={{ '--slider-progress': `${progress}%` } as React.CSSProperties}
+    />
   );
 }
 
@@ -128,6 +149,12 @@ export function ServerSettingsPage() {
     save({ [field]: value });
   };
 
+  const handleSettingChange = (field: keyof GuildSettings, value: number) => {
+    if (!settings) return;
+    setSettings({ ...settings, [field]: value });
+    save({ [field]: value });
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center mt-20">
@@ -162,29 +189,21 @@ export function ServerSettingsPage() {
 
       {/* 読み上げ設定 */}
       <SectionCard title="読み上げ設定">
-        <div className="py-3 border-b border-white/5 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-white">最大文字数</p>
-              <p className="text-xs text-gray-500 mt-0.5">{settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}</p>
+        <div className="py-3 border-b border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">最大文字数</p>
+              <p className="text-xs text-gray-400">{settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}</p>
             </div>
-            <span className="text-sm font-semibold text-white shrink-0">{settings.maxReadLength}文字</span>
+            <span className="text-sm font-medium text-white">{settings.maxReadLength}文字</span>
           </div>
-          <Slider
-            aria-label="最大文字数"
-            step={10}
-            minValue={10}
-            maxValue={settings.isPremium ? 200 : 50}
+          <RangeSlider
             value={settings.maxReadLength}
-            onChange={(value) => setSettings({ ...settings, maxReadLength: value as number })}
-            onChangeEnd={(value) => save({ maxReadLength: value as number })}
-            className="max-w-md"
-          >
-            <Slider.Track className="!border-x-0">
-              <Slider.Fill className="!bg-purple-600" />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
+            min={10}
+            max={settings.isPremium ? 200 : 50}
+            step={10}
+            onChange={(val) => handleSettingChange('maxReadLength', val)}
+          />
         </div>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
           <SettingSwitch label="名前読み上げ" isSelected={settings.readUsername} onChange={(v) => handleSwitch('readUsername', v)} />
