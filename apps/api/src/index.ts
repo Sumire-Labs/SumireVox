@@ -15,6 +15,7 @@ import { userRouter } from './routes/user.js';
 import { stripeWebhookRouter } from './routes/stripe-webhook.js';
 import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
+import { botInstancesRouter } from './routes/bot-instances.js';
 
 const app = new Hono();
 
@@ -51,6 +52,7 @@ app.route('/api/user', userRouter);
 app.route('/api/stripe', stripeWebhookRouter);
 app.route('/api/admin', adminRouter);
 app.route('/api/voicevox', voicevoxRouter);
+app.route('/api/bot-instances', botInstancesRouter);
 
 // サーバー起動
 async function main(): Promise<void> {

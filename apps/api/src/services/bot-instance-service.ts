@@ -96,6 +96,19 @@ export async function getAvailableBotCount(guildId: string): Promise<number> {
 }
 
 /**
+ * ギルドのアクティブブースト数を取得
+ * manualPremium の場合は MAX_BOT_INSTANCES を返す
+ */
+export async function getGuildBoostCount(guildId: string): Promise<number> {
+  const prisma = getPrisma();
+  const guildSettings = await prisma.guildSettings.findUnique({ where: { guildId } });
+  if (guildSettings?.manualPremium) return LIMITS.MAX_BOT_INSTANCES;
+  return prisma.boost.count({
+    where: { guildId, subscription: { status: 'ACTIVE' } },
+  });
+}
+
+/**
  * サーバーの Bot インスタンス別設定を取得
  */
 export async function getGuildBotInstanceSettings(guildId: string): Promise<GuildBotInstanceSettingsMap> {
