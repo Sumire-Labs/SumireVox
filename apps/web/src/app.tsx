@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router';
+import { Routes, Route, Navigate } from 'react-router';
 import { Layout } from './components/layout';
 import { HomePage } from './pages/home';
 import { CommandsPage } from './pages/commands';
@@ -14,12 +14,29 @@ import { ServersPage } from './pages/dashboard/servers';
 import { ServerSettingsPage } from './pages/dashboard/server-settings';
 import { ServerDictionaryPage } from './pages/dashboard/server-dictionary';
 import { ServerBotsPage } from './pages/dashboard/server-bots';
+import { useAuth } from './lib/auth-context';
+import { Spinner } from '@heroui/react';
+
+function HomeOrDashboard() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <Spinner size="lg" className="text-purple-500" />
+      </div>
+    );
+  }
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <HomePage />;
+}
 
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<HomeOrDashboard />} />
         <Route path="/commands" element={<CommandsPage />} />
         <Route path="/credits" element={<CreditsPage />} />
         <Route path="/terms" element={<TermsPage />} />
