@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
-import { getUserBoosts, assignBoost, unassignBoost } from '../services/boost-service.js';
+import { getUserBoosts, assignBoost, unassignBoost, setGuildBoostCount } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription, createBillingPortalSession } from '../services/stripe-service.js';
 import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
 import { stripe } from '../infrastructure/stripe-client.js';
@@ -107,6 +107,35 @@ userRouter.post('/boosts/checkout', async (c) => {
 
   const checkoutUrl = await createCheckoutSession(session.userId, boostCount);
   return c.json({ success: true, data: { url: checkoutUrl } });
+});
+
+/**
+ * POST /api/user/boosts/assign
+ * body: { guildId: string, count: number }
+ * ギルドへのブースト割り当て数を設定する（増減を自動処理）
+ */
+userRouter.post('/boosts/assign', async (c) => {
+  const session = c.get('session')!;
+  const body = await c.req.json<{ guildId?: string; count?: number }>();
+
+  if (!body.guildId) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'guildId が必要です。' } },
+      400,
+    );
+  }
+
+  if (typeof body.count !== 'number' || !Number.isInteger(body.count) || body.count < 0) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'count は0以上の整数で指定してください。' } },
+      400,
+    );
+  }
+
+  await setGuildBoostCount(session.userId, body.guildId, body.count);
+  await syncUserSubscriptionsIfStale(session.userId);
+  const result = await getUserBoosts(session.userId);
+  return c.json({ success: true, data: result });
 });
 
 /**

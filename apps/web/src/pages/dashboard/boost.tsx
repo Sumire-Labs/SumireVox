@@ -1,9 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Select, ListBox, Spinner } from '@heroui/react';
 import { api, ApiError } from '../../lib/api';
 import { useToast, Toast } from '../../components/toast';
 
+interface Guild {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
+interface BoostAllocation {
+  guildId: string;
+  boostCount: number;
+}
+
 interface BoostData {
+  totalBoosts: number;
+  usedBoosts: number;
+  availableBoosts: number;
+  allocations: BoostAllocation[];
+  subscription: {
+    status: string;
+    currentPeriodEnd: string;
+    boostCount: number;
+  } | null;
   boosts: Array<{
     id: string;
     guildId: string | null;
@@ -12,42 +31,17 @@ interface BoostData {
     cooldownEndsAt: string | null;
     isOnCooldown: boolean;
   }>;
-  subscription: {
-    status: string;
-    currentPeriodEnd: string;
-    boostCount: number;
-  } | null;
-}
-
-interface Guild {
-  id: string;
-  name: string;
-  icon: string | null;
 }
 
 export function BoostPage() {
   const [data, setData] = useState<BoostData | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
-  const guildMap = new Map(guilds.map((g) => [g.id, g]));
   const [loading, setLoading] = useState(true);
   const [boostCount, setBoostCount] = useState('1');
+  const [showPurchase, setShowPurchase] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { toastState, showSaving, showSuccess, showError } = useToast();
-
-  const fetchData = async () => {
-    try {
-      const [boostData, guildsData] = await Promise.all([
-        api.get<BoostData>('/api/user/boosts'),
-        api.get<Guild[]>('/api/user/guilds'),
-      ]);
-      setData(boostData);
-      setGuilds(guildsData);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,6 +55,7 @@ export function BoostPage() {
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
+        showError('データの取得に失敗しました');
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -81,37 +76,39 @@ export function BoostPage() {
     }
   };
 
-  const handleAssign = async (boostId: string, guildId: string) => {
-    setActionLoading(boostId);
-    showSaving('割り当て中...');
+  const handleSetCount = async (guildId: string, newCount: number) => {
+    if (actionLoading) return;
+    setActionLoading(guildId);
+    showSaving('更新中...');
+
+    // Optimistic update
+    const prevData = data;
+    if (data) {
+      const currentCount = data.allocations.find((a) => a.guildId === guildId)?.boostCount ?? 0;
+      const delta = newCount - currentCount;
+      const newAllocations = data.allocations
+        .filter((a) => a.guildId !== guildId)
+        .concat(newCount > 0 ? [{ guildId, boostCount: newCount }] : []);
+      setData({
+        ...data,
+        allocations: newAllocations,
+        usedBoosts: data.usedBoosts + delta,
+        availableBoosts: data.availableBoosts - delta,
+      });
+    }
+
     try {
-      await api.put(`/api/user/boosts/${boostId}/assign`, { guildId });
-      await fetchData();
-      showSuccess('割り当てました');
+      const result = await api.post<BoostData>('/api/user/boosts/assign', { guildId, count: newCount });
+      setData(result);
+      showSuccess('更新しました');
     } catch (err) {
+      setData(prevData);
       if (err instanceof ApiError) showError(err.message);
-      else showError('割り当てに失敗しました');
+      else showError('更新に失敗しました');
     } finally {
       setActionLoading(null);
     }
   };
-
-  const handleUnassign = async (boostId: string) => {
-    setActionLoading(boostId);
-    showSaving('解除中...');
-    try {
-      await api.put(`/api/user/boosts/${boostId}/unassign`);
-      await fetchData();
-      showSuccess('割り当てを解除しました');
-    } catch (err) {
-      if (err instanceof ApiError) showError(err.message);
-      else showError('解除に失敗しました');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const [portalLoading, setPortalLoading] = useState(false);
 
   const handlePortal = async () => {
     setPortalLoading(true);
@@ -133,153 +130,174 @@ export function BoostPage() {
     );
   }
 
+  const totalBoosts = data?.totalBoosts ?? 0;
+  const usedBoosts = data?.usedBoosts ?? 0;
+  const availableBoosts = data?.availableBoosts ?? 0;
+  const allocationMap = new Map((data?.allocations ?? []).map((a) => [a.guildId, a.boostCount]));
+
   return (
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">ブースト管理</h1>
-        <p className="text-gray-400">ブーストの購入・割り当て・解約を管理します</p>
+        <p className="text-gray-400">サーバーにブーストを割り当てて機能を拡張します</p>
       </div>
 
-      {/* 購入 */}
+      {/* ブースト概要 */}
       <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
-        <h2 className="text-lg font-semibold text-white">ブーストを購入</h2>
-        <div className="flex items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm text-gray-400">ブースト数</label>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={boostCount}
-              onChange={(e) => setBoostCount(e.target.value)}
-              className="w-24 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500/50"
-            />
+        <h2 className="text-lg font-semibold text-white">ブースト概要</h2>
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-gray-500">合計</span>
+            <span className="text-2xl font-bold text-white">{totalBoosts}</span>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <p className="text-sm text-gray-400">月額 {parseInt(boostCount, 10) * 300}円</p>
+          <div className="w-px h-10 bg-white/10 hidden sm:block" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-gray-500">使用中</span>
+            <span className="text-2xl font-bold text-purple-400">{usedBoosts}</span>
+          </div>
+          <div className="w-px h-10 bg-white/10 hidden sm:block" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-gray-500">未割り当て</span>
+            <span className="text-2xl font-bold text-white">{availableBoosts}</span>
+          </div>
+          <div className="flex-1" />
+          <div className="flex items-center gap-3 flex-wrap">
+            {data?.subscription && (
+              <button
+                onClick={handlePortal}
+                disabled={portalLoading}
+                className="text-sm border border-white/10 text-gray-400 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl transition-all"
+              >
+                {portalLoading ? '読み込み中...' : 'カスタマーポータルを開く'}
+              </button>
+            )}
             <button
-              onClick={handleCheckout}
-              className="gradient-bg text-white px-6 py-2 rounded-xl text-sm font-medium transition-all hover:opacity-90"
+              onClick={() => setShowPurchase((v) => !v)}
+              className="gradient-bg text-white px-5 py-2 rounded-xl text-sm font-medium transition-all hover:opacity-90"
             >
-              購入する
+              ブーストを購入
             </button>
           </div>
         </div>
       </div>
 
-      {/* ブースト一覧 */}
-      {data?.boosts && data.boosts.length > 0 && (
+      {/* 購入フォーム */}
+      {showPurchase && (
         <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
-          <h2 className="text-lg font-semibold text-white">ブースト枠一覧</h2>
-          <div className="flex flex-col gap-3">
-            {data.boosts.map((boost) => (
-              <div
-                key={boost.id}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
+          <h2 className="text-lg font-semibold text-white">ブーストを購入</h2>
+          <div className="flex items-end gap-4 flex-wrap">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm text-gray-400">ブースト数</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={boostCount}
+                onChange={(e) => setBoostCount(e.target.value)}
+                className="w-24 bg-white/5 border border-white/10 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500/50"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm text-gray-400">月額 {parseInt(boostCount, 10) * 300}円</p>
+              <button
+                onClick={handleCheckout}
+                className="gradient-bg text-white px-6 py-2 rounded-xl text-sm font-medium transition-all hover:opacity-90"
               >
-                <div className="flex items-center gap-3">
-                  {boost.guildId ? (
-                    <span className="flex items-center gap-2 text-gray-300">
-                      {(() => {
-                        const guild = guildMap.get(boost.guildId);
-                        if (!guild) {
-                          return <span className="text-gray-400">不明なサーバー ({boost.guildId})</span>;
-                        }
-                        return (
-                          <>
-                            {guild.icon ? (
-                              <img
-                                src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
-                                alt=""
-                                className="w-6 h-6 rounded-full shrink-0"
-                              />
-                            ) : (
-                              <span className="bg-gray-700 rounded-full w-6 h-6 flex items-center justify-center text-xs text-white shrink-0">
-                                {guild.name.charAt(0)}
-                              </span>
-                            )}
-                            <span>{guild.name}</span>
-                            <span className="text-xs text-gray-500 ml-2">{guild.id}</span>
-                          </>
-                        );
-                      })()}
-                    </span>
-                  ) : (
-                    <span className="text-gray-500">未割り当て</span>
-                  )}
-                  {boost.isOnCooldown && boost.cooldownEndsAt && (
-                    <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2.5 py-0.5 rounded-full">
-                      クールダウン: {new Date(boost.cooldownEndsAt).toLocaleDateString('ja-JP')} まで
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {actionLoading === boost.id ? (
-                    <Spinner size="sm" />
-                  ) : boost.guildId ? (
-                    <button
-                      onClick={() => handleUnassign(boost.id)}
-                      className="text-sm bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 px-4 py-1.5 rounded-lg transition-all"
-                    >
-                      外す
-                    </button>
-                  ) : !boost.isOnCooldown ? (
-                    <Select
-                      placeholder="サーバーを選択"
-                      onChange={(val) => {
-                        if (val) handleAssign(boost.id, val as string);
-                      }}
-                    >
-                      <Select.Trigger className="min-w-[200px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm">
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl">
-                        <ListBox>
-                          {guilds.map((guild) => (
-                            <ListBox.Item key={guild.id} id={guild.id}>
-                              <span className="flex items-center gap-2">
-                                {guild.icon ? (
-                                  <img
-                                    src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=32`}
-                                    alt=""
-                                    className="w-5 h-5 rounded-full"
-                                  />
-                                ) : (
-                                  <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs text-gray-400">
-                                    {guild.name.charAt(0)}
-                                  </span>
-                                )}
-                                {guild.name}
-                              </span>
-                            </ListBox.Item>
-                          ))}
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  ) : null}
-                </div>
-              </div>
-            ))}
+                購入する
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* サブスクリプション管理 */}
-      {data?.subscription && (
-        <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex items-center justify-between gap-4">
-          <p className="text-sm text-gray-400">
-            サブスクリプションの管理・解約はStripeカスタマーポータルから行えます。
+      {/* サーバー一覧 */}
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-white">サーバー一覧</h2>
+
+        {totalBoosts === 0 && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-gray-400">ブーストを購入して、サーバーの機能を拡張しましょう</p>
+            <button
+              onClick={() => setShowPurchase(true)}
+              className="gradient-bg text-white px-6 py-2 rounded-xl text-sm font-medium transition-all hover:opacity-90"
+            >
+              ブーストを購入
+            </button>
+          </div>
+        )}
+
+        {guilds.length === 0 && totalBoosts > 0 && (
+          <p className="text-gray-500 text-sm py-4 text-center">
+            Bot が導入済みのサーバーが見つかりません
           </p>
-          <button
-            onClick={handlePortal}
-            disabled={portalLoading}
-            className="shrink-0 text-sm border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2 rounded-xl transition-all"
-          >
-            {portalLoading ? '読み込み中...' : 'カスタマーポータルを開く'}
-          </button>
-        </div>
-      )}
+        )}
+
+        {guilds.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {guilds.map((guild) => {
+              const currentCount = allocationMap.get(guild.id) ?? 0;
+              const isLoading = actionLoading === guild.id;
+              const canIncrease = availableBoosts > 0 && totalBoosts > 0;
+              const canDecrease = currentCount > 0;
+
+              return (
+                <div
+                  key={guild.id}
+                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {guild.icon ? (
+                      <img
+                        src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
+                        alt=""
+                        className="w-8 h-8 rounded-full shrink-0"
+                      />
+                    ) : (
+                      <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm text-gray-400 shrink-0">
+                        {guild.name.charAt(0)}
+                      </span>
+                    )}
+                    <span className="font-medium text-white truncate">{guild.name}</span>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                    <span className="text-sm text-gray-500">現在のブースト:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSetCount(guild.id, currentCount - 1)}
+                        disabled={!canDecrease || isLoading}
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        aria-label="ブーストを減らす"
+                      >
+                        −
+                      </button>
+                      <span
+                        className={`w-6 text-center text-sm font-bold tabular-nums ${
+                          currentCount > 0 ? 'text-purple-400' : 'text-gray-400'
+                        }`}
+                      >
+                        {currentCount}
+                      </span>
+                      <button
+                        onClick={() => handleSetCount(guild.id, currentCount + 1)}
+                        disabled={!canIncrease || isLoading}
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        aria-label="ブーストを増やす"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {isLoading && (
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <Toast state={toastState} />
     </div>
   );

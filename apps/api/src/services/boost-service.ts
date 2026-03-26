@@ -20,12 +20,21 @@ export interface SubscriptionInfo {
   boostCount: number;
 }
 
+export interface BoostAllocation {
+  guildId: string;
+  boostCount: number;
+}
+
 /**
  * ユーザーのブースト枠一覧を取得する
  */
 export async function getUserBoosts(userId: string): Promise<{
   boosts: BoostWithStatus[];
   subscription: SubscriptionInfo | null;
+  totalBoosts: number;
+  usedBoosts: number;
+  availableBoosts: number;
+  allocations: BoostAllocation[];
 }> {
   const prisma = getPrisma();
 
@@ -36,7 +45,7 @@ export async function getUserBoosts(userId: string): Promise<{
   });
 
   if (subscriptions.length === 0) {
-    return { boosts: [], subscription: null };
+    return { boosts: [], subscription: null, totalBoosts: 0, usedBoosts: 0, availableBoosts: 0, allocations: [] };
   }
 
   const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
@@ -61,6 +70,21 @@ export async function getUserBoosts(userId: string): Promise<{
   const sub = subscriptions[0]; // 最新のサブスクリプションを代表値として使用
   const totalBoostCount = subscriptions.reduce((sum, s) => sum + s.boostCount, 0);
 
+  // ギルドごとの割り当て集計
+  const allocationMap = new Map<string, number>();
+  let usedBoosts = 0;
+  for (const boost of boosts) {
+    if (boost.guildId) {
+      usedBoosts++;
+      allocationMap.set(boost.guildId, (allocationMap.get(boost.guildId) ?? 0) + 1);
+    }
+  }
+  const availableBoosts = boosts.filter((b) => !b.guildId && !b.isOnCooldown).length;
+  const allocations: BoostAllocation[] = Array.from(allocationMap.entries()).map(([guildId, boostCount]) => ({
+    guildId,
+    boostCount,
+  }));
+
   return {
     boosts,
     subscription: {
@@ -69,7 +93,72 @@ export async function getUserBoosts(userId: string): Promise<{
       currentPeriodEnd: sub.currentPeriodEnd,
       boostCount: totalBoostCount,
     },
+    totalBoosts: boosts.length,
+    usedBoosts,
+    availableBoosts,
+    allocations,
   };
+}
+
+/**
+ * ギルドへのブースト割り当て数を設定する（増減を自動処理）
+ */
+export async function setGuildBoostCount(userId: string, guildId: string, count: number): Promise<void> {
+  const prisma = getPrisma();
+
+  const subscriptions = await prisma.subscription.findMany({
+    where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
+    include: { boosts: true },
+  });
+
+  if (subscriptions.length === 0) {
+    throw new AppError('NOT_FOUND', 'サブスクリプションが見つかりません。', 404);
+  }
+
+  const allBoosts = subscriptions.flatMap((s) => s.boosts);
+  const guildBoosts = allBoosts.filter((b) => b.guildId === guildId);
+  const currentCount = guildBoosts.length;
+  const delta = count - currentCount;
+
+  if (delta === 0) return;
+
+  if (delta > 0) {
+    const hasActiveSubscription = subscriptions.some((s) => s.status === 'ACTIVE');
+    if (!hasActiveSubscription) {
+      throw new AppError('VALIDATION_ERROR', 'サブスクリプションが有効ではありません。', 400);
+    }
+
+    const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
+    const availableBoosts = allBoosts.filter((b) => {
+      if (b.guildId !== null) return false;
+      if (b.unassignedAt && Date.now() < b.unassignedAt.getTime() + cooldownMs) return false;
+      return true;
+    });
+
+    if (availableBoosts.length < delta) {
+      throw new AppError(
+        'BOOST_LIMIT_REACHED',
+        `未割り当てブーストが不足しています。利用可能: ${availableBoosts.length}、必要: ${delta}`,
+        400,
+      );
+    }
+
+    const toAssign = availableBoosts.slice(0, delta);
+    await prisma.boost.updateMany({
+      where: { id: { in: toAssign.map((b) => b.id) } },
+      data: { guildId, assignedAt: new Date(), unassignedAt: null },
+    });
+
+    logger.info({ userId, guildId, delta }, 'Boosts assigned to guild');
+  } else {
+    const toUnassign = guildBoosts.slice(0, Math.abs(delta));
+    await prisma.boost.updateMany({
+      where: { id: { in: toUnassign.map((b) => b.id) } },
+      data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
+    });
+
+    logger.info({ userId, guildId, delta }, 'Boosts unassigned from guild');
+  }
 }
 
 /**
