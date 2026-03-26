@@ -6,7 +6,7 @@
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "postinstall": "prisma generate --schema=../bot/prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema=../bot/prisma/schema.prisma"
   },
   "prisma": {
     "schema": "../bot/prisma/schema.prisma"
