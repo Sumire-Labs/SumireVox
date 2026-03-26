@@ -27,9 +27,14 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: |
+          pnpm install --frozen-lockfile
+        env:
+          PRISMA_SKIP_POSTINSTALL_GENERATE: true
       - name: Generate Prisma Client
         run: pnpm --filter @sumirevox/bot exec prisma generate
+      - name: Build shared
+        run: pnpm --filter @sumirevox/shared build
       - name: Build Web
         run: pnpm --filter @sumirevox/web build
         env:
@@ -60,9 +65,14 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: |
+          pnpm install --frozen-lockfile
+        env:
+          PRISMA_SKIP_POSTINSTALL_GENERATE: true
       - name: Generate Prisma Client
         run: pnpm --filter @sumirevox/bot exec prisma generate
+      - name: Build shared
+        run: pnpm --filter @sumirevox/shared build
       - name: Build Admin
         run: pnpm --filter @sumirevox/admin build
         env:
