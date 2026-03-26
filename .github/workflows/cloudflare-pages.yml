@@ -24,10 +24,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate Prisma Client
+        run: pnpm --filter @sumirevox/bot exec prisma generate
       - name: Build Web
         run: pnpm --filter @sumirevox/web build
         env:
@@ -55,10 +57,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'pnpm'
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Generate Prisma Client
+        run: pnpm --filter @sumirevox/bot exec prisma generate
       - name: Build Admin
         run: pnpm --filter @sumirevox/admin build
         env:
