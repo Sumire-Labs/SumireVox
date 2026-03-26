@@ -40,11 +40,28 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  voicevox:
+    image: voicevox/voicevox_engine:nvidia-latest
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:50021/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
 
   bot:
     image: ghcr.io/sumire-labs/sumirevox-bot:latest
@@ -53,6 +70,8 @@ services:
       api:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      voicevox:
         condition: service_healthy
     env_file:
       - .env.prod
@@ -88,6 +107,7 @@ services:
       - /root/.docker/config.json:/config.json:ro
     command: --interval 60 --cleanup --include-restarting
     environment:
+      DOCKER_API_VERSION: "1.40"
       WATCHTOWER_POLL_INTERVAL: 60
 
 volumes:
