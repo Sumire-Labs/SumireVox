@@ -25,6 +25,7 @@ COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/bot/package.json ./apps/bot/
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 ENV NODE_ENV=production
 WORKDIR /app/apps/bot
 CMD ["npx", "prisma", "migrate", "deploy"]
@@ -37,6 +38,7 @@ COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/bot/dist ./apps/bot/dist
 COPY --from=build /app/apps/bot/package.json ./apps/bot/
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 ENV NODE_ENV=production
 WORKDIR /app/apps/bot
 CMD ["node", "dist/index.js"]
