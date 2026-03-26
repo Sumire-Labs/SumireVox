@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
-import { Mic, BookOpen, Terminal, Sparkles, Check } from 'lucide-react';
+import { BookOpen, Terminal, Sparkles, Check, MonitorSpeakerIcon } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 
 const BOT_INVITE_URL =
@@ -9,10 +9,10 @@ const BOT_INVITE_URL =
 
 const FEATURES = [
   {
-    icon: Mic,
+    icon: MonitorSpeakerIcon,
     title: '高速なGPU生成',
     description:
-      '音声生成はすべて高速なGPU生成。 FREE プランでも音声生成はすべてGPUサーバーで行われます。',
+        'すべての音声生成を高速なGPUで処理。FREEプランでも全ての音声がGPUサーバーで生成されます。',
   },
   {
     icon: BookOpen,
