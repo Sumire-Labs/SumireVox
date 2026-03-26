@@ -4,6 +4,7 @@ import { getGuildSettings, getInstanceSettings } from '../services/guild-setting
 import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
 import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
 import { startDisconnectTimer, cancelDisconnectTimer } from '../services/auto-disconnect-timer.js';
+import { canInstanceConnect } from '../services/premium-service.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
@@ -88,6 +89,18 @@ async function handleAutoJoin(
 
     // 指定 VC チャンネルがある場合、そのチャンネルへの参加のみ対象
     if (instanceSettings.voiceChannelId && newState.channelId !== instanceSettings.voiceChannelId) return;
+
+    // インスタンス接続制限チェック (2号機以降はブースト数が必要)
+    if (config.botInstanceId > 1) {
+      const allowed = await canInstanceConnect(guildId, config.botInstanceId);
+      if (!allowed) {
+        logger.info(
+          { guildId, instanceId: config.botInstanceId },
+          'Auto-join skipped: insufficient boosts for this instance',
+        );
+        return;
+      }
+    }
 
     const guild = newState.guild;
     const voiceChannel = newState.channel;

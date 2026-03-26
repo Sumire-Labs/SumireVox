@@ -11,17 +11,19 @@ interface BotInstanceSettings {
 }
 
 interface BotInstanceInfo {
-  instanceId: number;
+  instanceNumber: number;
   name: string;
   botUserId: string;
   isActive: boolean;
   isInGuild: boolean;
-  settings: BotInstanceSettings;
+  isAvailable: boolean;
+  settings: BotInstanceSettings | null;
 }
 
 interface BotListResponse {
-  availableCount: number;
-  instances: BotInstanceInfo[];
+  bots: BotInstanceInfo[];
+  boostCount: number;
+  maxBots: number;
 }
 
 interface Channel {
@@ -144,20 +146,20 @@ export function ServerBotsPage() {
   }, [guildId]);
 
   const updateSettings = useCallback(
-    async (instanceId: number, patch: Partial<BotInstanceSettings>) => {
+    async (instanceNumber: number, patch: Partial<BotInstanceSettings>) => {
       if (!guildId) return;
-      setSavingId(instanceId);
+      setSavingId(instanceNumber);
       showSaving();
       try {
-        await api.put(`/api/guilds/${guildId}/bots/${instanceId}/settings`, patch);
+        await api.put(`/api/guilds/${guildId}/bots/${instanceNumber}/settings`, patch);
         setData((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
-            instances: prev.instances.map((inst) =>
-              inst.instanceId === instanceId
-                ? { ...inst, settings: { ...inst.settings, ...patch } }
-                : inst,
+            bots: prev.bots.map((bot) =>
+              bot.instanceNumber === instanceNumber
+                ? { ...bot, settings: { ...(bot.settings ?? { autoJoin: false, textChannelId: null, voiceChannelId: null }), ...patch } }
+                : bot,
             ),
           };
         });
@@ -173,11 +175,11 @@ export function ServerBotsPage() {
   );
 
   const handleInvite = useCallback(
-    async (instanceId: number) => {
+    async (instanceNumber: number) => {
       if (!guildId) return;
       try {
         const result = await api.get<{ url: string }>(
-          `/api/guilds/${guildId}/bots/${instanceId}/invite`,
+          `/api/guilds/${guildId}/bots/${instanceNumber}/invite`,
         );
         window.open(result.url, '_blank', 'noopener,noreferrer');
       } catch (err) {
@@ -198,7 +200,7 @@ export function ServerBotsPage() {
 
   if (!data) return <p className="text-red-400">Bot 情報の読み込みに失敗しました。</p>;
 
-  const totalSlots = 5; // MAX_BOT_INSTANCES
+  const totalInstances = data.bots.length;
   const cats = channels?.categories ?? [];
   const textChannels = channels?.textChannels ?? [];
   const voiceChannels = channels?.voiceChannels ?? [];
@@ -212,25 +214,23 @@ export function ServerBotsPage() {
         </div>
         <div className="pt-1">
           <span className="text-sm bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-xl font-medium">
-            利用可能な Bot 数: {data.availableCount} / {totalSlots}
+            利用可能な Bot 数: {data.maxBots} / {totalInstances}
           </span>
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
-        {Array.from({ length: totalSlots }, (_, i) => i + 1).map((slot) => {
-          const instance = data.instances.find((inst) => inst.instanceId === slot);
-          const isAvailable = slot <= data.availableCount;
-          const isSaving = savingId === slot;
+        {data.bots.map((bot) => {
+          const isSaving = savingId === bot.instanceNumber;
 
-          if (!isAvailable) {
+          if (!bot.isAvailable) {
             return (
               <div
-                key={slot}
+                key={bot.instanceNumber}
                 className="bg-[#12121a] border border-white/5 rounded-2xl p-6 opacity-50"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-white font-semibold">SumireVox #{slot}</span>
+                  <span className="text-white font-semibold">{bot.name}</span>
                   <StatusBadge label="利用不可" variant="unavailable" />
                 </div>
                 <p className="text-sm text-gray-500 mt-2">このインスタンスを利用するにはブーストが必要です。</p>
@@ -238,42 +238,30 @@ export function ServerBotsPage() {
             );
           }
 
-          if (!instance) {
-            return (
-              <div
-                key={slot}
-                className="bg-[#12121a] border border-white/5 rounded-2xl p-6"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-white font-semibold">SumireVox #{slot}</span>
-                  <StatusBadge label="読み込み中" variant="inactive" />
-                </div>
-              </div>
-            );
-          }
+          const settings = bot.settings ?? { autoJoin: false, textChannelId: null, voiceChannelId: null };
 
           return (
             <div
-              key={slot}
+              key={bot.instanceNumber}
               className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5"
             >
               <div className="flex items-center justify-between">
-                <span className="text-white font-semibold">{instance.name}</span>
+                <span className="text-white font-semibold">{bot.name}</span>
                 <StatusBadge
-                  label={instance.isActive ? '稼働中' : '停止中'}
-                  variant={instance.isActive ? 'active' : 'inactive'}
+                  label={bot.isActive ? '稼働中' : '停止中'}
+                  variant={bot.isActive ? 'active' : 'inactive'}
                 />
               </div>
 
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">ステータス</span>
-                {instance.isInGuild ? (
+                {bot.isInGuild ? (
                   <span className="text-green-400">サーバーに参加済み</span>
                 ) : (
                   <div className="flex items-center gap-3">
                     <span className="text-gray-500">未参加</span>
                     <button
-                      onClick={() => handleInvite(instance.instanceId)}
+                      onClick={() => handleInvite(bot.instanceNumber)}
                       className="text-sm bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded-lg transition-colors"
                     >
                       サーバーに招待
@@ -287,15 +275,15 @@ export function ServerBotsPage() {
                   <div>
                     <p className="text-sm font-medium text-white">自動接続</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {instance.isInGuild
+                      {bot.isInGuild
                         ? '誰かが VC に参加したとき自動で接続する'
                         : '参加後に設定可能'}
                     </p>
                   </div>
                   <Switch
-                    isSelected={instance.settings.autoJoin}
-                    isDisabled={!instance.isInGuild || isSaving}
-                    onChange={(v) => updateSettings(instance.instanceId, { autoJoin: v })}
+                    isSelected={settings.autoJoin}
+                    isDisabled={!bot.isInGuild || isSaving}
+                    onChange={(v) => updateSettings(bot.instanceNumber, { autoJoin: v })}
                   >
                     {({ isSelected }) => (
                       <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
@@ -307,22 +295,22 @@ export function ServerBotsPage() {
 
                 <ChannelSelect
                   label="VC チャンネル（未設定の場合は任意の VC に参加）"
-                  value={instance.settings.voiceChannelId}
+                  value={settings.voiceChannelId}
                   channels={voiceChannels}
                   categories={cats}
                   placeholder="VC チャンネルを選択"
-                  disabled={!instance.isInGuild || isSaving}
-                  onChange={(v) => updateSettings(instance.instanceId, { voiceChannelId: v })}
+                  disabled={!bot.isInGuild || isSaving}
+                  onChange={(v) => updateSettings(bot.instanceNumber, { voiceChannelId: v })}
                 />
 
                 <ChannelSelect
                   label="テキストチャンネル（読み上げ対象チャンネル）"
-                  value={instance.settings.textChannelId}
+                  value={settings.textChannelId}
                   channels={textChannels}
                   categories={cats}
                   placeholder="テキストチャンネルを選択"
-                  disabled={!instance.isInGuild || isSaving}
-                  onChange={(v) => updateSettings(instance.instanceId, { textChannelId: v })}
+                  disabled={!bot.isInGuild || isSaving}
+                  onChange={(v) => updateSettings(bot.instanceNumber, { textChannelId: v })}
                 />
               </div>
 

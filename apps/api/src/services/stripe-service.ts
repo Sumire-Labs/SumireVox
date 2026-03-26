@@ -59,6 +59,25 @@ export async function createCheckoutSession(
 }
 
 /**
+ * Stripe カスタマーポータルセッションを作成する
+ */
+export async function createBillingPortalSession(
+  customerId: string,
+  returnUrl: string,
+): Promise<string> {
+  if (!stripe) {
+    throw new AppError('INTERNAL_ERROR', 'Stripe is not configured', 503);
+  }
+
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+
+  return session.url;
+}
+
+/**
  * サブスクリプションを解約する（期末解約）
  */
 export async function cancelSubscription(userId: string): Promise<void> {

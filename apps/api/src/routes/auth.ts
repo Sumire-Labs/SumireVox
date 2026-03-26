@@ -159,7 +159,8 @@ authRouter.get('/callback', async (c) => {
 
     logger.info({ userId: userData.id, username: userData.username }, 'User logged in');
     const redirectDomain = from === 'admin' ? config.adminDomain : config.webDomain;
-    return c.redirect(`${redirectDomain}/`);
+    const redirectPath = from === 'admin' ? '/dashboard' : '/';
+    return c.redirect(`${redirectDomain}${redirectPath}`);
   } catch (error) {
     logger.error({ err: error }, 'OAuth callback error');
     return c.json(

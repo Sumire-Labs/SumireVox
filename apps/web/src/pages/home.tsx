@@ -1,13 +1,18 @@
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
-import { Mic, BookOpen, Terminal, Sparkles, Check } from 'lucide-react';
+import { BookOpen, Terminal, Sparkles, Check, MonitorSpeakerIcon } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
+
+const BOT_INVITE_URL =
+  import.meta.env.VITE_BOT_INVITE_URL ||
+  'https://discord.com/oauth2/authorize?client_id=1484868242945343649&permissions=36727824&scope=bot';
 
 const FEATURES = [
   {
-    icon: Mic,
-    title: '高品質な音声合成',
+    icon: MonitorSpeakerIcon,
+    title: '高速なGPU生成',
     description:
-      'VOICEVOX エンジンによる自然な日本語音声。複数の話者から好みの声を選べます。速度やピッチも細かく調整可能です。',
+        'すべての音声生成を高速なGPUで処理。FREEプランでも全ての音声がGPUサーバーで生成されます。',
   },
   {
     icon: BookOpen,
@@ -32,7 +37,7 @@ const FEATURES = [
 const FREE_FEATURES = [
   '読み上げ最大 50 文字',
   'サーバーデフォルト話者',
-  'サーバー辞書 100 エントリ',
+  'サーバー辞書 10 エントリ',
   '入退室通知',
   '自動接続',
 ];
@@ -40,7 +45,7 @@ const FREE_FEATURES = [
 const PREMIUM_FEATURES = [
   '読み上げ最大 200 文字',
   'ユーザーごとの話者・速度・ピッチ設定',
-  'サーバー辞書 500 エントリ',
+  'サーバー辞書 100 エントリ',
   '入退室通知',
   '自動接続',
   '優先サポート',
@@ -56,6 +61,8 @@ const fadeUp = {
 };
 
 export function HomePage() {
+  const { user, loading } = useAuth();
+
   return (
     <div className="flex flex-col">
       {/* ── Hero ── */}
@@ -125,18 +132,26 @@ export function HomePage() {
             variants={fadeUp}
             className="flex gap-4 flex-wrap justify-center"
           >
-            <a
-              href="#"
-              className="gradient-bg text-white font-semibold px-8 py-3 rounded-xl transition-all hover:opacity-90 hover:scale-105"
-            >
-              Bot を導入する
-            </a>
-            <Link
-              to="/dashboard"
-              className="text-white font-medium px-8 py-3 rounded-xl transition-all hover:bg-white/10 border border-white/20 bg-white/5"
-            >
-              ダッシュボード
-            </Link>
+            {!loading && (
+              <>
+                <a
+                  href={BOT_INVITE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gradient-bg text-white font-semibold px-8 py-3 rounded-xl transition-all hover:opacity-90 hover:scale-105"
+                >
+                  Bot を導入する
+                </a>
+                {user && (
+                  <Link
+                    to="/dashboard"
+                    className="text-white font-medium px-8 py-3 rounded-xl transition-all hover:bg-white/10 border border-white/20 bg-white/5"
+                  >
+                    ダッシュボード
+                  </Link>
+                )}
+              </>
+            )}
           </motion.div>
         </div>
       </section>
@@ -211,7 +226,9 @@ export function HomePage() {
                 ))}
               </ul>
               <a
-                href="#"
+                href={BOT_INVITE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="block text-center text-white border border-white/20 bg-white/5 hover:bg-white/10 font-medium px-6 py-3 rounded-xl transition-all"
               >
                 Bot を導入する
@@ -246,12 +263,21 @@ export function HomePage() {
                   </li>
                 ))}
               </ul>
-              <a
-                href="/auth/login"
-                className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
-              >
-                ログインしてブーストを購入
-              </a>
+              {user ? (
+                <Link
+                  to="/dashboard/boost"
+                  className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
+                >
+                  ブーストを購入
+                </Link>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg block text-center text-white font-semibold px-6 py-3 rounded-xl transition-all hover:opacity-90"
+                >
+                  ログインしてブーストを購入
+                </a>
+              )}
             </motion.div>
           </div>
         </div>
@@ -277,7 +303,9 @@ export function HomePage() {
           <p className="text-gray-400">完全無料で始められます</p>
           <div className="flex flex-col items-center gap-3">
             <a
-              href="#"
+              href={BOT_INVITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="gradient-bg text-white font-semibold px-10 py-4 rounded-xl text-lg transition-all hover:opacity-90 hover:scale-105"
             >
               Bot を導入する

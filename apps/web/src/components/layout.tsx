@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router';
+import { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { Menu, X, ExternalLink } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
+
+const DISCORD_SUPPORT_URL = import.meta.env.VITE_DISCORD_SUPPORT_URL || '#';
 
 const NAV_LINKS = [
   { to: '/', label: 'ホーム' },
@@ -11,7 +14,11 @@ const NAV_LINKS = [
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, loading, logout } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -21,7 +28,18 @@ export function Layout() {
 
   useEffect(() => {
     setMenuOpen(false);
+    setDropdownOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg-base)' }}>
@@ -56,14 +74,55 @@ export function Layout() {
             ))}
           </div>
 
-          {/* Login button + mobile toggle */}
+          {/* Auth area + mobile toggle */}
           <div className="flex items-center gap-3">
-            <a
-              href="/auth/login"
-              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
-            >
-              ログイン
-            </a>
+            {!loading && (
+              user ? (
+                <div ref={dropdownRef} className="relative hidden sm:block">
+                  <button
+                    onClick={() => setDropdownOpen((v) => !v)}
+                    className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  >
+                    {user.avatar ? (
+                      <img
+                        src={`https://cdn.discordapp.com/avatars/${user.userId}/${user.avatar}.png?size=64`}
+                        alt={user.username}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="bg-purple-600 rounded-full w-8 h-8 flex items-center justify-center text-white text-sm">
+                        {user.username.charAt(0)}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-300">{user.username}</span>
+                  </button>
+                  {dropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 min-w-[160px] bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl z-50">
+                      <button
+                        onClick={() => navigate('/dashboard')}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white cursor-pointer rounded-t-lg"
+                      >
+                        ダッシュボード
+                      </button>
+                      <div className="border-t border-white/10" />
+                      <button
+                        onClick={() => logout()}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-white/10 hover:text-white cursor-pointer rounded-b-lg"
+                      >
+                        ログアウト
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg transition-all hover:opacity-90 hidden sm:block"
+                >
+                  ログイン
+                </a>
+              )
+            )}
             <button
               className="sm:hidden text-gray-400 hover:text-white p-1"
               onClick={() => setMenuOpen((v) => !v)}
@@ -88,12 +147,42 @@ export function Layout() {
                 {link.label}
               </Link>
             ))}
-            <a
-              href="/auth/login"
-              className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
-            >
-              ログイン
-            </a>
+            {!loading && (
+              user ? (
+                <>
+                  <div className="flex items-center gap-2 py-2">
+                    {user.avatar ? (
+                      <img
+                        src={`https://cdn.discordapp.com/avatars/${user.userId}/${user.avatar}.png?size=64`}
+                        alt={user.username}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="bg-purple-600 rounded-full w-8 h-8 flex items-center justify-center text-white text-sm">
+                        {user.username.charAt(0)}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-300">{user.username}</span>
+                  </div>
+                  <Link to="/dashboard" className="text-sm py-2 text-gray-400 hover:text-white">
+                    ダッシュボード
+                  </Link>
+                  <button
+                    onClick={() => { setMenuOpen(false); logout(); }}
+                    className="text-left text-sm py-2 text-gray-400 hover:text-white"
+                  >
+                    ログアウト
+                  </button>
+                </>
+              ) : (
+                <a
+                  href="/auth/login"
+                  className="gradient-bg text-white text-sm font-medium px-5 py-2 rounded-lg text-center"
+                >
+                  ログイン
+                </a>
+              )
+            )}
           </div>
         )}
       </nav>
@@ -130,7 +219,9 @@ export function Layout() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">外部リンク</p>
             <div className="flex flex-col gap-2">
               <a
-                href="#"
+                href={DISCORD_SUPPORT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
               >
                 <ExternalLink size={13} />

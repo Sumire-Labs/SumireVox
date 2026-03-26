@@ -20,6 +20,7 @@ import {
 import {
   getActiveBotInstances,
   getAvailableBotCount,
+  getGuildBoostCount,
   getGuildBotInstanceSettings,
   updateGuildBotInstanceSettings,
   generateBotInviteUrl,
@@ -110,8 +111,11 @@ guildsRouter.get('/', async (c) => {
  */
 guildsRouter.get('/:guildId/settings', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
-  const settings = await getGuildSettings(guildId);
-  return c.json({ success: true, data: settings });
+  const [settings, isPremium] = await Promise.all([
+    getGuildSettings(guildId),
+    isGuildPremium(guildId),
+  ]);
+  return c.json({ success: true, data: { ...settings, isPremium } });
 });
 
 /**
@@ -126,8 +130,11 @@ guildsRouter.put('/:guildId/settings', requireGuildAdmin, async (c) => {
   delete body['guildId'];
   delete body['manualPremium'];
 
-  const updated = await updateGuildSettings(guildId, body);
-  return c.json({ success: true, data: updated });
+  const [updated, isPremium] = await Promise.all([
+    updateGuildSettings(guildId, body),
+    isGuildPremium(guildId),
+  ]);
+  return c.json({ success: true, data: { ...updated, isPremium } });
 });
 
 /**
@@ -263,26 +270,31 @@ guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
 guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
 
-  const [instances, availableCount, instanceSettingsMap] = await Promise.all([
+  const [instances, availableCount, boostCount, instanceSettingsMap] = await Promise.all([
     getActiveBotInstances(),
     getAvailableBotCount(guildId),
+    getGuildBoostCount(guildId),
     getGuildBotInstanceSettings(guildId),
   ]);
 
-  const instancesWithStatus = await Promise.all(
+  const bots = await Promise.all(
     instances.map(async (instance) => {
       const isInGuild = await isBotInGuild(instance.instanceId, guildId);
-      const settings = instanceSettingsMap[String(instance.instanceId)] ?? {
-        autoJoin: false,
-        textChannelId: null,
-        voiceChannelId: null,
-      };
+      const isAvailable = instance.instanceId <= availableCount;
+      const settings = isAvailable
+        ? (instanceSettingsMap[String(instance.instanceId)] ?? {
+            autoJoin: false,
+            textChannelId: null,
+            voiceChannelId: null,
+          })
+        : null;
       return {
-        instanceId: instance.instanceId,
+        instanceNumber: instance.instanceId,
         name: instance.name,
         botUserId: instance.botUserId,
         isActive: instance.isActive,
         isInGuild,
+        isAvailable,
         settings,
       };
     }),
@@ -291,8 +303,9 @@ guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
   return c.json({
     success: true,
     data: {
-      availableCount,
-      instances: instancesWithStatus,
+      bots,
+      boostCount,
+      maxBots: availableCount,
     },
   });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Switch, Select, ListBox, NumberField } from '@heroui/react';
+import { Switch, Select, ListBox } from '@heroui/react';
 import { Link, useParams } from 'react-router';
 import { api, ApiError } from '../../lib/api';
 import { Toast, useToast } from '../../components/toast';
@@ -20,6 +20,7 @@ interface GuildSettings {
   adminRoleId: string | null;
   dictionaryPermission: 'everyone' | 'admin_only';
   manualPremium: boolean;
+  isPremium: boolean;
 }
 
 interface Role {
@@ -51,6 +52,28 @@ function SettingRow({ label, description, children }: { label: string; descripti
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  );
+}
+
+function RangeSlider({ value, min, max, step, onChange, onChangeEnd }: {
+  value: number; min: number; max: number; step: number;
+  onChange: (value: number) => void;
+  onChangeEnd: (value: number) => void;
+}) {
+  const progress = ((value - min) / (max - min)) * 100;
+  return (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      onMouseUp={(e) => onChangeEnd(Number((e.target as HTMLInputElement).value))}
+      onTouchEnd={(e) => onChangeEnd(Number((e.target as HTMLInputElement).value))}
+      className="slider-purple w-full h-2 rounded-full appearance-none cursor-pointer"
+      style={{ '--slider-progress': `${progress}%` } as React.CSSProperties}
+    />
   );
 }
 
@@ -127,8 +150,9 @@ export function ServerSettingsPage() {
     save({ [field]: value });
   };
 
-  const handleNumber = (field: keyof GuildSettings, value: number | undefined) => {
-    if (!settings || value === undefined) return;
+  const handleSettingChange = (field: keyof GuildSettings, value: number) => {
+    if (!settings) return;
+    setSettings({ ...settings, [field]: value });
     save({ [field]: value });
   };
 
@@ -166,21 +190,23 @@ export function ServerSettingsPage() {
 
       {/* 読み上げ設定 */}
       <SectionCard title="読み上げ設定">
-        <SettingRow label="最大文字数" description="FREE: 上限50 / PREMIUM: 上限200">
-          <NumberField
-            aria-label="最大文字数"
+        <div className="py-3 border-b border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">最大文字数</p>
+              <p className="text-xs text-gray-400">{settings.isPremium ? 'PREMIUM: 上限200' : 'FREE: 上限50'}</p>
+            </div>
+            <span className="text-sm font-medium text-white">{settings.maxReadLength}文字</span>
+          </div>
+          <RangeSlider
             value={settings.maxReadLength}
-            onChange={(val) => handleNumber('maxReadLength', val)}
-            minValue={1}
-            maxValue={settings.manualPremium ? 200 : 50}
-          >
-            <NumberField.Group className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-              <NumberField.DecrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-              <NumberField.Input className="w-14 text-white text-center bg-transparent text-sm py-1.5 focus:outline-none" />
-              <NumberField.IncrementButton className="px-2.5 text-gray-400 hover:text-white hover:bg-white/5 h-full" />
-            </NumberField.Group>
-          </NumberField>
-        </SettingRow>
+            min={10}
+            max={settings.isPremium ? 200 : 50}
+            step={10}
+            onChange={(val) => setSettings(prev => prev ? { ...prev, maxReadLength: val } : prev)}
+            onChangeEnd={(val) => handleSettingChange('maxReadLength', val)}
+          />
+        </div>
         <SettingRow label="名前読み上げ" description="メッセージ送信者の名前を読み上げる">
           <SettingSwitch label="名前読み上げ" isSelected={settings.readUsername} onChange={(v) => handleSwitch('readUsername', v)} />
         </SettingRow>
