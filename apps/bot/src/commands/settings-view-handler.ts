@@ -562,11 +562,19 @@ async function handleMaxLengthSubmit(
     return;
   }
 
-  await updateGuildSettings(guildId, { maxReadLength: value });
+  const settings = await updateGuildSettings(guildId, { maxReadLength: value });
+  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const botName = getClient().user?.username ?? 'SumireVox';
+  const { components } = buildSettingsMessage(settings, 'reading', parsed.userId, instanceSettings, botName);
+
   await interaction.reply({
     content: `読み上げ最大文字数を **${value}** に変更しました。`,
     ephemeral: true,
   });
+
+  if (interaction.message) {
+    await interaction.message.edit({ components });
+  }
 }
 
 async function updateAndRefresh(

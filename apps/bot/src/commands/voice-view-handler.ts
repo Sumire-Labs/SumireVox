@@ -59,11 +59,32 @@ async function handleSpeakerSelect(
 ): Promise<void> {
   const speakerId = parseInt(interaction.values[0], 10);
   await updateUserVoiceSetting(parsed.userId, { speakerId });
+
+  const setting = await getUserVoiceSetting(parsed.userId);
   const speakerName = getSpeakerStyleName(speakerId) ?? `ID: ${speakerId}`;
-  await interaction.reply({
-    content: `話者を **${speakerName}** に変更しました。`,
-    ephemeral: true,
-  });
+  const speakers = getSpeakers();
+  const styles = speakers.flatMap((s) =>
+    s.styles.map((st) => ({
+      label: `${s.name}（${st.name}）`,
+      value: st.id.toString(),
+    })),
+  );
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(styles.length / pageSize));
+  const currentPage = parseInt(parsed.action.split(':')[1], 10) || 0;
+
+  const { components } = buildVoiceMessage(
+    speakerName,
+    setting.speedScale,
+    setting.pitchScale,
+    styles,
+    currentPage,
+    totalPages,
+    parsed.userId,
+    setting.speakerId,
+  );
+
+  await interaction.update({ components });
 }
 
 async function handlePageChange(
@@ -156,10 +177,33 @@ async function handleSpeedSubmit(
     return;
   }
   await updateUserVoiceSetting(parsed.userId, { speedScale: value });
-  await interaction.reply({
-    content: `速度を **${value}** に変更しました。`,
-    ephemeral: true,
-  });
+
+  const setting = await getUserVoiceSetting(parsed.userId);
+  const speakerName =
+    setting.speakerId !== null
+      ? (getSpeakerStyleName(setting.speakerId) ?? `ID: ${setting.speakerId}`)
+      : '未設定（サーバーデフォルト）';
+  const speakers = getSpeakers();
+  const styles = speakers.flatMap((s) =>
+    s.styles.map((st) => ({ label: `${s.name}（${st.name}）`, value: st.id.toString() })),
+  );
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(styles.length / pageSize));
+  const { components } = buildVoiceMessage(
+    speakerName,
+    setting.speedScale,
+    setting.pitchScale,
+    styles,
+    0,
+    totalPages,
+    parsed.userId,
+    setting.speakerId,
+  );
+
+  await interaction.reply({ content: `速度を **${value}** に変更しました。`, ephemeral: true });
+  if (interaction.message) {
+    await interaction.message.edit({ components });
+  }
 }
 
 async function handlePitchSubmit(
@@ -175,8 +219,31 @@ async function handlePitchSubmit(
     return;
   }
   await updateUserVoiceSetting(parsed.userId, { pitchScale: value });
-  await interaction.reply({
-    content: `ピッチを **${value}** に変更しました。`,
-    ephemeral: true,
-  });
+
+  const setting = await getUserVoiceSetting(parsed.userId);
+  const speakerName =
+    setting.speakerId !== null
+      ? (getSpeakerStyleName(setting.speakerId) ?? `ID: ${setting.speakerId}`)
+      : '未設定（サーバーデフォルト）';
+  const speakers = getSpeakers();
+  const styles = speakers.flatMap((s) =>
+    s.styles.map((st) => ({ label: `${s.name}（${st.name}）`, value: st.id.toString() })),
+  );
+  const pageSize = 25;
+  const totalPages = Math.max(1, Math.ceil(styles.length / pageSize));
+  const { components } = buildVoiceMessage(
+    speakerName,
+    setting.speedScale,
+    setting.pitchScale,
+    styles,
+    0,
+    totalPages,
+    parsed.userId,
+    setting.speakerId,
+  );
+
+  await interaction.reply({ content: `ピッチを **${value}** に変更しました。`, ephemeral: true });
+  if (interaction.message) {
+    await interaction.message.edit({ components });
+  }
 }

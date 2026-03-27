@@ -209,6 +209,10 @@ async function buildGlobalDictionaryContainer(
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
     new ButtonBuilder()
+      .setCustomId(buildCustomId('dict', `global_refresh:${page}`, userId))
+      .setLabel('🔄 更新')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(buildCustomId('dict', 'global_request', userId))
       .setLabel('📝 申請')
       .setStyle(ButtonStyle.Primary),
@@ -276,6 +280,10 @@ async function buildRequestContainer(
       .setLabel('次 ▶')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages),
+    new ButtonBuilder()
+      .setCustomId(buildCustomId('dict', `request_refresh:${page}`, userId))
+      .setLabel('🔄 更新')
+      .setStyle(ButtonStyle.Secondary),
   );
   container.addActionRowComponents(navRow);
 
@@ -324,7 +332,21 @@ export async function handleDictionaryView(
     return;
   }
 
+  if (action.startsWith('global_refresh:') && interaction.isButton()) {
+    const page = Math.max(1, parseInt(action.split(':')[1], 10));
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'global', page);
+    await interaction.update({ components });
+    return;
+  }
+
   if (action.startsWith('request_page:') && interaction.isButton()) {
+    const page = Math.max(1, parseInt(action.split(':')[1], 10));
+    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
+    await interaction.update({ components });
+    return;
+  }
+
+  if (action.startsWith('request_refresh:') && interaction.isButton()) {
     const page = Math.max(1, parseInt(action.split(':')[1], 10));
     const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
     await interaction.update({ components });
@@ -438,6 +460,10 @@ async function handleServerAddSubmit(
       content: `辞書に追加しました: **${word.trim()}** → ${reading.trim()}`,
       ephemeral: true,
     });
+    if (interaction.message) {
+      const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
+      await interaction.message.edit({ components });
+    }
   } catch (error) {
     if (error instanceof AppError) {
       await interaction.reply({ content: error.message, ephemeral: true });
@@ -568,6 +594,10 @@ async function handleGlobalRequestSubmit(
       content: `グローバル辞書に申請しました: **${word.trim()}** → ${reading.trim()}`,
       ephemeral: true,
     });
+    if (interaction.message) {
+      const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', 1);
+      await interaction.message.edit({ components });
+    }
     await sendRequestNotification(request.id, word.trim(), reading.trim(), reason, parsed.userId);
   } catch (error) {
     if (error instanceof AppError) {
