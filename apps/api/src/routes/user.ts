@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
-import { getUserBoosts, assignBoost, unassignBoost, setGuildBoostCount } from '../services/boost-service.js';
+import { getUserBoosts, assignBoost, unassignBoost, setGuildBoostCount, getGuildBoostInfo } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription, createBillingPortalSession } from '../services/stripe-service.js';
 import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
 import { stripe } from '../infrastructure/stripe-client.js';
@@ -13,6 +13,47 @@ import { logger } from '../infrastructure/logger.js';
 
 const USER_GUILDS_CACHE_TTL = 60;
 const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
+
+async function getActiveBotGuildIds(userId: string, accessToken: string): Promise<string[]> {
+  const cacheKey = userGuildsCacheKey(userId);
+  let allGuilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
+
+  try {
+    const cached = await getRedisClient().get(cacheKey);
+    if (cached) {
+      allGuilds = JSON.parse(cached) as Array<{ id: string; name: string; icon: string | null }>;
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to read user all-guilds cache');
+  }
+
+  if (!allGuilds) {
+    try {
+      const guilds = await fetchUserGuilds(accessToken);
+      allGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
+      try {
+        await getRedisClient().set(cacheKey, JSON.stringify(allGuilds), 'EX', USER_GUILDS_CACHE_TTL);
+      } catch (err) {
+        logger.warn({ err }, 'Failed to write user all-guilds cache');
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Failed to fetch user guilds for guild boost info');
+      return [];
+    }
+  }
+
+  const botInstances = await getActiveBotInstances();
+  const result: string[] = [];
+  for (const guild of allGuilds) {
+    for (const instance of botInstances) {
+      if (await isBotInGuild(instance.instanceId, guild.id)) {
+        result.push(guild.id);
+        break;
+      }
+    }
+  }
+  return result;
+}
 
 export const userRouter = new Hono();
 
@@ -75,11 +116,13 @@ userRouter.get('/guilds', async (c) => {
 userRouter.get('/boosts', async (c) => {
   const session = c.get('session')!;
   await syncUserSubscriptionsIfStale(session.userId);
-  const [result, maxBoostsPerGuild] = await Promise.all([
+  const botGuildIds = await getActiveBotGuildIds(session.userId, session.accessToken);
+  const [result, maxBoostsPerGuild, guildBoostInfo] = await Promise.all([
     getUserBoosts(session.userId),
     getActiveInstanceCount(),
+    getGuildBoostInfo(session.userId, botGuildIds),
   ]);
-  return c.json({ success: true, data: { ...result, maxBoostsPerGuild } });
+  return c.json({ success: true, data: { ...result, maxBoostsPerGuild, guildBoostInfo } });
 });
 
 /**
@@ -145,8 +188,12 @@ userRouter.post('/boosts/assign', async (c) => {
 
   await setGuildBoostCount(session.userId, body.guildId, body.count);
   await syncUserSubscriptionsIfStale(session.userId);
-  const result = await getUserBoosts(session.userId);
-  return c.json({ success: true, data: { ...result, maxBoostsPerGuild } });
+  const botGuildIds = await getActiveBotGuildIds(session.userId, session.accessToken);
+  const [result, guildBoostInfo] = await Promise.all([
+    getUserBoosts(session.userId),
+    getGuildBoostInfo(session.userId, botGuildIds),
+  ]);
+  return c.json({ success: true, data: { ...result, maxBoostsPerGuild, guildBoostInfo } });
 });
 
 /**
