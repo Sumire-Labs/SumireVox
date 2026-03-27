@@ -3,8 +3,11 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
+import { logger } from '../infrastructure/logger.js';
 import { getGuildInfo } from '../infrastructure/discord-guild-info.js';
-import { updateGuildSettings } from '../services/guild-settings-service.js';
+import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
+import { isGuildPremium } from '../services/dictionary-service.js';
+import { fetchGuildRoles } from '../services/discord-api.js';
 import { getAllBotInstances, setBotInstanceActive } from '../services/bot-instance-service.js';
 import { REDIS_KEYS } from '@sumirevox/shared';
 import {
@@ -98,6 +101,72 @@ adminRouter.put('/servers/:guildId/premium', async (c) => {
   }
   const updated = await updateGuildSettings(guildId, { manualPremium: body.manualPremium });
   return c.json({ success: true, data: { guildId: updated.guildId, manualPremium: updated.manualPremium } });
+});
+
+/**
+ * GET /api/admin/servers/:guildId/settings
+ * サーバー設定取得（管理者用）
+ */
+const ADMIN_ROLE_CACHE_TTL = 120;
+const adminRoleCacheKey = (guildId: string) => `guild:${guildId}:roles`;
+
+adminRouter.get('/servers/:guildId/settings', async (c) => {
+  const guildId = c.req.param('guildId');
+
+  const [settings, isPremium, guildInfo] = await Promise.all([
+    getGuildSettings(guildId),
+    isGuildPremium(guildId),
+    getGuildInfo(guildId),
+  ]);
+
+  const redis = getRedisClient();
+  const cacheKey = adminRoleCacheKey(guildId);
+  let roles: Array<{ id: string; name: string; color: number }> = [];
+
+  const cachedRoles = await redis.get(cacheKey);
+  if (cachedRoles) {
+    roles = JSON.parse(cachedRoles) as Array<{ id: string; name: string; color: number }>;
+  } else {
+    try {
+      const rawRoles = await fetchGuildRoles(guildId);
+      roles = rawRoles
+        .filter((r) => r.name !== '@everyone' && !r.managed)
+        .sort((a, b) => b.position - a.position)
+        .map((r) => ({ id: r.id, name: r.name, color: r.color }));
+      await redis.set(cacheKey, JSON.stringify(roles), 'EX', ADMIN_ROLE_CACHE_TTL);
+    } catch (err) {
+      logger.warn({ err, guildId }, 'Failed to fetch guild roles for admin settings');
+    }
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      ...settings,
+      isPremium,
+      name: guildInfo?.name ?? guildId,
+      icon: guildInfo?.icon ?? null,
+      roles,
+    },
+  });
+});
+
+/**
+ * PUT /api/admin/servers/:guildId/settings
+ * サーバー設定変更（管理者用）
+ */
+adminRouter.put('/servers/:guildId/settings', async (c) => {
+  const guildId = c.req.param('guildId');
+  const body = await c.req.json<Record<string, unknown>>();
+
+  // guildId は更新不可
+  delete body['guildId'];
+
+  const [updated, isPremium] = await Promise.all([
+    updateGuildSettings(guildId, body),
+    isGuildPremium(guildId),
+  ]);
+  return c.json({ success: true, data: { ...updated, isPremium } });
 });
 
 // ========================================
