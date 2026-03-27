@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
+import { getRedisClient } from '../infrastructure/redis.js';
 import { getGuildInfo } from '../infrastructure/discord-guild-info.js';
 import { updateGuildSettings } from '../services/guild-settings-service.js';
 import { getAllBotInstances, setBotInstanceActive } from '../services/bot-instance-service.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
 import {
   getGlobalDictionaryEntries,
   addGlobalDictionaryEntry,
@@ -28,13 +30,30 @@ adminRouter.get('/servers', async (c) => {
   const prisma = getPrisma();
   const page = parseInt(c.req.query('page') ?? '1', 10);
   const perPage = parseInt(c.req.query('perPage') ?? '20', 10);
+
+  // Redis の BOT_GUILDS セットから Bot が現在参加しているギルド ID を収集
+  const botInstances = await getAllBotInstances();
+  const redis = getRedisClient();
+  const guildIdSets = await Promise.all(
+    botInstances.map((instance) =>
+      redis.smembers(REDIS_KEYS.BOT_GUILDS(instance.instanceId)).catch(() => [] as string[]),
+    ),
+  );
+  const botGuildIds = [...new Set(guildIdSets.flat())];
+
+  // Bot が1つも参加していない場合は空を返す
+  if (botGuildIds.length === 0) {
+    return c.json({ success: true, data: { items: [], total: 0, page, perPage } });
+  }
+
   const [servers, total] = await Promise.all([
     prisma.guildSettings.findMany({
+      where: { guildId: { in: botGuildIds } },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * perPage,
       take: perPage,
     }),
-    prisma.guildSettings.count(),
+    prisma.guildSettings.count({ where: { guildId: { in: botGuildIds } } }),
   ]);
 
   const guildInfos = await Promise.all(servers.map((s) => getGuildInfo(s.guildId)));
