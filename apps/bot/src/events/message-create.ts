@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { Message } from 'discord.js';
 import { getVcSession } from '../services/vc-session-manager.js';
 import { getGuildSettings } from '../services/guild-settings-service.js';
@@ -5,7 +6,8 @@ import { isGuildPremium } from '../services/premium-service.js';
 import { resolveVoiceParams } from '../services/speaker-resolver.js';
 import { runPipeline, getDictionaryTrie, PipelineContext } from '../services/text-pipeline/index.js';
 import { truncateForSpeech } from '../services/text-pipeline/truncate.js';
-import { enqueue } from '../services/speech-queue.js';
+import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
+import { matchEasterEgg } from '../services/easter-eggs.js';
 import { clampReadLength } from '@sumirevox/shared';
 import { logger } from '../infrastructure/logger.js';
 
@@ -33,6 +35,14 @@ export async function handleMessageCreate(message: Message): Promise<void> {
   if (!message.content && message.embeds.length > 0) return;
 
   try {
+    // イースターエッグチェック（テキストパイプラインより前に行う）
+    const easterEggFile = matchEasterEgg(message.content);
+    if (easterEggFile) {
+      const buffer = await readFile(easterEggFile);
+      enqueuePreSynthesized(guildId, buffer);
+      return;
+    }
+
     const guildSettings = await getGuildSettings(guildId);
     const isPremium = await isGuildPremium(guildId);
 
