@@ -295,7 +295,8 @@ export function BoostPage() {
                   key={guild.id}
                   className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* 左側: アイコン + サーバー名 + バッジ */}
+                  <div className="flex items-center gap-2 min-w-0">
                     {guild.icon ? (
                       <img
                         src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
@@ -315,42 +316,42 @@ export function BoostPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="text-xs text-gray-500 tabular-nums">
-                        全体: <span className="text-gray-300 font-medium">{totalGuildBoosts}</span>
+                  {/* 右側: 全体数 + あなた数 + ボタン群 */}
+                  <div className="flex items-center gap-6 shrink-0 ml-4">
+                    <span className="text-sm text-gray-400 tabular-nums">
+                      全体: <span className="text-gray-200 font-medium">{totalGuildBoosts}</span>
+                    </span>
+                    <span className="text-sm text-gray-400 tabular-nums">
+                      あなた: <span className={`font-medium ${currentCount > 0 ? 'text-purple-400' : 'text-gray-200'}`}>{currentCount}</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSetCount(guild.id, currentCount - 1)}
+                        disabled={!canDecrease || isLoading}
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        aria-label="ブーストを減らす"
+                      >
+                        −
+                      </button>
+                      <span
+                        className={`w-6 text-center text-sm font-bold tabular-nums ${
+                          currentCount > 0 ? 'text-purple-400' : 'text-gray-400'
+                        }`}
+                      >
+                        {currentCount}
                       </span>
-                      <span className="text-xs text-gray-500 tabular-nums">
-                        あなた: <span className={currentCount > 0 ? 'text-purple-400 font-medium' : 'text-gray-400 font-medium'}>{currentCount}</span>
-                      </span>
+                      {atMax && (
+                        <span className="text-xs text-gray-400">(最大)</span>
+                      )}
+                      <button
+                        onClick={() => handleSetCount(guild.id, currentCount + 1)}
+                        disabled={!canIncrease || isLoading}
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        aria-label="ブーストを増やす"
+                      >
+                        +
+                      </button>
                     </div>
-                    {isManualPremium ? (
-                      <div className="text-xs text-gray-500 max-w-[120px] text-right leading-tight">
-                        管理者によりプレミアムが設定されています
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleSetCount(guild.id, currentCount - 1)}
-                          disabled={!canDecrease || isLoading}
-                          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
-                          aria-label="ブーストを減らす"
-                        >
-                          −
-                        </button>
-                        {atMax && (
-                          <span className="text-xs text-gray-400">(最大)</span>
-                        )}
-                        <button
-                          onClick={() => handleSetCount(guild.id, currentCount + 1)}
-                          disabled={!canIncrease || isLoading}
-                          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
-                          aria-label="ブーストを増やす"
-                        >
-                          +
-                        </button>
-                      </div>
-                    )}
                     {isLoading && (
                       <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
                     )}
