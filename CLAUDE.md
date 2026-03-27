@@ -80,3 +80,20 @@ IMPORTANT: 実装時は必ず以下の仕様書を参照すること。
 - 単一テスト: `pnpm run test -- path/to/file.test.ts`
 - 全テスト: `pnpm run test`
 - テスト変更時は必ず実行して通ることを確認する
+
+## 注意事項
+
+### ファイル名の大文字小文字
+- Linux CI（GitHub Actions）はファイル名の大文字小文字を区別する
+- `main.tsx` でのインポートとファイル名の casing を必ず一致させること
+- 例: `import App from './App'` なら `App.tsx`、`import App from './app'` なら `app.tsx`
+- ファイル名を変更する場合は `git mv` を使うこと（OS上のリネームだけでは Git が追跡しない場合がある）
+
+### ビルド順序
+- `@sumirevox/shared` は他のパッケージより先にビルドする必要がある
+- Prisma Client は `pnpm --filter @sumirevox/bot exec prisma generate` で明示的に生成する（`PRISMA_SKIP_POSTINSTALL_GENERATE=true` を使用しているため）
+- CI およびDockerfile で `pnpm build` する前に上記2つが完了していること
+
+### pnpm ワークスペース
+- Prisma CLI は `apps/bot/node_modules/.bin/prisma` にある（root にホイストされない）
+- `node_modules/.prisma` は root に存在しない（`.pnpm` 配下にある）
