@@ -41,6 +41,9 @@ export async function handleStripeWebhook(
     case 'customer.subscription.deleted':
       await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
       break;
+    case 'charge.refunded':
+      await handleChargeRefunded(event.data.object as Stripe.Charge);
+      break;
     default:
       logger.debug({ type: event.type }, 'Unhandled webhook event type');
   }
@@ -175,6 +178,88 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   });
 
   logger.info({ subscriptionId: subscription.id }, 'Subscription deleted, all boosts unassigned');
+}
+
+async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
+  const prisma = getPrisma();
+  let subscriptionId: string | null = null;
+
+  // 1. charge → invoice → subscription の経路で取得を試みる
+  const invoiceId = charge.invoice as string | null;
+  if (invoiceId) {
+    const invoice = await stripe!.invoices.retrieve(invoiceId);
+    subscriptionId = invoice.subscription as string | null;
+  }
+
+  // 2. invoice 経由で取得できない場合、charge.customer から DB を検索
+  if (!subscriptionId) {
+    const customerId = charge.customer as string | null;
+    if (!customerId) {
+      logger.warn({ chargeId: charge.id }, 'Refunded charge has no invoice and no customer, skipping');
+      return;
+    }
+
+    const dbSubscription = await prisma.subscription.findFirst({
+      where: {
+        stripeCustomerId: customerId,
+        status: { in: ['ACTIVE', 'PAST_DUE'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!dbSubscription) {
+      logger.warn({ chargeId: charge.id, customerId }, 'No active subscription found for customer, skipping');
+      return;
+    }
+
+    subscriptionId = dbSubscription.stripeSubscriptionId;
+    logger.info({ chargeId: charge.id, customerId, subscriptionId }, 'Found subscription via customer ID fallback');
+  }
+
+  // 全額返金かどうか判定
+  const isFullRefund = charge.amount_refunded >= charge.amount;
+
+  if (isFullRefund) {
+    // Stripe 側のサブスクリプションキャンセル（存在する場合）
+    try {
+      const stripeSubscription = await stripe!.subscriptions.retrieve(subscriptionId);
+      if (stripeSubscription.status !== 'canceled') {
+        await stripe!.subscriptions.cancel(subscriptionId);
+        logger.info({ subscriptionId }, 'Stripe subscription canceled due to full refund');
+      }
+    } catch (err) {
+      // Stripe 上にサブスクリプションが存在しない場合（手動 DB 登録の場合）はスキップ
+      logger.warn({ err, subscriptionId }, 'Could not cancel Stripe subscription (may not exist in Stripe)');
+    }
+
+    // DB のサブスクリプションを CANCELED に更新
+    await prisma.subscription.updateMany({
+      where: { stripeSubscriptionId: subscriptionId },
+      data: { status: 'CANCELED' },
+    });
+
+    // 割り当て済みブーストをすべて解除
+    await prisma.boost.updateMany({
+      where: { subscriptionId, guildId: { not: null } },
+      data: {
+        guildId: null,
+        assignedAt: null,
+        unassignedAt: new Date(),
+      },
+    });
+
+    // 全ブースト削除
+    await prisma.boost.deleteMany({
+      where: { subscriptionId },
+    });
+
+    logger.info({ subscriptionId, chargeId: charge.id }, 'Full refund processed: subscription canceled, all boosts revoked and deleted');
+  } else {
+    logger.info(
+      { subscriptionId, chargeId: charge.id, amountRefunded: charge.amount_refunded, totalAmount: charge.amount },
+      'Partial refund detected, no automatic boost changes applied',
+    );
+  }
 }
 
 function mapStripeStatus(status: Stripe.Subscription.Status): string {

@@ -13,6 +13,13 @@ interface BoostAllocation {
   boostCount: number;
 }
 
+interface GuildBoostInfo {
+  guildId: string;
+  userBoostCount: number;
+  totalGuildBoosts: number;
+  isManualPremium: boolean;
+}
+
 interface BoostData {
   totalBoosts: number;
   usedBoosts: number;
@@ -20,6 +27,7 @@ interface BoostData {
   availableBoosts: number;
   maxBoostsPerGuild: number;
   allocations: BoostAllocation[];
+  guildBoostInfo: GuildBoostInfo[];
   cooldowns: Array<{
     boostId: string;
     unassignedAt: string;
@@ -91,14 +99,21 @@ export function BoostPage() {
     // Optimistic update
     const prevData = data;
     if (data) {
-      const currentCount = data.allocations.find((a) => a.guildId === guildId)?.boostCount ?? 0;
+      const currentInfo = data.guildBoostInfo.find((g) => g.guildId === guildId);
+      const currentCount = currentInfo?.userBoostCount ?? 0;
       const delta = newCount - currentCount;
       const newAllocations = data.allocations
         .filter((a) => a.guildId !== guildId)
         .concat(newCount > 0 ? [{ guildId, boostCount: newCount }] : []);
+      const newGuildBoostInfo = data.guildBoostInfo.map((g) =>
+        g.guildId !== guildId
+          ? g
+          : { ...g, userBoostCount: newCount, totalGuildBoosts: g.totalGuildBoosts + delta },
+      );
       setData({
         ...data,
         allocations: newAllocations,
+        guildBoostInfo: newGuildBoostInfo,
         usedBoosts: data.usedBoosts + delta,
         availableBoosts: data.availableBoosts - delta,
         cooldownBoosts: delta < 0 ? data.cooldownBoosts + Math.abs(delta) : data.cooldownBoosts,
@@ -147,7 +162,7 @@ export function BoostPage() {
   const earliestAvailableAt = cooldowns.length > 0
     ? cooldowns.reduce((min, c) => c.availableAt < min ? c.availableAt : min, cooldowns[0].availableAt)
     : null;
-  const allocationMap = new Map((data?.allocations ?? []).map((a) => [a.guildId, a.boostCount]));
+  const guildBoostInfoMap = new Map((data?.guildBoostInfo ?? []).map((g) => [g.guildId, g]));
 
   return (
     <div className="flex flex-col gap-8">
@@ -266,18 +281,22 @@ export function BoostPage() {
         {guilds.length > 0 && (
           <div className="flex flex-col gap-2">
             {guilds.map((guild) => {
-              const currentCount = allocationMap.get(guild.id) ?? 0;
+              const guildInfo = guildBoostInfoMap.get(guild.id);
+              const currentCount = guildInfo?.userBoostCount ?? 0;
+              const totalGuildBoosts = guildInfo?.totalGuildBoosts ?? 0;
+              const isManualPremium = guildInfo?.isManualPremium ?? false;
               const isLoading = actionLoading === guild.id;
               const atMax = maxBoostsPerGuild > 0 && currentCount >= maxBoostsPerGuild;
-              const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !atMax;
-              const canDecrease = currentCount > 0;
+              const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !atMax && !isManualPremium;
+              const canDecrease = currentCount > 0 && !isManualPremium;
 
               return (
                 <div
                   key={guild.id}
                   className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* 左側: アイコン + サーバー名 + バッジ */}
+                  <div className="flex items-center gap-2 min-w-0">
                     {guild.icon ? (
                       <img
                         src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
@@ -290,15 +309,26 @@ export function BoostPage() {
                       </span>
                     )}
                     <span className="font-medium text-white truncate">{guild.name}</span>
+                    {isManualPremium && (
+                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        管理者設定
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
-                    <span className="text-sm text-gray-500">現在のブースト:</span>
+                  {/* 右側: 全体数 + あなた数 + ボタン群 */}
+                  <div className="flex items-center gap-6 shrink-0 ml-4">
+                    <span className="text-sm text-gray-400 tabular-nums">
+                      全体: <span className="text-gray-200 font-medium">{totalGuildBoosts}</span>
+                    </span>
+                    <span className="text-sm text-gray-400 tabular-nums">
+                      あなた: <span className={`font-medium ${currentCount > 0 ? 'text-purple-400' : 'text-gray-200'}`}>{currentCount}</span>
+                    </span>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleSetCount(guild.id, currentCount - 1)}
                         disabled={!canDecrease || isLoading}
-                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
                         aria-label="ブーストを減らす"
                       >
                         −
@@ -316,7 +346,7 @@ export function BoostPage() {
                       <button
                         onClick={() => handleSetCount(guild.id, currentCount + 1)}
                         disabled={!canIncrease || isLoading}
-                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
                         aria-label="ブーストを増やす"
                       >
                         +

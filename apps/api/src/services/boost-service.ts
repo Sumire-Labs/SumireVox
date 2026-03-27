@@ -4,6 +4,62 @@ import { AppError } from '../infrastructure/app-error.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
 
+export interface GuildBoostInfo {
+  guildId: string;
+  userBoostCount: number;
+  totalGuildBoosts: number;
+  isManualPremium: boolean;
+}
+
+/**
+ * 指定ギルドの全体ブースト数とマニュアルプレミアム状態を取得する
+ */
+export async function getGuildBoostInfo(
+  userId: string,
+  guildIds: string[],
+): Promise<GuildBoostInfo[]> {
+  if (guildIds.length === 0) return [];
+
+  const prisma = getPrisma();
+
+  const [allBoosts, userBoosts, guildSettings] = await Promise.all([
+    prisma.boost.findMany({
+      where: { guildId: { in: guildIds } },
+      select: { guildId: true },
+    }),
+    prisma.boost.findMany({
+      where: {
+        guildId: { in: guildIds },
+        subscription: { userId },
+      },
+      select: { guildId: true },
+    }),
+    prisma.guildSettings.findMany({
+      where: { guildId: { in: guildIds } },
+      select: { guildId: true, manualPremium: true },
+    }),
+  ]);
+
+  const totalBoostMap = new Map<string, number>();
+  for (const b of allBoosts) {
+    if (b.guildId) totalBoostMap.set(b.guildId, (totalBoostMap.get(b.guildId) ?? 0) + 1);
+  }
+
+  const userBoostMap = new Map<string, number>();
+  for (const b of userBoosts) {
+    if (b.guildId) userBoostMap.set(b.guildId, (userBoostMap.get(b.guildId) ?? 0) + 1);
+  }
+
+  const manualPremiumMap = new Map(guildSettings.map((s) => [s.guildId, s.manualPremium]));
+
+  return guildIds.map((guildId) => ({
+    guildId,
+    userBoostCount: userBoostMap.get(guildId) ?? 0,
+    totalGuildBoosts: totalBoostMap.get(guildId) ?? 0,
+    isManualPremium: manualPremiumMap.get(guildId) ?? false,
+  }));
+}
+
 export interface BoostWithStatus {
   id: string;
   guildId: string | null;

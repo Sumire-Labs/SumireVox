@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Switch, Spinner } from '@heroui/react';
+import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { useToast, Toast } from '../components/toast';
 
@@ -8,7 +9,7 @@ interface ServerItem {
   name: string;
   icon: string | null;
   manualPremium: boolean;
-  createdAt: string;
+  botJoinedAt: string | null;
 }
 
 interface PaginatedResponse<T> {
@@ -95,7 +96,7 @@ export function AdminServersPage() {
                   <tr className="border-b border-white/5">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">サーバー</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Manual PREMIUM</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">作成日時</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Bot 導入日時</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -106,7 +107,7 @@ export function AdminServersPage() {
                   ) : servers.map((server) => (
                     <tr key={server.guildId} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
+                        <Link to={`/servers/${server.guildId}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                           {server.icon ? (
                             <img
                               src={`https://cdn.discordapp.com/icons/${server.guildId}/${server.icon}.png?size=64`}
@@ -122,7 +123,7 @@ export function AdminServersPage() {
                             <div className="font-semibold text-white text-sm">{server.name}</div>
                             <div className="font-mono text-xs text-gray-500">{server.guildId}</div>
                           </div>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         <Switch
@@ -139,7 +140,7 @@ export function AdminServersPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-500">
-                          {new Date(server.createdAt).toLocaleDateString('ja-JP')}
+                          {server.botJoinedAt ? new Date(server.botJoinedAt).toLocaleDateString('ja-JP') : '設定なし'}
                         </span>
                       </td>
                     </tr>
