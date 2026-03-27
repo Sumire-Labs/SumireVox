@@ -69,8 +69,7 @@ adminRouter.get('/servers', async (c) => {
           name: info?.name ?? guildId,
           icon: info?.icon ?? null,
           manualPremium: settings?.manualPremium ?? false,
-          createdAt: settings?.createdAt ?? null,
-          updatedAt: settings?.updatedAt ?? null,
+          botJoinedAt: info?.botJoinedAt ?? null,
         };
       }),
       total,
