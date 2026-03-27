@@ -24,7 +24,7 @@ adminRouter.use('*', requireAuth, requireBotAdmin);
 
 /**
  * GET /api/admin/servers
- * 全サーバー一覧（Bot が参加しているサーバーの GuildSettings）
+ * 全サーバー一覧（Bot が現在参加している全サーバー。guild_settings 未登録サーバーはデフォルト値で表示）
  */
 adminRouter.get('/servers', async (c) => {
   const prisma = getPrisma();
@@ -39,36 +39,40 @@ adminRouter.get('/servers', async (c) => {
       redis.smembers(REDIS_KEYS.BOT_GUILDS(instance.instanceId)).catch(() => [] as string[]),
     ),
   );
-  const botGuildIds = [...new Set(guildIdSets.flat())];
+  const botGuildIds = [...new Set(guildIdSets.flat())].sort();
 
-  // Bot が1つも参加していない場合は空を返す
-  if (botGuildIds.length === 0) {
+  const total = botGuildIds.length;
+  if (total === 0) {
     return c.json({ success: true, data: { items: [], total: 0, page, perPage } });
   }
 
-  const [servers, total] = await Promise.all([
-    prisma.guildSettings.findMany({
-      where: { guildId: { in: botGuildIds } },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * perPage,
-      take: perPage,
-    }),
-    prisma.guildSettings.count({ where: { guildId: { in: botGuildIds } } }),
-  ]);
+  // ページネーション（Redis セット上で行う）
+  const pagedGuildIds = botGuildIds.slice((page - 1) * perPage, page * perPage);
 
-  const guildInfos = await Promise.all(servers.map((s) => getGuildInfo(s.guildId)));
+  // guild_settings から既存レコードを取得（存在するもののみ）
+  const existingSettings = await prisma.guildSettings.findMany({
+    where: { guildId: { in: pagedGuildIds } },
+  });
+  const settingsMap = new Map(existingSettings.map((s) => [s.guildId, s]));
+
+  // Discord からギルド情報を取得
+  const guildInfos = await Promise.all(pagedGuildIds.map((id) => getGuildInfo(id)));
 
   return c.json({
     success: true,
     data: {
-      items: servers.map((s, i) => ({
-        guildId: s.guildId,
-        name: guildInfos[i]!.name,
-        icon: guildInfos[i]!.icon,
-        manualPremium: s.manualPremium,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      })),
+      items: pagedGuildIds.map((guildId, i) => {
+        const settings = settingsMap.get(guildId);
+        const info = guildInfos[i];
+        return {
+          guildId,
+          name: info?.name ?? guildId,
+          icon: info?.icon ?? null,
+          manualPremium: settings?.manualPremium ?? false,
+          createdAt: settings?.createdAt ?? null,
+          updatedAt: settings?.updatedAt ?? null,
+        };
+      }),
       total,
       page,
       perPage,
