@@ -286,8 +286,8 @@ export function BoostPage() {
               const totalGuildBoosts = guildInfo?.totalGuildBoosts ?? 0;
               const isManualPremium = guildInfo?.isManualPremium ?? false;
               const isLoading = actionLoading === guild.id;
-              const atMax = maxBoostsPerGuild > 0 && currentCount >= maxBoostsPerGuild;
-              const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !atMax && !isManualPremium;
+              const isGuildAtMax = maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild;
+              const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !isGuildAtMax && !isManualPremium;
               const canDecrease = currentCount > 0 && !isManualPremium;
 
               return (
@@ -312,6 +312,11 @@ export function BoostPage() {
                     {isManualPremium && (
                       <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
                         管理者設定
+                      </span>
+                    )}
+                    {isGuildAtMax && !isManualPremium && (
+                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
+                        最大ブースト
                       </span>
                     )}
                   </div>
@@ -340,9 +345,6 @@ export function BoostPage() {
                       >
                         {currentCount}
                       </span>
-                      {atMax && (
-                        <span className="text-xs text-gray-400">(最大)</span>
-                      )}
                       <button
                         onClick={() => handleSetCount(guild.id, currentCount + 1)}
                         disabled={!canIncrease || isLoading}

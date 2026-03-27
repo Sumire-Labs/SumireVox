@@ -201,6 +201,7 @@ export function ServerBotsPage() {
   if (!data) return <p className="text-red-400">Bot 情報の読み込みに失敗しました。</p>;
 
   const totalInstances = data.bots.length;
+  const effectiveMaxBots = Math.min(data.maxBots, totalInstances);
   const cats = channels?.categories ?? [];
   const textChannels = channels?.textChannels ?? [];
   const voiceChannels = channels?.voiceChannels ?? [];
@@ -214,7 +215,7 @@ export function ServerBotsPage() {
         </div>
         <div className="pt-1">
           <span className="text-sm bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-xl font-medium">
-            利用可能な Bot 数: {data.maxBots} / {totalInstances}
+            利用可能な Bot 数: {effectiveMaxBots} / {totalInstances}
           </span>
         </div>
       </div>
@@ -222,8 +223,9 @@ export function ServerBotsPage() {
       <div className="flex flex-col gap-4">
         {data.bots.map((bot) => {
           const isSaving = savingId === bot.instanceNumber;
+          const isEffectivelyAvailable = bot.isAvailable && bot.instanceNumber <= totalInstances;
 
-          if (!bot.isAvailable) {
+          if (!isEffectivelyAvailable) {
             return (
               <div
                 key={bot.instanceNumber}

@@ -3,6 +3,7 @@ import { getPrisma } from '../infrastructure/database.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
+import { getActiveInstanceCount } from './bot-instance-service.js';
 
 export interface GuildBoostInfo {
   guildId: string;
@@ -97,19 +98,23 @@ export async function getUserBoosts(userId: string): Promise<{
   usedBoosts: number;
   cooldownBoosts: number;
   availableBoosts: number;
+  maxBoostsPerGuild: number;
   allocations: BoostAllocation[];
   cooldowns: BoostCooldownInfo[];
 }> {
   const prisma = getPrisma();
 
-  const subscriptions = await prisma.subscription.findMany({
-    where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
-    include: { boosts: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const [subscriptions, maxBoostsPerGuild] = await Promise.all([
+    prisma.subscription.findMany({
+      where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
+      include: { boosts: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+    getActiveInstanceCount(),
+  ]);
 
   if (subscriptions.length === 0) {
-    return { boosts: [], subscription: null, totalBoosts: 0, usedBoosts: 0, cooldownBoosts: 0, availableBoosts: 0, allocations: [], cooldowns: [] };
+    return { boosts: [], subscription: null, totalBoosts: 0, usedBoosts: 0, cooldownBoosts: 0, availableBoosts: 0, maxBoostsPerGuild, allocations: [], cooldowns: [] };
   }
 
   const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
@@ -169,6 +174,7 @@ export async function getUserBoosts(userId: string): Promise<{
     usedBoosts,
     cooldownBoosts,
     availableBoosts,
+    maxBoostsPerGuild,
     allocations,
     cooldowns,
   };
@@ -200,6 +206,14 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
     const hasActiveSubscription = subscriptions.some((s) => s.status === 'ACTIVE');
     if (!hasActiveSubscription) {
       throw new AppError('VALIDATION_ERROR', 'サブスクリプションが有効ではありません。', 400);
+    }
+
+    const maxBoostsPerGuild = await getActiveInstanceCount();
+    const totalGuildBoosts = await getPrisma().boost.count({
+      where: { guildId, subscription: { status: 'ACTIVE' } },
+    });
+    if (maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild) {
+      throw new AppError('GUILD_BOOST_LIMIT_REACHED', 'このサーバーは最大ブースト数に達しています。', 400);
     }
 
     const cooldownMs = config.boostCooldownDays * 24 * 60 * 60 * 1000;
@@ -323,4 +337,52 @@ export async function unassignBoost(userId: string, boostId: string): Promise<vo
   });
 
   logger.info({ userId, boostId, previousGuildId: boost.guildId }, 'Boost unassigned');
+}
+
+/**
+ * ブースト整合処理: アクティブインスタンス数を超えるギルドブーストを自動解除する
+ * アクティブインスタンス減少時にクールダウンなしで超過分を解除する
+ */
+export async function reconcileBoosts(): Promise<void> {
+  const prisma = getPrisma();
+  const maxBoosts = await getActiveInstanceCount();
+
+  const guildBoosts = await prisma.boost.groupBy({
+    by: ['guildId'],
+    where: {
+      guildId: { not: null },
+      subscription: { status: 'ACTIVE' },
+    },
+    _count: { id: true },
+  });
+
+  for (const group of guildBoosts) {
+    if (!group.guildId) continue;
+    const currentCount = group._count.id;
+    if (currentCount <= maxBoosts) continue;
+
+    const excess = currentCount - maxBoosts;
+    const boostsToRemove = await prisma.boost.findMany({
+      where: {
+        guildId: group.guildId,
+        subscription: { status: 'ACTIVE' },
+      },
+      orderBy: { assignedAt: 'desc' },
+      take: excess,
+    });
+
+    await prisma.boost.updateMany({
+      where: { id: { in: boostsToRemove.map((b) => b.id) } },
+      data: {
+        guildId: null,
+        assignedAt: null,
+        unassignedAt: null,
+      },
+    });
+
+    logger.info(
+      { guildId: group.guildId, removed: excess, maxBoosts },
+      'Boost reconciliation: excess boosts removed without cooldown',
+    );
+  }
 }

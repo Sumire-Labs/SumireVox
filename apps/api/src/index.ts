@@ -16,6 +16,7 @@ import { stripeWebhookRouter } from './routes/stripe-webhook.js';
 import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
 import { botInstancesRouter } from './routes/bot-instances.js';
+import { reconcileBoosts } from './services/boost-service.js';
 
 const app = new Hono();
 
@@ -72,6 +73,9 @@ async function main(): Promise<void> {
       logger.info({ port: info.port }, `API server listening on port ${info.port}`);
     },
   );
+
+  // 起動後にブースト整合処理を実行
+  reconcileBoosts().catch((err) => logger.error({ err }, 'Boost reconciliation failed on startup'));
 }
 
 // Graceful Shutdown

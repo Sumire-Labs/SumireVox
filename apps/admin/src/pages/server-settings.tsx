@@ -44,6 +44,113 @@ interface SettingsApiResponse extends ServerSettings {
   roles: Role[];
 }
 
+interface BotInstanceSettings {
+  autoJoin: boolean;
+  textChannelId: string | null;
+  voiceChannelId: string | null;
+}
+
+interface BotInstanceInfo {
+  instanceNumber: number;
+  name: string;
+  botUserId: string;
+  isActive: boolean;
+  isInGuild: boolean;
+  isAvailable: boolean;
+  settings: BotInstanceSettings | null;
+}
+
+interface BotListResponse {
+  bots: BotInstanceInfo[];
+  boostCount: number;
+  maxBots: number;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface ChannelsData {
+  textChannels: Channel[];
+  voiceChannels: Channel[];
+  categories: Category[];
+}
+
+function BotStatusBadge({ label, variant }: { label: string; variant: 'active' | 'inactive' | 'unavailable' }) {
+  const styles = {
+    active: 'bg-green-500/20 text-green-400',
+    inactive: 'bg-yellow-500/20 text-yellow-400',
+    unavailable: 'bg-white/10 text-gray-500',
+  };
+  return (
+    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${styles[variant]}`}>
+      {label}
+    </span>
+  );
+}
+
+function channelLabel(ch: Channel, categories: Category[]): string {
+  if (ch.parentId) {
+    const cat = categories.find((c) => c.id === ch.parentId);
+    if (cat) return `${cat.name} > ${ch.name}`;
+  }
+  return ch.name;
+}
+
+function ChannelSelect({
+  label,
+  value,
+  channels,
+  categories,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  channels: Channel[];
+  categories: Category[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs text-gray-500">{label}</label>
+      <Select
+        aria-label={label}
+        value={value ?? ''}
+        onChange={(val) => onChange((val as string) || null)}
+        isDisabled={disabled}
+      >
+        <Select.Trigger className="min-w-[240px] bg-white/5 border border-white/10 text-white rounded-xl px-3 py-1.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          <Select.Value>{value ? undefined : placeholder}</Select.Value>
+          <Select.Indicator />
+        </Select.Trigger>
+        <Select.Popover className="bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
+          <ListBox>
+            <ListBox.Item id="" textValue="未設定">
+              <span className="text-gray-500">未設定</span>
+            </ListBox.Item>
+            {channels.map((ch) => (
+              <ListBox.Item key={ch.id} id={ch.id} textValue={channelLabel(ch, categories)}>
+                {channelLabel(ch, categories)}
+              </ListBox.Item>
+            ))}
+          </ListBox>
+        </Select.Popover>
+      </Select>
+    </div>
+  );
+}
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-5">
@@ -106,6 +213,9 @@ export function AdminServerSettingsPage() {
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [botData, setBotData] = useState<BotListResponse | null>(null);
+  const [channelsData, setChannelsData] = useState<ChannelsData | null>(null);
+  const [savingBotId, setSavingBotId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const { toastState, showSaving, showSuccess, showError } = useToast();
 
@@ -115,13 +225,17 @@ export function AdminServerSettingsPage() {
     Promise.all([
       api.get<SettingsApiResponse>(`/api/admin/servers/${guildId}/settings`),
       api.get<Speaker[]>('/api/voicevox/speakers').catch(() => [] as Speaker[]),
+      api.get<BotListResponse>(`/api/admin/servers/${guildId}/bots`).catch(() => null),
+      api.get<ChannelsData>(`/api/admin/servers/${guildId}/channels`).catch(() => null),
     ])
-      .then(([res, sp]) => {
+      .then(([res, sp, bots, ch]) => {
         const { name, icon, roles: fetchedRoles, ...rest } = res;
         setSettings(rest);
         setServerInfo({ name, icon });
         setRoles(fetchedRoles ?? []);
         setSpeakers(sp);
+        setBotData(bots);
+        setChannelsData(ch);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -158,6 +272,35 @@ export function AdminServerSettingsPage() {
     setSettings({ ...settings, [field]: value });
     save({ [field]: value });
   };
+
+  const updateBotSettings = useCallback(
+    async (instanceNumber: number, patch: Partial<BotInstanceSettings>) => {
+      if (!guildId) return;
+      setSavingBotId(instanceNumber);
+      showSaving();
+      try {
+        await api.put(`/api/admin/servers/${guildId}/bots/${instanceNumber}/settings`, patch);
+        setBotData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            bots: prev.bots.map((bot) =>
+              bot.instanceNumber === instanceNumber
+                ? { ...bot, settings: { ...(bot.settings ?? { autoJoin: false, textChannelId: null, voiceChannelId: null }), ...patch } }
+                : bot,
+            ),
+          };
+        });
+        showSuccess();
+      } catch (err) {
+        showError();
+        if (!(err instanceof ApiError)) throw err;
+      } finally {
+        setSavingBotId(null);
+      }
+    },
+    [guildId, showSaving, showSuccess, showError],
+  );
 
   if (loading) {
     return (
@@ -318,6 +461,98 @@ export function AdminServerSettingsPage() {
           </Select>
         </SettingRow>
       </SectionCard>
+
+      {/* Bot 設定 */}
+      {botData && (
+        <SectionCard title="Bot 設定">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">各 Bot の自動接続・チャンネル設定</p>
+            <span className="text-xs bg-purple-500/20 text-purple-300 px-2.5 py-1 rounded-full font-medium">
+              利用可能: {Math.min(botData.maxBots, botData.bots.length)} / {botData.bots.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-4">
+            {botData.bots.map((bot) => {
+              const effectiveMaxBots = Math.min(botData.maxBots, botData.bots.length);
+              const isEffectivelyAvailable = bot.isAvailable && bot.instanceNumber <= effectiveMaxBots;
+              const isSaving = savingBotId === bot.instanceNumber;
+              const cats = channelsData?.categories ?? [];
+              const textChannels = channelsData?.textChannels ?? [];
+              const voiceChannels = channelsData?.voiceChannels ?? [];
+
+              if (!isEffectivelyAvailable) {
+                return (
+                  <div key={bot.instanceNumber} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 opacity-50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-white">{bot.name}</span>
+                      <BotStatusBadge label="利用不可" variant="unavailable" />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">このインスタンスを利用するにはブーストが必要です。</p>
+                  </div>
+                );
+              }
+
+              const botSettings = bot.settings ?? { autoJoin: false, textChannelId: null, voiceChannelId: null };
+
+              return (
+                <div key={bot.instanceNumber} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">{bot.name}</span>
+                    <div className="flex items-center gap-2">
+                      {bot.isInGuild ? (
+                        <span className="text-xs text-green-400">参加済み</span>
+                      ) : (
+                        <span className="text-xs text-gray-500">未参加</span>
+                      )}
+                      <BotStatusBadge
+                        label={bot.isActive ? '稼働中' : '停止中'}
+                        variant={bot.isActive ? 'active' : 'inactive'}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-white">自動接続</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {bot.isInGuild ? '誰かが VC に参加したとき自動で接続する' : '参加後に設定可能'}
+                      </p>
+                    </div>
+                    <Switch
+                      isSelected={botSettings.autoJoin}
+                      isDisabled={!bot.isInGuild || isSaving}
+                      onChange={(v) => updateBotSettings(bot.instanceNumber, { autoJoin: v })}
+                    >
+                      {({ isSelected }) => (
+                        <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      )}
+                    </Switch>
+                  </div>
+                  <ChannelSelect
+                    label="VC チャンネル（未設定の場合は任意の VC に参加）"
+                    value={botSettings.voiceChannelId}
+                    channels={voiceChannels}
+                    categories={cats}
+                    placeholder="VC チャンネルを選択"
+                    disabled={!bot.isInGuild || isSaving}
+                    onChange={(v) => updateBotSettings(bot.instanceNumber, { voiceChannelId: v })}
+                  />
+                  <ChannelSelect
+                    label="テキストチャンネル（読み上げ対象チャンネル）"
+                    value={botSettings.textChannelId}
+                    channels={textChannels}
+                    categories={cats}
+                    placeholder="テキストチャンネルを選択"
+                    disabled={!bot.isInGuild || isSaving}
+                    onChange={(v) => updateBotSettings(bot.instanceNumber, { textChannelId: v })}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       {/* 権限設定 */}
       <SectionCard title="権限設定">

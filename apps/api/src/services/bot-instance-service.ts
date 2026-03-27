@@ -209,6 +209,20 @@ export async function setBotInstanceActive(instanceId: number, isActive: boolean
     where: { instanceId },
     data: { isActive },
   });
+
+  // アクティブインスタンス数のキャッシュをクリア
+  try {
+    await getRedisClient().del(ACTIVE_INSTANCE_COUNT_CACHE_KEY);
+  } catch {
+    // キャッシュ削除失敗は無視
+  }
+
+  // インスタンスが非アクティブ化された場合、ブースト整合処理を実行
+  if (!isActive) {
+    const { reconcileBoosts } = await import('./boost-service.js');
+    await reconcileBoosts();
+  }
+
   return {
     instanceId: instance.instanceId,
     botUserId: instance.botUserId,
