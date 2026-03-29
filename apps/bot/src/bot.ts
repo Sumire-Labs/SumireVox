@@ -80,55 +80,61 @@ async function bootstrap(): Promise<void> {
   });
 
   client.on(Events.ClientReady, async (readyClient) => {
-    childLogger.info(
-      { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
-      `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
-    );
-
-    // Bot インスタンス登録
-    await registerBotInstance();
-
-    // 参加サーバー一覧を Redis Set に保存
-    const guildIds = readyClient.guilds.cache.map((g) => g.id);
-    const redis = getRedisClient();
-    const botGuildsKey = REDIS_KEYS.BOT_GUILDS(config.botInstanceId);
-    await redis.del(botGuildsKey);
-    if (guildIds.length > 0) {
-      await redis.sadd(botGuildsKey, ...guildIds);
-    }
-    childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set initialized');
-
-    // VOICEVOX 話者一覧キャッシュ
-    await loadSpeakers();
-    childLogger.info('VOICEVOX speakers loaded');
-
-    // シャードセマフォ初期化
-    const totalShards = readyClient.shard?.count ?? 1;
-    initShardSemaphore(totalShards);
-
-    // VOICEVOX ヘルスチェック開始
-    startHealthChecker();
-    childLogger.info('VOICEVOX health checker started');
-
-    // 定型文事前合成
-    await preloadPredefinedAudio();
-    childLogger.info('Predefined audio preloaded');
-
-    // VC セッション復旧
-    await restoreVcSessions();
-
-    memoryInterval = setInterval(() => {
-      const mem = process.memoryUsage();
+    try {
       childLogger.info(
-        {
-          rss: Math.round(mem.rss / 1024 / 1024),
-          heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
-          heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
-          external: Math.round(mem.external / 1024 / 1024),
-        },
-        'Memory usage (MB)',
+        { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
+        `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
       );
-    }, 60_000);
+
+      // Bot インスタンス登録
+      await registerBotInstance();
+
+      // 参加サーバー一覧を Redis Set に保存
+      const guildIds = readyClient.guilds.cache.map((g) => g.id);
+      const redis = getRedisClient();
+      const botGuildsKey = REDIS_KEYS.BOT_GUILDS(config.botInstanceId);
+      await redis.del(botGuildsKey);
+      if (guildIds.length > 0) {
+        await redis.sadd(botGuildsKey, ...guildIds);
+      }
+      childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set initialized');
+
+      // VOICEVOX 話者一覧キャッシュ
+      await loadSpeakers();
+      childLogger.info('VOICEVOX speakers loaded');
+
+      // シャードセマフォ初期化
+      const totalShards = readyClient.shard?.count ?? 1;
+      initShardSemaphore(totalShards);
+
+      // VOICEVOX ヘルスチェック開始
+      startHealthChecker();
+      childLogger.info('VOICEVOX health checker started');
+
+      // 定型文事前合成
+      await preloadPredefinedAudio();
+      childLogger.info('Predefined audio preloaded');
+
+      // VC セッション復旧
+      await restoreVcSessions();
+
+      memoryInterval = setInterval(() => {
+        const mem = process.memoryUsage();
+        childLogger.info(
+          {
+            rss: Math.round(mem.rss / 1024 / 1024),
+            heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(mem.heapTotal / 1024 / 1024),
+            external: Math.round(mem.external / 1024 / 1024),
+          },
+          'Memory usage (MB)',
+        );
+      }, 60_000);
+    } catch (err) {
+      childLogger.fatal({ err }, 'Critical initialization failed in ClientReady, shutting down...');
+      client.destroy();
+      process.exit(1);
+    }
   });
 
   client.on(Events.Error, (error) => {
