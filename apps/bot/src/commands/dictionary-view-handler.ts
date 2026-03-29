@@ -416,6 +416,29 @@ async function handleServerDeleteConfirm(
     await deleteServerDictionaryEntry(guildId, word);
   } catch (error) {
     logger.error({ err: error, guildId, word }, 'Failed to delete dictionary entry');
+
+    const errorContainer = new ContainerBuilder().setAccentColor(0xef4444);
+    errorContainer
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('## ❌ 削除エラー'),
+      )
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('削除に失敗しました。時間をおいて再度お試しください。'),
+      )
+      .addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+      )
+      .addActionRowComponents(
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('dict', 'server_page:1', parsed.userId))
+            .setLabel('◀ 辞書に戻る')
+            .setStyle(ButtonStyle.Secondary),
+        ),
+      );
+
+    await interaction.update({ components: [errorContainer] });
+    return;
   }
 
   const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'server', 1);
