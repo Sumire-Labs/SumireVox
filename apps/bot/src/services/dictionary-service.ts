@@ -6,6 +6,7 @@ import {
   REDIS_CHANNELS,
   validateDictionaryEntry,
 } from '@sumirevox/shared';
+import { Prisma } from '@prisma/client';
 import { getPrisma } from '../infrastructure/database.js';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { invalidateGuildTrie, invalidateAllTries } from './text-pipeline/index.js';
@@ -51,29 +52,45 @@ export async function addServerDictionaryEntry(
 
   const prisma = getPrisma();
   const limit = isPremium ? LIMITS.PREMIUM_DICTIONARY_ENTRIES : LIMITS.FREE_DICTIONARY_ENTRIES;
-  const currentCount = await prisma.serverDictionary.count({ where: { guildId } });
-  if (currentCount >= limit) {
-    throw new AppError(
-      'DICTIONARY_LIMIT_REACHED',
-      `サーバー辞書のエントリ上限（${limit}件）に達しています。${!isPremium ? 'PREMIUM にアップグレードすると100件まで登録できます。' : ''}`,
-    );
+  const trimmedWord = word.trim();
+  const trimmedReading = reading.trim();
+
+  try {
+    const entry = await prisma.$transaction(async (tx) => {
+      const currentCount = await tx.serverDictionary.count({ where: { guildId } });
+      if (currentCount >= limit) {
+        throw new AppError(
+          'DICTIONARY_LIMIT_REACHED',
+          `サーバー辞書のエントリ上限（${limit}件）に達しています。${!isPremium ? 'PREMIUM にアップグレードすると100件まで登録できます。' : ''}`,
+        );
+      }
+
+      const existing = await tx.serverDictionary.findUnique({
+        where: { guildId_word: { guildId, word: trimmedWord } },
+      });
+      if (existing) {
+        throw new AppError('VALIDATION_ERROR', `「${trimmedWord}」は既に登録されています。`);
+      }
+
+      return tx.serverDictionary.create({
+        data: { guildId, word: trimmedWord, reading: trimmedReading, registeredBy },
+      });
+    });
+
+    invalidateGuildTrie(guildId);
+    await publishEvent(REDIS_CHANNELS.SERVER_DICTIONARY_UPDATED, JSON.stringify({ guildId }));
+    logger.info({ guildId, word: trimmedWord }, 'Server dictionary entry added');
+    return mapServerEntry(entry);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      throw new AppError('VALIDATION_ERROR', `「${trimmedWord}」は既に登録されています。`);
+    }
+    throw error;
   }
-
-  const existing = await prisma.serverDictionary.findUnique({
-    where: { guildId_word: { guildId, word: word.trim() } },
-  });
-  if (existing) {
-    throw new AppError('VALIDATION_ERROR', `「${word.trim()}」は既に登録されています。`);
-  }
-
-  const entry = await prisma.serverDictionary.create({
-    data: { guildId, word: word.trim(), reading: reading.trim(), registeredBy },
-  });
-
-  invalidateGuildTrie(guildId);
-  await publishEvent(REDIS_CHANNELS.SERVER_DICTIONARY_UPDATED, JSON.stringify({ guildId }));
-  logger.info({ guildId, word: word.trim() }, 'Server dictionary entry added');
-  return mapServerEntry(entry);
 }
 
 export async function deleteServerDictionaryEntry(guildId: string, word: string): Promise<void> {
