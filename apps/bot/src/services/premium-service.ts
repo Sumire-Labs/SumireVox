@@ -1,14 +1,32 @@
 import { getPrisma } from '../infrastructure/database.js';
 import { getGuildSettings } from './guild-settings-service.js';
 
+const PREMIUM_CACHE_TTL_MS = 60_000;
+
+const premiumCache = new Map<string, { isPremium: boolean; cachedAt: number }>();
+
+export function invalidatePremiumCache(guildId: string): void {
+  premiumCache.delete(guildId);
+}
+
+export function clearPremiumCache(): void {
+  premiumCache.clear();
+}
+
 /**
  * サーバーが PREMIUM かどうかを判定する
  * manualPremium が true、または有効なブーストが1つ以上ある場合に PREMIUM
+ * ブースト判定結果は60秒間インメモリキャッシュする
  */
 export async function isGuildPremium(guildId: string): Promise<boolean> {
   const settings = await getGuildSettings(guildId);
 
   if (settings.manualPremium) return true;
+
+  const cached = premiumCache.get(guildId);
+  if (cached !== undefined && Date.now() - cached.cachedAt < PREMIUM_CACHE_TTL_MS) {
+    return cached.isPremium;
+  }
 
   const prisma = getPrisma();
   const activeBoost = await prisma.boost.findFirst({
@@ -20,7 +38,10 @@ export async function isGuildPremium(guildId: string): Promise<boolean> {
     },
   });
 
-  return activeBoost !== null;
+  const isPremium = activeBoost !== null;
+  premiumCache.set(guildId, { isPremium, cachedAt: Date.now() });
+
+  return isPremium;
 }
 
 /**
