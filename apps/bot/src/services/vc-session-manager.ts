@@ -17,6 +17,7 @@ import { logger } from '../infrastructure/logger.js';
 import { config } from '../infrastructure/config.js';
 import { deleteGuildQueue } from './speech-queue.js';
 import { initTrieSlot, destroyTrieSlot } from './text-pipeline/index.js';
+import { startDisconnectTimer } from './auto-disconnect-timer.js';
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
@@ -156,6 +157,22 @@ export async function restoreVcSessions(): Promise<void> {
         { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
         'VC session restored',
       );
+
+      try {
+        const humanMembers = voiceChannel.members.filter((member) => !member.user.bot);
+        if (humanMembers.size === 0) {
+          logger.info(
+            { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
+            'No human members in restored VC, starting disconnect timer',
+          );
+          startDisconnectTimer(session.guildId);
+        }
+      } catch (timerError) {
+        logger.warn(
+          { err: timerError, guildId: session.guildId },
+          'Failed to check human members after session restore',
+        );
+      }
     } catch (error) {
       logger.error({ err: error, guildId: session.guildId }, 'Failed to restore VC session');
       await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
