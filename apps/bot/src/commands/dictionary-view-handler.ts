@@ -25,9 +25,6 @@ import {
   deleteServerDictionaryEntry,
   getGlobalDictionaryEntries,
   createGlobalDictionaryRequest,
-  approveGlobalDictionaryRequest,
-  rejectGlobalDictionaryRequest,
-  getPendingRequests,
 } from '../services/dictionary-service.js';
 import { hasAdminPermission, hasDictionaryAddPermission } from '../services/permission-service.js';
 import { isGuildPremium } from '../services/premium-service.js';
@@ -37,7 +34,7 @@ import { AppError } from '../infrastructure/app-error.js';
 import { logger } from '../infrastructure/logger.js';
 
 type ParsedId = NonNullable<ReturnType<typeof parseCustomId>>;
-type Tab = 'server' | 'global' | 'request';
+type Tab = 'server' | 'global';
 
 export async function buildDictionaryMessage(
   guildId: string,
@@ -53,7 +50,6 @@ export async function buildDictionaryMessage(
     .addOptions(
       { label: 'サーバー辞書', value: 'server', default: tab === 'server' },
       { label: 'グローバル辞書', value: 'global', default: tab === 'global' },
-      { label: 'グローバル辞書申請', value: 'request', default: tab === 'request' },
     );
 
   mainContainer
@@ -78,8 +74,6 @@ async function buildTabContainer(
       return buildServerDictionaryContainer(guildId, userId, page);
     case 'global':
       return buildGlobalDictionaryContainer(userId, page);
-    case 'request':
-      return buildRequestContainer(guildId, userId, page);
   }
 }
 
@@ -222,84 +216,6 @@ async function buildGlobalDictionaryContainer(
   return container;
 }
 
-// ---- グローバル辞書申請タブ ----
-
-async function buildRequestContainer(
-  guildId: string,
-  userId: string,
-  page: number,
-): Promise<ContainerBuilder> {
-  const isBotAdmin = config.botAdminUserIds.includes(userId);
-  const { requests, total } = await getPendingRequests(page);
-  const totalPages = Math.max(1, Math.ceil(total / LIMITS.DICTIONARY_PAGE_SIZE));
-
-  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
-
-  container
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 📝 グローバル辞書申請'))
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`未処理の申請: **${total}**`),
-    )
-    .addSeparatorComponents(
-      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-    );
-
-  if (requests.length > 0) {
-    const requestsText = requests
-      .map(
-        (r) =>
-          `${r.word}  →  ${r.reading}${r.reason ? ` (理由: ${r.reason})` : ''} — <@${r.requestedBy}>`,
-      )
-      .join('\n');
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(requestsText),
-    );
-  } else {
-    container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent('未処理の申請はありません。'),
-    );
-  }
-
-  container.addSeparatorComponents(
-    new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-  );
-
-  const navRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `request_page:${page - 1}`, userId))
-      .setLabel('◀ 前')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page <= 1),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', 'request_page_indicator', userId))
-      .setLabel(`${page} / ${totalPages}`)
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `request_page:${page + 1}`, userId))
-      .setLabel('次 ▶')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(page >= totalPages),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `request_refresh:${page}`, userId))
-      .setLabel('🔄 更新')
-      .setStyle(ButtonStyle.Secondary),
-  );
-  container.addActionRowComponents(navRow);
-
-  if (isBotAdmin && requests.length > 0) {
-    const approveSelect = new StringSelectMenuBuilder()
-      .setCustomId(buildCustomId('dict', 'request_action_select', userId))
-      .setPlaceholder('処理する申請を選択')
-      .addOptions(requests.map((r) => ({ label: `${r.word} → ${r.reading}`, value: r.id })));
-    container.addActionRowComponents(
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(approveSelect),
-    );
-  }
-
-  return container;
-}
-
 // ========================================
 // View ハンドラ
 // ========================================
@@ -335,20 +251,6 @@ export async function handleDictionaryView(
   if (action.startsWith('global_refresh:') && interaction.isButton()) {
     const page = Math.max(1, parseInt(action.split(':')[1], 10));
     const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'global', page);
-    await interaction.update({ components });
-    return;
-  }
-
-  if (action.startsWith('request_page:') && interaction.isButton()) {
-    const page = Math.max(1, parseInt(action.split(':')[1], 10));
-    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
-    await interaction.update({ components });
-    return;
-  }
-
-  if (action.startsWith('request_refresh:') && interaction.isButton()) {
-    const page = Math.max(1, parseInt(action.split(':')[1], 10));
-    const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', page);
     await interaction.update({ components });
     return;
   }
@@ -389,20 +291,6 @@ export async function handleDictionaryView(
     return;
   }
 
-  if (action === 'request_action_select' && interaction.isStringSelectMenu()) {
-    await handleRequestActionSelect(interaction, parsed);
-    return;
-  }
-
-  if (action.startsWith('request_approve:') && interaction.isButton()) {
-    await handleRequestApprove(interaction, parsed);
-    return;
-  }
-
-  if (action.startsWith('request_reject:') && interaction.isButton()) {
-    await handleRequestReject(interaction, parsed);
-    return;
-  }
 }
 
 // ---- サーバー辞書追加 ----
@@ -595,7 +483,7 @@ async function handleGlobalRequestSubmit(
       ephemeral: true,
     });
     if (interaction.message) {
-      const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'request', 1);
+      const { components } = await buildDictionaryMessage(guildId, parsed.userId, 'global', 1);
       await interaction.message.edit({ components });
     }
     await sendRequestNotification(request.id, word.trim(), reading.trim(), reason, parsed.userId);
@@ -654,75 +542,3 @@ async function sendRequestNotification(
   }
 }
 
-// ---- 申請の承認/却下（/dictionary コマンド内から） ----
-
-async function handleRequestActionSelect(
-  interaction: StringSelectMenuInteraction,
-  parsed: ParsedId,
-): Promise<void> {
-  if (!config.botAdminUserIds.includes(parsed.userId)) {
-    await interaction.reply({
-      content: 'この操作は Bot 管理者のみ実行できます。',
-      ephemeral: true,
-    });
-    return;
-  }
-
-  const requestId = interaction.values[0];
-  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `request_approve:${requestId}`, parsed.userId))
-      .setLabel('承認')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(buildCustomId('dict', `request_reject:${requestId}`, parsed.userId))
-      .setLabel('却下')
-      .setStyle(ButtonStyle.Danger),
-  );
-
-  await interaction.reply({ content: '操作を選択してください。', components: [row], ephemeral: true });
-}
-
-async function handleRequestApprove(
-  interaction: ButtonInteraction,
-  parsed: ParsedId,
-): Promise<void> {
-  if (!config.botAdminUserIds.includes(parsed.userId)) {
-    await interaction.reply({ content: 'Bot 管理者のみ実行できます。', ephemeral: true });
-    return;
-  }
-
-  const requestId = parsed.action.replace('request_approve:', '');
-  try {
-    await approveGlobalDictionaryRequest(requestId);
-    await interaction.reply({ content: '申請を承認しました。', ephemeral: true });
-  } catch (error) {
-    if (error instanceof AppError) {
-      await interaction.reply({ content: error.message, ephemeral: true });
-      return;
-    }
-    throw error;
-  }
-}
-
-async function handleRequestReject(
-  interaction: ButtonInteraction,
-  parsed: ParsedId,
-): Promise<void> {
-  if (!config.botAdminUserIds.includes(parsed.userId)) {
-    await interaction.reply({ content: 'Bot 管理者のみ実行できます。', ephemeral: true });
-    return;
-  }
-
-  const requestId = parsed.action.replace('request_reject:', '');
-  try {
-    await rejectGlobalDictionaryRequest(requestId);
-    await interaction.reply({ content: '申請を却下しました。', ephemeral: true });
-  } catch (error) {
-    if (error instanceof AppError) {
-      await interaction.reply({ content: error.message, ephemeral: true });
-      return;
-    }
-    throw error;
-  }
-}
