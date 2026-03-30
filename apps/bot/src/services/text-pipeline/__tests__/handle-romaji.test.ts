@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { handleRomaji } from '../steps/handle-romaji.js';
 import type { PipelineContext } from '../types.js';
 
-const ctx = { guildSettings: { romajiReading: false } } as unknown as PipelineContext;
+// romajiReading: true のとき変換が有効
+const ctx = { guildSettings: { romajiReading: true } } as unknown as PipelineContext;
 
 describe('handleRomaji', () => {
   it('ローマ字をひらがなに変換する', () => {
@@ -38,8 +39,8 @@ describe('handleRomaji', () => {
     expect(handleRomaji('', ctx)).toBe('');
   });
 
-  it('romajiReading が true の場合は変換しない', () => {
-    const skipCtx = { guildSettings: { romajiReading: true } } as unknown as PipelineContext;
+  it('romajiReading が false の場合は変換しない', () => {
+    const skipCtx = { guildSettings: { romajiReading: false } } as unknown as PipelineContext;
     expect(handleRomaji('konnichiwa', skipCtx)).toBe('konnichiwa');
   });
 });
