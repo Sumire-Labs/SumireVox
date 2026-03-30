@@ -14,6 +14,7 @@ import { applyDictionary } from './steps/apply-dictionary.js';
 import { convertWKusa } from './steps/convert-w-kusa.js';
 import { optimizeNumbersAndUnits } from './steps/optimize-numbers-and-units.js';
 import { handleRomaji } from './steps/handle-romaji.js';
+import { convertUppercaseRomaji } from './steps/convert-uppercase-romaji.js';
 import { clampReadLength } from '@sumirevox/shared';
 import { truncateForSpeech } from './truncate.js';
 
@@ -33,7 +34,8 @@ const pipelineSteps: PipelineStep[] = [
   applyDictionary,         // 11. 辞書変換
   convertWKusa,            // 12. w/草変換
   optimizeNumbersAndUnits, // 13. 英数字最適化
-  handleRomaji,            // 14. ローマ字変換
+  convertUppercaseRomaji,  // 14. 大文字ローマ字変換
+  handleRomaji,            // 15. ローマ字変換
 ];
 
 /**

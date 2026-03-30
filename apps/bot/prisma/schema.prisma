@@ -14,6 +14,7 @@ model GuildSettings {
   readUsername          Boolean  @default(false) @map("read_username")
   addSanSuffix          Boolean  @default(false) @map("add_san_suffix")
   romajiReading         Boolean  @default(false) @map("romaji_reading")
+  uppercaseReading      Boolean  @default(false) @map("uppercase_reading")
   // 通知設定
   joinLeaveNotification Boolean  @default(false) @map("join_leave_notification")
   greetingOnJoin        Boolean  @default(false) @map("greeting_on_join")

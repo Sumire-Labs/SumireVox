@@ -10,6 +10,7 @@ interface ServerSettings {
   readUsername: boolean;
   addSanSuffix: boolean;
   romajiReading: boolean;
+  uppercaseReading: boolean;
   joinLeaveNotification: boolean;
   greetingOnJoin: boolean;
   customEmojiHandling: 'read_name' | 'remove';
@@ -378,6 +379,9 @@ export function AdminServerSettingsPage() {
         </SettingRow>
         <SettingRow label="ローマ字ひらがな変換" description="ローマ字パターンをひらがなに変換して読み上げる">
           <SettingSwitch label="ローマ字読み" isSelected={settings.romajiReading} onChange={(v) => handleSwitch('romajiReading', v)} />
+        </SettingRow>
+        <SettingRow label="大文字ローマ字読み" description="大文字のローマ字（API, URL等）をひらがなで読み上げる">
+          <SettingSwitch label="大文字ローマ字読み" isSelected={settings.uppercaseReading} onChange={(v) => handleSwitch('uppercaseReading', v)} />
         </SettingRow>
       </SectionCard>
 

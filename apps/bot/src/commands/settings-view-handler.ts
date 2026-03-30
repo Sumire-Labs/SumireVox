@@ -174,6 +174,20 @@ function buildReadingCategory(settings: GuildSettings, userId: string): Containe
             .setLabel(settings.romajiReading ? '✓ ON' : 'OFF')
             .setStyle(settings.romajiReading ? ButtonStyle.Success : ButtonStyle.Secondary),
         ),
+    )
+    .addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent(
+            `**大文字ローマ字読み:** ${settings.uppercaseReading ? 'ON' : 'OFF'}`,
+          ),
+        )
+        .setButtonAccessory(
+          new ButtonBuilder()
+            .setCustomId(buildCustomId('settings', 'toggle_uppercase_reading', userId))
+            .setLabel(settings.uppercaseReading ? '✓ ON' : 'OFF')
+            .setStyle(settings.uppercaseReading ? ButtonStyle.Success : ButtonStyle.Secondary),
+        ),
     );
 
   return container;
@@ -508,6 +522,7 @@ async function handleToggle(
     toggle_read_username: { field: 'readUsername', category: 'reading' },
     toggle_san_suffix: { field: 'addSanSuffix', category: 'reading' },
     toggle_romaji: { field: 'romajiReading', category: 'reading' },
+    toggle_uppercase_reading: { field: 'uppercaseReading', category: 'reading' },
     toggle_join_leave: { field: 'joinLeaveNotification', category: 'notification' },
     toggle_greeting: { field: 'greetingOnJoin', category: 'notification' },
   };

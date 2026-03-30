@@ -11,6 +11,7 @@ export interface GuildSettings {
   readUsername: boolean;
   addSanSuffix: boolean;
   romajiReading: boolean;
+  uppercaseReading: boolean;
   // 通知設定
   joinLeaveNotification: boolean;
   greetingOnJoin: boolean;

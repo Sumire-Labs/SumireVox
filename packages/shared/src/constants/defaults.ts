@@ -6,6 +6,7 @@ export const GUILD_SETTINGS_DEFAULTS: Omit<GuildSettings, 'guildId'> = {
   readUsername: false,
   addSanSuffix: false,
   romajiReading: false,
+  uppercaseReading: false,
   joinLeaveNotification: false,
   greetingOnJoin: false,
   customEmojiHandling: 'read_name',

@@ -10,6 +10,7 @@ type DbGuildSettings = {
   readUsername: boolean;
   addSanSuffix: boolean;
   romajiReading: boolean;
+  uppercaseReading: boolean;
   joinLeaveNotification: boolean;
   greetingOnJoin: boolean;
   customEmojiHandling: string;
@@ -28,6 +29,7 @@ export function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
     readUsername: db.readUsername,
     addSanSuffix: db.addSanSuffix,
     romajiReading: db.romajiReading,
+    uppercaseReading: db.uppercaseReading,
     joinLeaveNotification: db.joinLeaveNotification,
     greetingOnJoin: db.greetingOnJoin,
     customEmojiHandling: db.customEmojiHandling as GuildSettings['customEmojiHandling'],
@@ -91,6 +93,7 @@ export async function updateGuildSettings(
       readUsername: updates.readUsername ?? current.readUsername,
       addSanSuffix: updates.addSanSuffix ?? current.addSanSuffix,
       romajiReading: updates.romajiReading ?? current.romajiReading,
+      uppercaseReading: updates.uppercaseReading ?? current.uppercaseReading,
       joinLeaveNotification: updates.joinLeaveNotification ?? current.joinLeaveNotification,
       greetingOnJoin: updates.greetingOnJoin ?? current.greetingOnJoin,
       customEmojiHandling: updates.customEmojiHandling ?? current.customEmojiHandling,
