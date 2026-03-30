@@ -45,6 +45,7 @@ function mapToDbFields(settings: GuildSettings): Record<string, unknown> {
     readUsername: settings.readUsername,
     addSanSuffix: settings.addSanSuffix,
     romajiReading: settings.romajiReading,
+    uppercaseReading: settings.uppercaseReading,
     joinLeaveNotification: settings.joinLeaveNotification,
     greetingOnJoin: settings.greetingOnJoin,
     customEmojiHandling: settings.customEmojiHandling,
@@ -98,6 +99,7 @@ function mapToDbUpdateFields(updates: Partial<Omit<GuildSettings, 'guildId'>>): 
   if (updates.readUsername !== undefined) result.readUsername = updates.readUsername;
   if (updates.addSanSuffix !== undefined) result.addSanSuffix = updates.addSanSuffix;
   if (updates.romajiReading !== undefined) result.romajiReading = updates.romajiReading;
+  if (updates.uppercaseReading !== undefined) result.uppercaseReading = updates.uppercaseReading;
   if (updates.joinLeaveNotification !== undefined) result.joinLeaveNotification = updates.joinLeaveNotification;
   if (updates.greetingOnJoin !== undefined) result.greetingOnJoin = updates.greetingOnJoin;
   if (updates.customEmojiHandling !== undefined) result.customEmojiHandling = updates.customEmojiHandling;

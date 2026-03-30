@@ -46,6 +46,7 @@ export function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
     readUsername: db.readUsername,
     addSanSuffix: db.addSanSuffix,
     romajiReading: db.romajiReading,
+    uppercaseReading: db.uppercaseReading,
     joinLeaveNotification: db.joinLeaveNotification,
     greetingOnJoin: db.greetingOnJoin,
     customEmojiHandling: db.customEmojiHandling as GuildSettings['customEmojiHandling'],
