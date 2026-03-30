@@ -213,7 +213,7 @@ export function ServerSettingsPage() {
         <SettingRow label="さん付け" description="名前の後ろに「さん」を付ける">
           <SettingSwitch label="さん付け" isSelected={settings.addSanSuffix} onChange={(v) => handleSwitch('addSanSuffix', v)} />
         </SettingRow>
-        <SettingRow label="ローマ字読み" description="ローマ字パターンをそのまま読む">
+        <SettingRow label="ローマ字ひらがな変換" description="ローマ字パターンをひらがなに変換して読み上げる">
           <SettingSwitch label="ローマ字読み" isSelected={settings.romajiReading} onChange={(v) => handleSwitch('romajiReading', v)} />
         </SettingRow>
       </SectionCard>
