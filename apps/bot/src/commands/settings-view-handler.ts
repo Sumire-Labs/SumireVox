@@ -165,7 +165,7 @@ function buildReadingCategory(settings: GuildSettings, userId: string): Containe
       new SectionBuilder()
         .addTextDisplayComponents(
           new TextDisplayBuilder().setContent(
-            `**ローマ字読み:** ${settings.romajiReading ? 'ON' : 'OFF'}`,
+            `**ローマ字ひらがな変換:** ${settings.romajiReading ? 'ON' : 'OFF'}`,
           ),
         )
         .setButtonAccessory(

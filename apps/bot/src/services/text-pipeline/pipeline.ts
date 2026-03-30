@@ -33,7 +33,7 @@ const pipelineSteps: PipelineStep[] = [
   applyDictionary,         // 11. 辞書変換
   convertWKusa,            // 12. w/草変換
   optimizeNumbersAndUnits, // 13. 英数字最適化
-  handleRomaji,            // 14. ローマ字読み
+  handleRomaji,            // 14. ローマ字変換
 ];
 
 /**
