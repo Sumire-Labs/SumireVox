@@ -74,6 +74,9 @@ const instanceParamsSchema = z.object({
   guildId: z.string(),
   instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
 });
+const botInstanceParamsSchema = z.object({
+  instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
+});
 const guildBotInstanceSettingsBodySchema = z
   .object({
     autoJoin: z.boolean().optional(),
@@ -432,7 +435,7 @@ adminRouter.get('/bot-instances', async (c) => {
  * body: { isActive: boolean }
  */
 adminRouter.put('/bot-instances/:instanceId/active', async (c) => {
-  const instanceId = parseInt(c.req.param('instanceId'), 10);
+  const { instanceId } = await validate.params(c, botInstanceParamsSchema);
   const body = await c.req.json<{ isActive: boolean }>();
 
   if (typeof body.isActive !== 'boolean') {

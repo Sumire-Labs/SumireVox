@@ -59,6 +59,32 @@ describe('validate', () => {
     await expect(response.json()).resolves.toEqual({ page: 2, perPage: 20 });
   });
 
+  it('rejects invalid pagination query values', async () => {
+    const app = new Hono();
+    app.onError(errorHandler);
+
+    app.get('/items', async (c) => {
+      const query = await validate.query(
+        c,
+        z.object({
+          page: z.coerce.number().int().positive().default(1),
+          perPage: z.coerce.number().int().min(1).max(100).default(20),
+        }),
+      );
+
+      return c.json(query);
+    });
+
+    const invalidPageResponse = await app.request('http://localhost/items?page=0');
+    expect(invalidPageResponse.status).toBe(400);
+
+    const invalidPerPageResponse = await app.request('http://localhost/items?perPage=101');
+    expect(invalidPerPageResponse.status).toBe(400);
+
+    const invalidNaNResponse = await app.request('http://localhost/items?page=abc');
+    expect(invalidNaNResponse.status).toBe(400);
+  });
+
   it('validates route params with coercion', async () => {
     const app = new Hono();
     app.onError(errorHandler);
