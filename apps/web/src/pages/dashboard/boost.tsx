@@ -87,9 +87,12 @@ export function BoostPage() {
         setData(boostData);
         setGuilds(guildsData);
 
-        const boostedGuildIds = boostData.allocations
-          .filter((a) => a.boostCount > 0)
-          .map((a) => a.guildId);
+        const boostedGuildIds = guildsData
+          .filter((guild) => {
+            const info = boostData.guildBoostInfo.find((g) => g.guildId === guild.id);
+            return info && (info.totalGuildBoosts > 0 || info.isManualPremium);
+          })
+          .map((guild) => guild.id);
 
         if (boostedGuildIds.length > 0) {
           Promise.all(boostedGuildIds.map(fetchBotsForGuild)).then((results) => {
@@ -159,7 +162,9 @@ export function BoostPage() {
       setData(result);
       showSuccess('更新しました');
 
-      if (newCount > 0) {
+      const guildInfo = result.guildBoostInfo.find((g) => g.guildId === guildId);
+      const shouldShowBots = guildInfo && (guildInfo.totalGuildBoosts > 0 || guildInfo.isManualPremium);
+      if (shouldShowBots) {
         fetchBotsForGuild(guildId).then((r) => {
           if (r) setGuildBots((prev) => new Map(prev).set(r.guildId, r.bots));
         });
@@ -356,9 +361,7 @@ export function BoostPage() {
               const canDecrease = currentCount > 0 && !isManualPremium;
 
               const bots = guildBots.get(guild.id);
-              const visibleBots = currentCount > 0 && bots
-                ? bots.filter((b) => b.instanceNumber <= currentCount && b.isAvailable)
-                : [];
+              const visibleBots = bots ? bots.filter((b) => b.isAvailable) : [];
 
               return (
                 <div

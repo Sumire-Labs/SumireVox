@@ -130,6 +130,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1774971699577,
+      "type": "file"
+    },
+    {
       "path": "package.json",
       "accessCount": 5,
       "lastAccessed": 1774943997428,
@@ -193,12 +199,6 @@
       "path": "apps\\bot\\src\\services\\speech-queue.ts",
       "accessCount": 2,
       "lastAccessed": 1774963350316,
-      "type": "file"
-    },
-    {
-      "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1774970210291,
       "type": "file"
     },
     {
