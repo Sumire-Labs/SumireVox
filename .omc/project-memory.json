@@ -1,0 +1,194 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1774940548960,
+  "projectRoot": "C:\\Users\\hayat\\Desktop\\Development\\SumireVox",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "pnpm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "pnpm build",
+    "testCommand": "pnpm test",
+    "lintCommand": "pnpm lint",
+    "devCommand": null,
+    "scripts": {
+      "dev:bot": "pnpm --filter @sumirevox/bot dev",
+      "dev:api": "pnpm --filter @sumirevox/api dev",
+      "dev:web": "pnpm --filter @sumirevox/web dev",
+      "dev:admin": "pnpm --filter @sumirevox/admin dev",
+      "build": "pnpm -r build",
+      "lint": "pnpm -r lint",
+      "test": "pnpm -r test",
+      "deploy-commands": "pnpm --filter @sumirevox/bot deploy-commands",
+      "dev:bot:1": "cross-env BOT_INSTANCE_ID=1 pnpm --filter @sumirevox/bot dev",
+      "dev:bot:2": "cross-env BOT_INSTANCE_ID=2 pnpm --filter @sumirevox/bot dev",
+      "dev:bot:3": "cross-env BOT_INSTANCE_ID=3 pnpm --filter @sumirevox/bot dev",
+      "deploy-commands:1": "cross-env BOT_INSTANCE_ID=1 pnpm --filter @sumirevox/bot deploy-commands",
+      "deploy-commands:2": "cross-env BOT_INSTANCE_ID=2 pnpm --filter @sumirevox/bot deploy-commands",
+      "deploy-commands:3": "cross-env BOT_INSTANCE_ID=3 pnpm --filter @sumirevox/bot deploy-commands",
+      "db:migrate:dev": "pnpm --filter @sumirevox/bot prisma:migrate:dev",
+      "db:migrate:deploy": "pnpm --filter @sumirevox/bot prisma:migrate:deploy",
+      "db:studio": "pnpm --filter @sumirevox/bot prisma:studio",
+      "db:generate": "pnpm --filter @sumirevox/bot prisma:generate",
+      "setup": "bash scripts/setup-env.sh && pnpm install && pnpm db:generate"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": true,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "apps": {
+      "path": "apps",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1774940548943,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 10,
+      "lastAccessed": 1774940548943,
+      "keyFiles": [
+        "api-endpoints.md",
+        "architecture.md",
+        "boost-system.md",
+        "commands.md",
+        "database.md"
+      ]
+    },
+    "nginx": {
+      "path": "nginx",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1774940548947,
+      "keyFiles": [
+        "nginx.conf",
+        "nginx.prod.conf"
+      ]
+    },
+    "packages": {
+      "path": "packages",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1774940548947,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1774940548947,
+      "keyFiles": [
+        "setup-env.sh"
+      ]
+    },
+    "apps\\api": {
+      "path": "apps\\api",
+      "purpose": "API routes",
+      "fileCount": 5,
+      "lastAccessed": 1774940548948,
+      "keyFiles": [
+        "docker-entrypoint.sh",
+        "Dockerfile",
+        "Dockerfile.prod"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "apps\\api\\src\\services\\stripe-webhook-handler.ts",
+      "accessCount": 8,
+      "lastAccessed": 1774942775459,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 5,
+      "lastAccessed": 1774943997428,
+      "type": "file"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "accessCount": 5,
+      "lastAccessed": 1774944009556,
+      "type": "directory"
+    },
+    {
+      "path": "apps\\bot\\prisma\\schema.prisma",
+      "accessCount": 4,
+      "lastAccessed": 1774942674317,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
+      "accessCount": 4,
+      "lastAccessed": 1774942807043,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 3,
+      "lastAccessed": 1774942673918,
+      "type": "directory"
+    },
+    {
+      "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
+      "accessCount": 2,
+      "lastAccessed": 1774942394594,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\services\\boost-service.ts",
+      "accessCount": 2,
+      "lastAccessed": 1774942668624,
+      "type": "file"
+    },
+    {
+      "path": "apps\\bot\\package.json",
+      "accessCount": 2,
+      "lastAccessed": 1774943997834,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\app-error.ts",
+      "accessCount": 1,
+      "lastAccessed": 1774942067389,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
+      "accessCount": 1,
+      "lastAccessed": 1774942746828,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
