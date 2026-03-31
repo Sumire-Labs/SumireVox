@@ -40,6 +40,11 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     return;
   }
 
+  // 「!」「！」始まりのメッセージは読み上げ対象外
+  if (message.content && /^[!！]/.test(message.content.trimStart())) {
+    return;
+  }
+
   try {
     // イースターエッグチェック（テキストパイプラインより前に行う）
     const easterEggFile = matchEasterEgg(message.content);
