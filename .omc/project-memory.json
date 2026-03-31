@@ -166,6 +166,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\bot\\src\\events\\message-create.ts",
+      "accessCount": 3,
+      "lastAccessed": 1774963365110,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -181,6 +187,12 @@
       "path": "apps\\bot\\package.json",
       "accessCount": 2,
       "lastAccessed": 1774943997834,
+      "type": "file"
+    },
+    {
+      "path": "apps\\bot\\src\\services\\speech-queue.ts",
+      "accessCount": 2,
+      "lastAccessed": 1774963350316,
       "type": "file"
     },
     {
