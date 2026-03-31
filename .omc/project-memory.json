@@ -196,6 +196,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1774970210291,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\infrastructure\\app-error.ts",
       "accessCount": 1,
       "lastAccessed": 1774942067389,
@@ -211,6 +217,12 @@
       "path": "tsconfig.base.json",
       "accessCount": 1,
       "lastAccessed": 1774962208913,
+      "type": "file"
+    },
+    {
+      "path": "apps\\web\\src\\pages\\dashboard\\server-bots.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1774970088635,
       "type": "file"
     }
   ],

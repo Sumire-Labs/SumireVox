@@ -1,7 +1,0 @@
-{
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"/c/Users/hayat/Desktop/Development/SumireVox/apps/api/vitest.config.ts\"}",
-  "error": "File does not exist. Note: your current working directory is C:\\Users\\hayat\\Desktop\\Development\\SumireVox.",
-  "timestamp": "2026-03-31T13:02:15.470Z",
-  "retry_count": 1
-}

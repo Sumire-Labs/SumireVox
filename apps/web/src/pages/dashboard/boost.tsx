@@ -48,6 +48,23 @@ interface BoostData {
   }>;
 }
 
+interface BotInstanceInfo {
+  instanceNumber: number;
+  name: string;
+  isInGuild: boolean;
+  isAvailable: boolean;
+}
+
+interface BotListResponse {
+  bots: BotInstanceInfo[];
+}
+
+function fetchBotsForGuild(guildId: string): Promise<{ guildId: string; bots: BotInstanceInfo[] } | null> {
+  return api.get<BotListResponse>(`/api/guilds/${guildId}/bots`)
+    .then((r) => ({ guildId, bots: r.bots }))
+    .catch(() => null);
+}
+
 export function BoostPage() {
   const [data, setData] = useState<BoostData | null>(null);
   const [guilds, setGuilds] = useState<Guild[]>([]);
@@ -56,6 +73,8 @@ export function BoostPage() {
   const [showPurchase, setShowPurchase] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [guildBots, setGuildBots] = useState<Map<string, BotInstanceInfo[]>>(new Map());
+  const [inviteLoading, setInviteLoading] = useState<Set<string>>(new Set());
   const { toastState, showSaving, showSuccess, showError } = useToast();
 
   useEffect(() => {
@@ -67,6 +86,21 @@ export function BoostPage() {
       .then(([boostData, guildsData]) => {
         setData(boostData);
         setGuilds(guildsData);
+
+        const boostedGuildIds = boostData.allocations
+          .filter((a) => a.boostCount > 0)
+          .map((a) => a.guildId);
+
+        if (boostedGuildIds.length > 0) {
+          Promise.all(boostedGuildIds.map(fetchBotsForGuild)).then((results) => {
+            const entries = results.filter(
+              (r): r is { guildId: string; bots: BotInstanceInfo[] } => r !== null,
+            );
+            if (entries.length > 0) {
+              setGuildBots(new Map(entries.map((e) => [e.guildId, e.bots])));
+            }
+          });
+        }
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.name === 'AbortError') return;
@@ -124,12 +158,43 @@ export function BoostPage() {
       const result = await api.post<BoostData>('/api/user/boosts/assign', { guildId, count: newCount });
       setData(result);
       showSuccess('更新しました');
+
+      if (newCount > 0) {
+        fetchBotsForGuild(guildId).then((r) => {
+          if (r) setGuildBots((prev) => new Map(prev).set(r.guildId, r.bots));
+        });
+      } else {
+        setGuildBots((prev) => {
+          const next = new Map(prev);
+          next.delete(guildId);
+          return next;
+        });
+      }
     } catch (err) {
       setData(prevData);
       if (err instanceof ApiError) showError(err.message);
       else showError('更新に失敗しました');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleInviteBot = async (guildId: string, instanceNumber: number) => {
+    const key = `${guildId}:${instanceNumber}`;
+    setInviteLoading((prev) => new Set(prev).add(key));
+    try {
+      const result = await api.get<{ url: string }>(
+        `/api/guilds/${guildId}/bots/${instanceNumber}/invite`,
+      );
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // ignore
+    } finally {
+      setInviteLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
@@ -290,74 +355,111 @@ export function BoostPage() {
               const canIncrease = availableBoosts > 0 && totalBoosts > 0 && !isGuildAtMax && !isManualPremium;
               const canDecrease = currentCount > 0 && !isManualPremium;
 
+              const bots = guildBots.get(guild.id);
+              const visibleBots = currentCount > 0 && bots
+                ? bots.filter((b) => b.instanceNumber <= currentCount && b.isAvailable)
+                : [];
+
               return (
                 <div
                   key={guild.id}
-                  className="flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/5"
+                  className="rounded-xl bg-white/[0.03] border border-white/5"
                 >
-                  {/* 左側: アイコン + サーバー名 + バッジ */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    {guild.icon ? (
-                      <img
-                        src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
-                        alt=""
-                        className="w-8 h-8 rounded-full shrink-0"
-                      />
-                    ) : (
-                      <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm text-gray-400 shrink-0">
-                        {guild.name.charAt(0)}
+                  <div className="flex items-center justify-between px-4 py-3">
+                    {/* 左側: アイコン + サーバー名 + バッジ */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      {guild.icon ? (
+                        <img
+                          src={`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`}
+                          alt=""
+                          className="w-8 h-8 rounded-full shrink-0"
+                        />
+                      ) : (
+                        <span className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm text-gray-400 shrink-0">
+                          {guild.name.charAt(0)}
+                        </span>
+                      )}
+                      <span className="font-medium text-white truncate">{guild.name}</span>
+                      {isManualPremium && (
+                        <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          管理者設定
+                        </span>
+                      )}
+                      {isGuildAtMax && !isManualPremium && (
+                        <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
+                          最大ブースト
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 右側: 全体数 + あなた数 + ボタン群 */}
+                    <div className="flex items-center gap-6 shrink-0 ml-4">
+                      <span className="text-sm text-gray-400 tabular-nums">
+                        全体: <span className="text-gray-200 font-medium">{totalGuildBoosts}</span>
                       </span>
-                    )}
-                    <span className="font-medium text-white truncate">{guild.name}</span>
-                    {isManualPremium && (
-                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        管理者設定
+                      <span className="text-sm text-gray-400 tabular-nums">
+                        あなた: <span className={`font-medium ${currentCount > 0 ? 'text-purple-400' : 'text-gray-200'}`}>{currentCount}</span>
                       </span>
-                    )}
-                    {isGuildAtMax && !isManualPremium && (
-                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/30">
-                        最大ブースト
-                      </span>
-                    )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleSetCount(guild.id, currentCount - 1)}
+                          disabled={!canDecrease || isLoading}
+                          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                          aria-label="ブーストを減らす"
+                        >
+                          −
+                        </button>
+                        <span
+                          className={`w-6 text-center text-sm font-bold tabular-nums ${
+                            currentCount > 0 ? 'text-purple-400' : 'text-gray-400'
+                          }`}
+                        >
+                          {currentCount}
+                        </span>
+                        <button
+                          onClick={() => handleSetCount(guild.id, currentCount + 1)}
+                          disabled={!canIncrease || isLoading}
+                          className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
+                          aria-label="ブーストを増やす"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {isLoading && (
+                        <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
                   </div>
 
-                  {/* 右側: 全体数 + あなた数 + ボタン群 */}
-                  <div className="flex items-center gap-6 shrink-0 ml-4">
-                    <span className="text-sm text-gray-400 tabular-nums">
-                      全体: <span className="text-gray-200 font-medium">{totalGuildBoosts}</span>
-                    </span>
-                    <span className="text-sm text-gray-400 tabular-nums">
-                      あなた: <span className={`font-medium ${currentCount > 0 ? 'text-purple-400' : 'text-gray-200'}`}>{currentCount}</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleSetCount(guild.id, currentCount - 1)}
-                        disabled={!canDecrease || isLoading}
-                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
-                        aria-label="ブーストを減らす"
-                      >
-                        −
-                      </button>
-                      <span
-                        className={`w-6 text-center text-sm font-bold tabular-nums ${
-                          currentCount > 0 ? 'text-purple-400' : 'text-gray-400'
-                        }`}
-                      >
-                        {currentCount}
-                      </span>
-                      <button
-                        onClick={() => handleSetCount(guild.id, currentCount + 1)}
-                        disabled={!canIncrease || isLoading}
-                        className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-base leading-none"
-                        aria-label="ブーストを増やす"
-                      >
-                        +
-                      </button>
+                  {/* Bot 招待セクション */}
+                  {visibleBots.length > 0 && (
+                    <div className="border-t border-white/5 px-4 py-3 flex flex-wrap gap-2">
+                      {visibleBots.map((bot) => {
+                        const key = `${guild.id}:${bot.instanceNumber}`;
+                        const isInviteLoading = inviteLoading.has(key);
+                        if (bot.isInGuild) {
+                          return (
+                            <span
+                              key={bot.instanceNumber}
+                              className="text-xs text-green-400 px-2.5 py-1 rounded-full bg-green-500/10 border border-green-500/20"
+                            >
+                              ✓ {bot.name}
+                            </span>
+                          );
+                        }
+                        return (
+                          <button
+                            key={bot.instanceNumber}
+                            onClick={() => handleInviteBot(guild.id, bot.instanceNumber)}
+                            disabled={isInviteLoading}
+                            className="text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:bg-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {isInviteLoading ? '...' : `${bot.name} を招待`}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {isLoading && (
-                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                    )}
-                  </div>
+                  )}
                 </div>
               );
             })}
