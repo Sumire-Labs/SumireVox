@@ -7,7 +7,11 @@ import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { config } from '../infrastructure/config.js';
 import { fetchUserGuilds } from '../services/discord-api.js';
-import { getActiveBotInstances, isBotInGuild, getActiveInstanceCount } from '../services/bot-instance-service.js';
+import {
+  getActiveBotInstances,
+  getActiveInstanceCount,
+  getGuildsWithBotStatus,
+} from '../services/bot-instance-service.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -43,16 +47,14 @@ async function getActiveBotGuildIds(userId: string, accessToken: string): Promis
   }
 
   const botInstances = await getActiveBotInstances();
-  const result: string[] = [];
-  for (const guild of allGuilds) {
-    for (const instance of botInstances) {
-      if (await isBotInGuild(instance.instanceId, guild.id)) {
-        result.push(guild.id);
-        break;
-      }
-    }
-  }
-  return result;
+  const guildBotStatusMap = await getGuildsWithBotStatus(
+    allGuilds.map((guild) => guild.id),
+    botInstances,
+  );
+
+  return allGuilds
+    .filter((guild) => guildBotStatusMap.get(guild.id) ?? false)
+    .map((guild) => guild.id);
 }
 
 export const userRouter = new Hono();
@@ -97,15 +99,11 @@ userRouter.get('/guilds', async (c) => {
   }
 
   const botInstances = await getActiveBotInstances();
-  const result: Array<{ id: string; name: string; icon: string | null }> = [];
-  for (const guild of allGuilds) {
-    for (const instance of botInstances) {
-      if (await isBotInGuild(instance.instanceId, guild.id)) {
-        result.push(guild);
-        break;
-      }
-    }
-  }
+  const guildBotStatusMap = await getGuildsWithBotStatus(
+    allGuilds.map((guild) => guild.id),
+    botInstances,
+  );
+  const result = allGuilds.filter((guild) => guildBotStatusMap.get(guild.id) ?? false);
 
   return c.json({ success: true, data: result });
 });

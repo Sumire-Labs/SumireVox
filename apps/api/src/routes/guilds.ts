@@ -25,6 +25,7 @@ import {
   getGuildBotInstanceSettings,
   updateGuildBotInstanceSettings,
   generateBotInviteUrl,
+  getGuildsWithBotStatus,
   isBotInGuild,
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS } from '@sumirevox/shared';
@@ -129,17 +130,12 @@ guildsRouter.get('/', async (c) => {
 
   // Bot 参加状態をチェック（Redis から直接参照、常に最新値を返す）
   const botInstances = await getActiveBotInstances();
+  const guildBotStatusMap = await getGuildsWithBotStatus(
+    guilds.map((guild) => guild.id),
+    botInstances,
+  );
   const guildsWithBotStatus = await Promise.all(
-    guilds.map(async (guild) => {
-      let botJoined = false;
-      for (const instance of botInstances) {
-        if (await isBotInGuild(instance.instanceId, guild.id)) {
-          botJoined = true;
-          break;
-        }
-      }
-      return { ...guild, botJoined };
-    }),
+    guilds.map(async (guild) => ({ ...guild, botJoined: guildBotStatusMap.get(guild.id) ?? false })),
   );
 
   return c.json({

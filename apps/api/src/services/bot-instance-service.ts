@@ -201,6 +201,61 @@ export async function isBotInGuild(instanceId: number, guildId: string): Promise
 }
 
 /**
+ * 複数ギルドに Bot が参加しているかを一括チェック
+ * 1つでもアクティブな Bot インスタンスが参加していれば true
+ */
+export async function getGuildsWithBotStatus(
+  guildIds: string[],
+  instances: BotInstance[],
+): Promise<Map<string, boolean>> {
+  const guildStatusMap = new Map<string, boolean>(guildIds.map((guildId) => [guildId, false]));
+
+  if (guildIds.length === 0 || instances.length === 0) {
+    return guildStatusMap;
+  }
+
+  try {
+    const redis = getRedisClient();
+    const pipeline = redis.pipeline();
+
+    for (const guildId of guildIds) {
+      for (const instance of instances) {
+        pipeline.sismember(REDIS_KEYS.BOT_GUILDS(instance.instanceId), guildId);
+      }
+    }
+
+    const results = await pipeline.exec();
+    if (!results) {
+      return guildStatusMap;
+    }
+
+    let resultIndex = 0;
+    for (const guildId of guildIds) {
+      let botJoined = false;
+
+      for (let instanceIndex = 0; instanceIndex < instances.length; instanceIndex += 1) {
+        const [error, result] = results[resultIndex] ?? [];
+        resultIndex += 1;
+
+        if (error) {
+          continue;
+        }
+
+        if (result === 1) {
+          botJoined = true;
+        }
+      }
+
+      guildStatusMap.set(guildId, botJoined);
+    }
+
+    return guildStatusMap;
+  } catch {
+    return guildStatusMap;
+  }
+}
+
+/**
  * Bot インスタンスのアクティブ状態を更新（管理者向け）
  */
 export async function setBotInstanceActive(instanceId: number, isActive: boolean): Promise<BotInstance> {
