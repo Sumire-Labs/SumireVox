@@ -8,16 +8,11 @@ import { logger } from '../infrastructure/logger.js';
 import { getGuildInfo } from '../infrastructure/discord-guild-info.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
 import { isGuildPremium } from '../services/dictionary-service.js';
-import { fetchGuildChannels, fetchGuildRoles } from '../services/discord-api.js';
 import {
   getAllBotInstances,
   setBotInstanceActive,
-  getActiveBotInstances,
-  getAvailableBotCount,
-  getGuildBoostCount,
-  getGuildBotInstanceSettings,
+  getGuildBotList,
   updateGuildBotInstanceSettings,
-  isBotInGuild,
 } from '../services/bot-instance-service.js';
 import { REDIS_KEYS, REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
@@ -31,6 +26,8 @@ import {
   rejectRequest,
 } from '../services/admin-dictionary-service.js';
 import { validate } from '../middleware/validate.js';
+import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
+import { getGuildRolesSorted } from '../services/guild-role-service.js';
 
 const paginationQuerySchema = z.object({
   page: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。').default(1),
@@ -171,9 +168,6 @@ adminRouter.put('/servers/:guildId/premium', async (c) => {
  * GET /api/admin/servers/:guildId/settings
  * サーバー設定取得（管理者用）
  */
-const ADMIN_ROLE_CACHE_TTL = 120;
-const adminRoleCacheKey = (guildId: string) => `guild:${guildId}:roles`;
-
 adminRouter.get('/servers/:guildId/settings', async (c) => {
   const guildId = c.req.param('guildId');
 
@@ -183,24 +177,11 @@ adminRouter.get('/servers/:guildId/settings', async (c) => {
     getGuildInfo(guildId),
   ]);
 
-  const redis = getRedisClient();
-  const cacheKey = adminRoleCacheKey(guildId);
   let roles: Array<{ id: string; name: string; color: number }> = [];
-
-  const cachedRoles = await redis.get(cacheKey);
-  if (cachedRoles) {
-    roles = JSON.parse(cachedRoles) as Array<{ id: string; name: string; color: number }>;
-  } else {
-    try {
-      const rawRoles = await fetchGuildRoles(guildId);
-      roles = rawRoles
-        .filter((r) => r.name !== '@everyone' && !r.managed)
-        .sort((a, b) => b.position - a.position)
-        .map((r) => ({ id: r.id, name: r.name, color: r.color }));
-      await redis.set(cacheKey, JSON.stringify(roles), 'EX', ADMIN_ROLE_CACHE_TTL);
-    } catch (err) {
-      logger.warn({ err, guildId }, 'Failed to fetch guild roles for admin settings');
-    }
+  try {
+    roles = await getGuildRolesSorted(guildId);
+  } catch (err) {
+    logger.warn({ err, guildId }, 'Failed to fetch guild roles for admin settings');
   }
 
   return c.json({
@@ -315,53 +296,17 @@ adminRouter.put('/dictionary/requests/:id/reject', async (c) => {
 // サーバー Bot 設定（管理者用）
 // ========================================
 
-const ADMIN_CHANNEL_CACHE_TTL = 120;
-const adminChannelCacheKey = (guildId: string) => `guild:${guildId}:channels`;
-
 /**
  * GET /api/admin/servers/:guildId/bots
  * サーバーで利用可能な Bot インスタンス一覧（管理者用）
  */
 adminRouter.get('/servers/:guildId/bots', async (c) => {
   const guildId = c.req.param('guildId');
-
-  const [instances, availableCount, boostCount, instanceSettingsMap] = await Promise.all([
-    getActiveBotInstances(),
-    getAvailableBotCount(guildId),
-    getGuildBoostCount(guildId),
-    getGuildBotInstanceSettings(guildId),
-  ]);
-
-  const bots = await Promise.all(
-    instances.map(async (instance) => {
-      const isInGuild = await isBotInGuild(instance.instanceId, guildId);
-      const isAvailable = instance.instanceId <= availableCount;
-      const settings = isAvailable
-        ? (instanceSettingsMap[String(instance.instanceId)] ?? {
-            autoJoin: false,
-            textChannelId: null,
-            voiceChannelId: null,
-          })
-        : null;
-      return {
-        instanceNumber: instance.instanceId,
-        name: instance.name,
-        botUserId: instance.botUserId,
-        isActive: instance.isActive,
-        isInGuild,
-        isAvailable,
-        settings,
-      };
-    }),
-  );
+  const result = await getGuildBotList(guildId);
 
   return c.json({
     success: true,
-    data: {
-      bots,
-      boostCount,
-      maxBots: availableCount,
-    },
+    data: result,
   });
 });
 
@@ -385,34 +330,7 @@ adminRouter.put('/servers/:guildId/bots/:instanceId/settings', async (c) => {
  */
 adminRouter.get('/servers/:guildId/channels', async (c) => {
   const guildId = c.req.param('guildId');
-  const redis = getRedisClient();
-  const cacheKey = adminChannelCacheKey(guildId);
-
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return c.json({ success: true, data: JSON.parse(cached) as unknown });
-  }
-
-  const channels = await fetchGuildChannels(guildId);
-
-  const categories = channels
-    .filter((ch) => ch.type === 4)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name }));
-
-  const textChannels = channels
-    .filter((ch) => ch.type === 0)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
-
-  const voiceChannels = channels
-    .filter((ch) => ch.type === 2 || ch.type === 13)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
-
-  const result = { textChannels, voiceChannels, categories };
-  await redis.set(cacheKey, JSON.stringify(result), 'EX', ADMIN_CHANNEL_CACHE_TTL);
-
+  const result = await getGuildChannelsSorted(guildId);
   return c.json({ success: true, data: result });
 });
 

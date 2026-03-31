@@ -143,6 +143,59 @@ export async function getGuildBotInstanceSettings(guildId: string): Promise<Guil
   return ((settings?.botInstanceSettings ?? {}) as unknown) as GuildBotInstanceSettingsMap;
 }
 
+export interface GuildBotListItem {
+  instanceNumber: number;
+  name: string;
+  botUserId: string;
+  isActive: boolean;
+  isInGuild: boolean;
+  isAvailable: boolean;
+  settings: BotInstanceSettings | null;
+}
+
+export interface GuildBotListResult {
+  bots: GuildBotListItem[];
+  boostCount: number;
+  maxBots: number;
+}
+
+export async function getGuildBotList(guildId: string): Promise<GuildBotListResult> {
+  const [instances, availableCount, boostCount, instanceSettingsMap] = await Promise.all([
+    getActiveBotInstances(),
+    getAvailableBotCount(guildId),
+    getGuildBoostCount(guildId),
+    getGuildBotInstanceSettings(guildId),
+  ]);
+
+  const bots = await Promise.all(
+    instances.map(async (instance) => {
+      const isInGuild = await isBotInGuild(instance.instanceId, guildId);
+      const isAvailable = instance.instanceId <= availableCount;
+      const settings = isAvailable
+        ? (instanceSettingsMap[String(instance.instanceId)] ?? {
+            ...DEFAULT_BOT_INSTANCE_SETTINGS,
+          })
+        : null;
+
+      return {
+        instanceNumber: instance.instanceId,
+        name: instance.name,
+        botUserId: instance.botUserId,
+        isActive: instance.isActive,
+        isInGuild,
+        isAvailable,
+        settings,
+      };
+    }),
+  );
+
+  return {
+    bots,
+    boostCount,
+    maxBots: availableCount,
+  };
+}
+
 /**
  * サーバーの特定インスタンスの設定を更新
  */

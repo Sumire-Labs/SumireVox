@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireGuildAdmin, guildAdminCacheKey } from '../middleware/require-guild-admin.js';
-import { fetchManagedGuilds, fetchGuildChannels, fetchGuildRoles } from '../services/discord-api.js';
+import { fetchManagedGuilds } from '../services/discord-api.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { getRedisClient } from '../infrastructure/redis.js';
@@ -21,16 +21,16 @@ import {
 import {
   getActiveBotInstances,
   getAvailableBotCount,
-  getGuildBoostCount,
-  getGuildBotInstanceSettings,
   updateGuildBotInstanceSettings,
   generateBotInviteUrl,
   getGuildsWithBotStatus,
-  isBotInGuild,
+  getGuildBotList,
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { validate } from '../middleware/validate.js';
+import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
+import { getGuildRolesSorted } from '../services/guild-role-service.js';
 
 const discordSnowflakeSchema = z.string().regex(/^\d+$/, '数字文字列の Discord Snowflake を指定してください。');
 const paginationQuerySchema = z.object({
@@ -228,45 +228,13 @@ guildsRouter.delete('/:guildId/dictionary/:word', requireGuildAdmin, async (c) =
 // Discord チャンネル・ロール
 // ========================================
 
-const CHANNEL_CACHE_TTL = 120;
-const ROLE_CACHE_TTL = 120;
-const channelCacheKey = (guildId: string) => `guild:${guildId}:channels`;
-const roleCacheKey = (guildId: string) => `guild:${guildId}:roles`;
-
 /**
  * GET /api/guilds/:guildId/channels
  * ギルドのチャンネル一覧 (テキスト・ボイス・カテゴリ別)
  */
 guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
-  const redis = getRedisClient();
-  const cacheKey = channelCacheKey(guildId);
-
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return c.json({ success: true, data: JSON.parse(cached) as unknown });
-  }
-
-  const channels = await fetchGuildChannels(guildId);
-
-  const categories = channels
-    .filter((ch) => ch.type === 4)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name }));
-
-  const textChannels = channels
-    .filter((ch) => ch.type === 0)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
-
-  const voiceChannels = channels
-    .filter((ch) => ch.type === 2 || ch.type === 13)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
-
-  const result = { textChannels, voiceChannels, categories };
-  await redis.set(cacheKey, JSON.stringify(result), 'EX', CHANNEL_CACHE_TTL);
-
+  const result = await getGuildChannelsSorted(guildId);
   return c.json({ success: true, data: result });
 });
 
@@ -276,23 +244,7 @@ guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
  */
 guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
-  const redis = getRedisClient();
-  const cacheKey = roleCacheKey(guildId);
-
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return c.json({ success: true, data: JSON.parse(cached) as unknown });
-  }
-
-  const roles = await fetchGuildRoles(guildId);
-
-  const result = roles
-    .filter((r) => r.name !== '@everyone' && !r.managed)
-    .sort((a, b) => b.position - a.position)
-    .map((r) => ({ id: r.id, name: r.name, color: r.color }));
-
-  await redis.set(cacheKey, JSON.stringify(result), 'EX', ROLE_CACHE_TTL);
-
+  const result = await getGuildRolesSorted(guildId);
   return c.json({ success: true, data: result });
 });
 
@@ -306,44 +258,11 @@ guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
  */
 guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
-
-  const [instances, availableCount, boostCount, instanceSettingsMap] = await Promise.all([
-    getActiveBotInstances(),
-    getAvailableBotCount(guildId),
-    getGuildBoostCount(guildId),
-    getGuildBotInstanceSettings(guildId),
-  ]);
-
-  const bots = await Promise.all(
-    instances.map(async (instance) => {
-      const isInGuild = await isBotInGuild(instance.instanceId, guildId);
-      const isAvailable = instance.instanceId <= availableCount;
-      const settings = isAvailable
-        ? (instanceSettingsMap[String(instance.instanceId)] ?? {
-            autoJoin: false,
-            textChannelId: null,
-            voiceChannelId: null,
-          })
-        : null;
-      return {
-        instanceNumber: instance.instanceId,
-        name: instance.name,
-        botUserId: instance.botUserId,
-        isActive: instance.isActive,
-        isInGuild,
-        isAvailable,
-        settings,
-      };
-    }),
-  );
+  const result = await getGuildBotList(guildId);
 
   return c.json({
     success: true,
-    data: {
-      bots,
-      boostCount,
-      maxBots: availableCount,
-    },
+    data: result,
   });
 });
 
