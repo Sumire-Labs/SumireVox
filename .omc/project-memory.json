@@ -160,6 +160,12 @@
       "type": "directory"
     },
     {
+      "path": "packages\\shared\\package.json",
+      "accessCount": 3,
+      "lastAccessed": 1774962256717,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -187,6 +193,12 @@
       "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
       "accessCount": 1,
       "lastAccessed": 1774942746828,
+      "type": "file"
+    },
+    {
+      "path": "tsconfig.base.json",
+      "accessCount": 1,
+      "lastAccessed": 1774962208913,
       "type": "file"
     }
   ],
