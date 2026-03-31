@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
@@ -29,6 +30,57 @@ import {
   approveRequest,
   rejectRequest,
 } from '../services/admin-dictionary-service.js';
+import { validate } from '../middleware/validate.js';
+
+const paginationQuerySchema = z.object({
+  page: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。').default(1),
+  perPage: z.coerce
+    .number()
+    .int('整数で指定してください。')
+    .min(1, '1以上で指定してください。')
+    .max(100, '100以下で指定してください。')
+    .default(20),
+});
+const dictionaryRequestsQuerySchema = paginationQuerySchema.extend({
+  status: z.string().optional(),
+});
+const discordSnowflakeSchema = z.string().regex(/^\d+$/, '数字文字列の Discord Snowflake を指定してください。');
+const guildSettingsUpdateSchema = z
+  .object({
+    maxReadLength: z
+      .number()
+      .int('整数で指定してください。')
+      .min(1, '1以上で指定してください。')
+      .max(500, '500以下で指定してください。')
+      .optional(),
+    readUsername: z.boolean().optional(),
+    addSanSuffix: z.boolean().optional(),
+    romajiReading: z.boolean().optional(),
+    uppercaseReading: z.boolean().optional(),
+    joinLeaveNotification: z.boolean().optional(),
+    greetingOnJoin: z.boolean().optional(),
+    customEmojiHandling: z.enum(['read_name', 'remove']).optional(),
+    readTargetType: z.enum(['text_only', 'text_and_sticker', 'text_sticker_and_attachment']).optional(),
+    defaultTextChannelId: discordSnowflakeSchema.nullable().optional(),
+    defaultSpeakerId: z.number().int('整数で指定してください。').min(0, '0以上で指定してください。').nullable().optional(),
+    adminRoleId: discordSnowflakeSchema.nullable().optional(),
+    dictionaryPermission: z.enum(['everyone', 'admin_only']).optional(),
+  })
+  .strict();
+const adminGuildSettingsUpdateSchema = guildSettingsUpdateSchema.extend({
+  manualPremium: z.boolean().optional(),
+});
+const instanceParamsSchema = z.object({
+  guildId: z.string(),
+  instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
+});
+const guildBotInstanceSettingsBodySchema = z
+  .object({
+    autoJoin: z.boolean().optional(),
+    textChannelId: z.string().nullable().optional(),
+    voiceChannelId: z.string().nullable().optional(),
+  })
+  .strict();
 
 export const adminRouter = new Hono();
 
@@ -41,8 +93,7 @@ adminRouter.use('*', requireAuth, requireBotAdmin);
  */
 adminRouter.get('/servers', async (c) => {
   const prisma = getPrisma();
-  const page = parseInt(c.req.query('page') ?? '1', 10);
-  const perPage = parseInt(c.req.query('perPage') ?? '20', 10);
+  const { page, perPage } = await validate.query(c, paginationQuerySchema);
 
   // Redis の BOT_GUILDS セットから Bot が現在参加しているギルド ID を収集
   const botInstances = await getAllBotInstances();
@@ -167,10 +218,7 @@ adminRouter.get('/servers/:guildId/settings', async (c) => {
  */
 adminRouter.put('/servers/:guildId/settings', async (c) => {
   const guildId = c.req.param('guildId');
-  const body = await c.req.json<Record<string, unknown>>();
-
-  // guildId は更新不可
-  delete body['guildId'];
+  const body = await validate.body(c, adminGuildSettingsUpdateSchema);
 
   const [updated, isPremium] = await Promise.all([
     updateGuildSettings(guildId, body),
@@ -187,8 +235,7 @@ adminRouter.put('/servers/:guildId/settings', async (c) => {
  * GET /api/admin/dictionary/global
  */
 adminRouter.get('/dictionary/global', async (c) => {
-  const page = parseInt(c.req.query('page') ?? '1', 10);
-  const perPage = parseInt(c.req.query('perPage') ?? '20', 10);
+  const { page, perPage } = await validate.query(c, paginationQuerySchema);
   const result = await getGlobalDictionaryEntries(page, perPage);
   return c.json({
     success: true,
@@ -235,9 +282,7 @@ adminRouter.delete('/dictionary/global/:word', async (c) => {
  * GET /api/admin/dictionary/requests
  */
 adminRouter.get('/dictionary/requests', async (c) => {
-  const page = parseInt(c.req.query('page') ?? '1', 10);
-  const perPage = parseInt(c.req.query('perPage') ?? '20', 10);
-  const status = c.req.query('status');
+  const { page, perPage, status } = await validate.query(c, dictionaryRequestsQuerySchema);
   const result = await getGlobalDictionaryRequests(page, perPage, status);
   return c.json({
     success: true,
@@ -322,9 +367,8 @@ adminRouter.get('/servers/:guildId/bots', async (c) => {
  * 特定インスタンスの設定更新（管理者用）
  */
 adminRouter.put('/servers/:guildId/bots/:instanceId/settings', async (c) => {
-  const guildId = c.req.param('guildId');
-  const instanceId = parseInt(c.req.param('instanceId'), 10);
-  const body = await c.req.json<{ autoJoin?: boolean; textChannelId?: string | null; voiceChannelId?: string | null }>();
+  const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
+  const body = await validate.body(c, guildBotInstanceSettingsBodySchema);
 
   await updateGuildBotInstanceSettings(guildId, instanceId, body);
   await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
