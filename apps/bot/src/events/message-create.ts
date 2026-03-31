@@ -6,7 +6,7 @@ import { isGuildPremium } from '../services/premium-service.js';
 import { resolveVoiceParams } from '../services/speaker-resolver.js';
 import { runPipeline, getDictionaryTrie, PipelineContext } from '../services/text-pipeline/index.js';
 import { truncateForSpeech } from '../services/text-pipeline/truncate.js';
-import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
+import { enqueue, enqueuePreSynthesized, skipCurrent } from '../services/speech-queue.js';
 import { matchEasterEgg } from '../services/easter-eggs.js';
 import { clampReadLength } from '@sumirevox/shared';
 import { logger } from '../infrastructure/logger.js';
@@ -33,6 +33,12 @@ export async function handleMessageCreate(message: Message): Promise<void> {
 
   // 4. Embed のみのメッセージは無視
   if (!message.content && message.embeds.length > 0) return;
+
+  // スキップコマンド判定（イースターエッグより前）
+  if (/^[sｓ]$/i.test(message.content.trim())) {
+    skipCurrent(guildId);
+    return;
+  }
 
   try {
     // イースターエッグチェック（テキストパイプラインより前に行う）

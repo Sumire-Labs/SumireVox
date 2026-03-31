@@ -269,6 +269,16 @@ async function playAudio(
 }
 
 /**
+ * 現在再生中の音声をスキップして次のキューアイテムへ進む
+ */
+export function skipCurrent(guildId: string): void {
+  const gq = guildQueues.get(guildId);
+  if (!gq || gq.player.state.status === AudioPlayerStatus.Idle) return;
+  gq.player.stop(true);
+  logger.debug({ guildId }, 'Current audio skipped');
+}
+
+/**
  * ギルドのキューをクリアする
  */
 export function clearQueue(guildId: string): void {
