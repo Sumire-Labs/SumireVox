@@ -3,6 +3,7 @@ import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
+import { adjustBoostSlots } from './adjust-boost-slots.js';
 
 const SYNC_TTL_SECONDS = 300; // 5分
 
@@ -113,44 +114,35 @@ async function syncSingleSubscription(
     return;
   }
 
-  await prisma.subscription.update({
-    where: { stripeSubscriptionId: stripeSub.id },
-    data: {
-      status,
-      currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
-      boostCount,
-    },
-  });
-
-  // ブースト枠数が変化した場合に DB レコードを増減
-  const currentCount = existing.boosts.length;
-  if (boostCount > currentCount) {
-    const toAdd = boostCount - currentCount;
-    const boostData = Array.from({ length: toAdd }, () => ({ subscriptionId: stripeSub.id }));
-    await prisma.boost.createMany({ data: boostData });
-    logger.info({ subscriptionId: stripeSub.id, added: toAdd }, 'Boost slots added during sync');
-  } else if (boostCount < currentCount) {
-    // 未割り当てのものから削除
-    const toRemove = currentCount - boostCount;
-    const unassigned = existing.boosts.filter((b) => !b.guildId).slice(0, toRemove);
-    for (const boost of unassigned) {
-      await prisma.boost.delete({ where: { id: boost.id } });
-    }
-    if (unassigned.length < toRemove) {
-      logger.warn(
-        { subscriptionId: stripeSub.id, needed: toRemove, removed: unassigned.length },
-        'Could not remove all excess boost slots — some are still assigned',
-      );
-    }
-  }
-
-  // キャンセル済みの場合は全ブースト割り当てを解除
-  if (status === 'CANCELED') {
-    await prisma.boost.updateMany({
-      where: { subscriptionId: stripeSub.id, guildId: { not: null } },
-      data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
+  await prisma.$transaction(async (tx) => {
+    await tx.subscription.update({
+      where: { stripeSubscriptionId: stripeSub.id },
+      data: {
+        status,
+        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        boostCount,
+      },
     });
-  }
+
+    // ブースト枠数が変化した場合に DB レコードを増減
+    const currentCount = existing.boosts.length;
+    if (boostCount > currentCount) {
+      const toAdd = boostCount - currentCount;
+      const boostData = Array.from({ length: toAdd }, () => ({ subscriptionId: stripeSub.id }));
+      await tx.boost.createMany({ data: boostData });
+      logger.info({ subscriptionId: stripeSub.id, added: toAdd }, 'Boost slots added during sync');
+    } else if (boostCount < currentCount) {
+      await adjustBoostSlots(tx, stripeSub.id, boostCount, existing.boosts);
+    }
+
+    // キャンセル済みの場合は全ブースト割り当てを解除
+    if (status === 'CANCELED') {
+      await tx.boost.updateMany({
+        where: { subscriptionId: stripeSub.id, guildId: { not: null } },
+        data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
+      });
+    }
+  });
 }
 
 /**

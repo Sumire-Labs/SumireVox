@@ -14,14 +14,14 @@
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
-    "@prisma/client": "^6.6.0",
+    "@prisma/client": "^6.19.2",
     "@sumirevox/shared": "workspace:*",
     "discord.js": "^14.25.1",
     "dotenv": "^16.5.0",
     "emojibase-data": "^17.0.0",
     "ioredis": "^5.6.1",
     "pino": "^9.6.0",
-    "prisma": "^6.6.0",
+    "prisma": "^6.19.2",
     "wanakana": "^5.3.1"
   },
   "optionalDependencies": {
