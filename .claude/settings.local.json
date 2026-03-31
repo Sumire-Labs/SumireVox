@@ -22,8 +22,31 @@
       "Bash(tsc *)",
       "Bash(npx tsc:*)",
       "Bash(pnpm -F @sumirevox/bot exec tsc --noEmit)",
-      "Bash(pnpm -F @sumirevox/api exec tsc --noEmit)"
+      "Bash(pnpm -F @sumirevox/api exec tsc --noEmit)",
+      "Bash(bash \"C:/Users/hayat/.claude/plugins/marketplaces/omc/scripts/setup-progress.sh\" resume)",
+      "Bash(bash \"C:/Users/hayat/.claude/plugins/marketplaces/omc/scripts/setup-claude-md.sh\" global)",
+      "Bash(bash \"C:/Users/hayat/.claude/plugins/marketplaces/omc/scripts/setup-progress.sh\" save 2 global)",
+      "Bash(node:*)",
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(bash \"C:/Users/hayat/.claude/plugins/marketplaces/omc/scripts/setup-progress.sh\" save 4 global)",
+      "Bash(bash \"C:/Users/hayat/.claude/plugins/marketplaces/omc/scripts/setup-progress.sh\" save 6 global)",
+      "Bash(claude mcp:*)",
+      "Read(//c/Users/hayat/.claude/commands/**)",
+      "Bash(mkdir -p .claude/rules)",
+      "Bash(cp \"C:/Users/hayat/.claude/plugins/marketplaces/omc/templates/rules/\"*.md .claude/rules/)",
+      "Bash(omc --version)",
+      "Bash(DATABASE_URL=\"postgresql://dummy:dummy@localhost:5432/dummy\" npx prisma migrate dev --name add-stripe-events --create-only)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm audit:*)",
+      "Bash(pnpm list:*)",
+      "Bash(xargs grep:*)",
+      "Bash(pnpm --filter @sumirevox/bot up prisma@6.19.2 \"@prisma/client@6.19.2\")",
+      "Bash(pnpm --filter @sumirevox/bot exec prisma generate)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm install:*)",
+      "mcp__plugin_oh-my-claudecode_t__state_list_active",
+      "mcp__plugin_oh-my-claudecode_t__state_write"
     ]
   }
 }
-
