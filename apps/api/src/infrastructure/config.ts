@@ -1,3 +1,5 @@
+import { requireEnv, requireInt } from '@sumirevox/shared';
+
 interface AppConfig {
   nodeEnv: string;
   discordClientId: string;
@@ -19,30 +21,6 @@ interface AppConfig {
   webDomain: string;
   adminDomain: string;
   settingsCacheTtlSeconds: number;
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    console.error(`[config] Required environment variable "${name}" is not set. Exiting.`);
-    process.exit(1);
-  }
-  return value;
-}
-
-function requireInt(name: string, defaultValue?: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    if (defaultValue !== undefined) return defaultValue;
-    console.error(`[config] Required environment variable "${name}" is not set. Exiting.`);
-    process.exit(1);
-  }
-  const parsed = parseInt(raw, 10);
-  if (isNaN(parsed)) {
-    console.error(`[config] Environment variable "${name}" must be an integer, got: "${raw}". Exiting.`);
-    process.exit(1);
-  }
-  return parsed;
 }
 
 function buildConfig(): AppConfig {

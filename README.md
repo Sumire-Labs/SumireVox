@@ -23,9 +23,17 @@ pnpm run setup
 
 `.env` ファイルを開き、以下を設定:
 
-- `DISCORD_TOKEN` — Bot トークン
-- `DISCORD_CLIENT_ID` — アプリケーション ID
+- `DISCORD_TOKEN_1` — 1号機 Bot のトークン
+- `DISCORD_CLIENT_ID_1` — 1号機 Bot のアプリケーション ID
 - `DISCORD_CLIENT_SECRET` — OAuth2 クライアントシークレット
+
+Bot はマルチインスタンス構成に対応しており、`BOT_INSTANCE_ID` に応じて
+`DISCORD_TOKEN_<instanceId>` / `DISCORD_CLIENT_ID_<instanceId>` を参照します。
+`BOT_INSTANCE_ID` のデフォルト値は `1` です。複数インスタンスで運用する場合は
+`DISCORD_TOKEN_2`, `DISCORD_CLIENT_ID_2`, `DISCORD_TOKEN_3`, `DISCORD_CLIENT_ID_3` ...
+のように追加してください。
+
+なお、API サーバーの OAuth2 設定ではサフィックスなしの `DISCORD_CLIENT_ID` を使用します。
 
 ### 3. インフラ起動（PostgreSQL, Redis, VOICEVOX）
 

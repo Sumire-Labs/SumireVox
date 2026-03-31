@@ -1,10 +1,3 @@
-import pino from 'pino';
+import { createLogger } from '@sumirevox/shared';
 
-const level = process.env['LOG_LEVEL'] ?? 'info';
-
-const transport =
-  process.env['NODE_ENV'] === 'development'
-    ? { target: 'pino-pretty' }
-    : undefined;
-
-export const logger: pino.Logger = pino({ level, transport });
+export const logger = createLogger();

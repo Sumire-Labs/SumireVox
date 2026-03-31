@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router';
 import { Layout } from './components/layout';
 import { HomePage } from './pages/home';
@@ -8,12 +9,40 @@ import { PrivacyPage } from './pages/privacy';
 import { LegalPage } from './pages/legal';
 import { RequireAuth } from './components/require-auth';
 import { DashboardLayout } from './components/dashboard-layout';
-import { DashboardPage } from './pages/dashboard';
-import { BoostPage } from './pages/dashboard/boost';
-import { ServersPage } from './pages/dashboard/servers';
-import { ServerSettingsPage } from './pages/dashboard/server-settings';
-import { ServerDictionaryPage } from './pages/dashboard/server-dictionary';
-import { ServerBotsPage } from './pages/dashboard/server-bots';
+
+const DashboardPage = lazy(() =>
+  import('./pages/dashboard').then((module) => ({ default: module.DashboardPage }))
+);
+const BoostPage = lazy(() =>
+  import('./pages/dashboard/boost').then((module) => ({ default: module.BoostPage }))
+);
+const ServersPage = lazy(() =>
+  import('./pages/dashboard/servers').then((module) => ({ default: module.ServersPage }))
+);
+const ServerSettingsPage = lazy(() =>
+  import('./pages/dashboard/server-settings').then((module) => ({ default: module.ServerSettingsPage }))
+);
+const ServerDictionaryPage = lazy(() =>
+  import('./pages/dashboard/server-dictionary').then((module) => ({ default: module.ServerDictionaryPage }))
+);
+const ServerBotsPage = lazy(() =>
+  import('./pages/dashboard/server-bots').then((module) => ({ default: module.ServerBotsPage }))
+);
+
+function RouteLoadingFallback() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        minHeight: '40vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <span>読み込み中...</span>
+    </div>
+  );
+}
 
 export function App() {
   return (
@@ -27,12 +56,54 @@ export function App() {
         <Route path="/legal" element={<LegalPage />} />
       </Route>
       <Route path="/dashboard" element={<RequireAuth><DashboardLayout /></RequireAuth>}>
-        <Route index element={<DashboardPage />} />
-        <Route path="boost" element={<BoostPage />} />
-        <Route path="servers" element={<ServersPage />} />
-        <Route path="servers/:guildId" element={<ServerSettingsPage />} />
-        <Route path="servers/:guildId/dictionary" element={<ServerDictionaryPage />} />
-        <Route path="servers/:guildId/bots" element={<ServerBotsPage />} />
+        <Route
+          index
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <DashboardPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="boost"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <BoostPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="servers"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ServersPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="servers/:guildId"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ServerSettingsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="servers/:guildId/dictionary"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ServerDictionaryPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="servers/:guildId/bots"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <ServerBotsPage />
+            </Suspense>
+          }
+        />
       </Route>
     </Routes>
   );

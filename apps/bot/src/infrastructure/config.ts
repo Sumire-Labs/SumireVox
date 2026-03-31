@@ -1,3 +1,5 @@
+import { requireEnv, requireInt } from '@sumirevox/shared';
+
 interface AppConfig {
   nodeEnv: string;
   botInstanceId: number;
@@ -18,46 +20,14 @@ interface AppConfig {
   logLevel: string;
 }
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    console.error(`[config] Required environment variable "${name}" is not set. Exiting.`);
-    process.exit(1);
-  }
-  return value;
-}
-
-function requireInt(name: string, defaultValue?: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    if (defaultValue !== undefined) return defaultValue;
-    console.error(`[config] Required environment variable "${name}" is not set. Exiting.`);
-    process.exit(1);
-  }
-  const parsed = parseInt(raw, 10);
-  if (isNaN(parsed)) {
-    console.error(`[config] Environment variable "${name}" must be an integer, got: "${raw}". Exiting.`);
-    process.exit(1);
-  }
-  return parsed;
-}
-
 function buildConfig(): AppConfig {
-  const botInstanceId = parseInt(process.env['BOT_INSTANCE_ID'] ?? '1', 10);
+  const botInstanceId = requireInt('BOT_INSTANCE_ID', 1);
 
   const discordTokenKey = `DISCORD_TOKEN_${botInstanceId}`;
-  const discordToken = process.env[discordTokenKey];
-  if (!discordToken) {
-    console.error(`[config] Required environment variable "${discordTokenKey}" is not set. Exiting.`);
-    process.exit(1);
-  }
+  const discordToken = requireEnv(discordTokenKey);
 
   const discordClientIdKey = `DISCORD_CLIENT_ID_${botInstanceId}`;
-  const discordClientId = process.env[discordClientIdKey];
-  if (!discordClientId) {
-    console.error(`[config] Required environment variable "${discordClientIdKey}" is not set. Exiting.`);
-    process.exit(1);
-  }
+  const discordClientId = requireEnv(discordClientIdKey);
 
   return {
     nodeEnv: process.env['NODE_ENV'] ?? 'production',
