@@ -143,8 +143,8 @@
     },
     {
       "path": "package.json",
-      "accessCount": 5,
-      "lastAccessed": 1774943997428,
+      "accessCount": 6,
+      "lastAccessed": 1775062453763,
       "type": "file"
     },
     {
@@ -196,6 +196,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\bot\\package.json",
+      "accessCount": 3,
+      "lastAccessed": 1775062459590,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -205,12 +211,6 @@
       "path": "apps\\api\\src\\services\\boost-service.ts",
       "accessCount": 2,
       "lastAccessed": 1774942668624,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\package.json",
-      "accessCount": 2,
-      "lastAccessed": 1774943997834,
       "type": "file"
     },
     {
@@ -244,6 +244,12 @@
       "type": "file"
     },
     {
+      "path": "README.md",
+      "accessCount": 2,
+      "lastAccessed": 1775062530615,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\infrastructure\\app-error.ts",
       "accessCount": 1,
       "lastAccessed": 1774942067389,
@@ -265,6 +271,30 @@
       "path": "apps\\web\\src\\pages\\dashboard\\server-bots.tsx",
       "accessCount": 1,
       "lastAccessed": 1774970088635,
+      "type": "file"
+    },
+    {
+      "path": "docker-compose.yml",
+      "accessCount": 1,
+      "lastAccessed": 1775062453829,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775062458913,
+      "type": "file"
+    },
+    {
+      "path": "apps\\bot\\src\\infrastructure\\config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775062459375,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\package.json",
+      "accessCount": 1,
+      "lastAccessed": 1775062459742,
       "type": "file"
     }
   ],
