@@ -190,6 +190,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\web\\src\\App.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775062008080,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -223,6 +229,18 @@
       "path": "apps\\bot\\prisma\\migrations\\20260402000000_change_default_read_target_type\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1775061298890,
+      "type": "file"
+    },
+    {
+      "path": "apps\\web\\vite.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775061999334,
+      "type": "file"
+    },
+    {
+      "path": "apps\\admin\\vite.config.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775062000883,
       "type": "file"
     },
     {

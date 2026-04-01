@@ -1,14 +1,27 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router';
 import { Layout } from './components/layout';
-import { HomePage } from './pages/home';
-import { CommandsPage } from './pages/commands';
-import { CreditsPage } from './pages/credits';
-import { TermsPage } from './pages/terms';
-import { PrivacyPage } from './pages/privacy';
-import { LegalPage } from './pages/legal';
 import { RequireAuth } from './components/require-auth';
 import { DashboardLayout } from './components/dashboard-layout';
+
+const HomePage = lazy(() =>
+  import('./pages/home').then((module) => ({ default: module.HomePage }))
+);
+const CommandsPage = lazy(() =>
+  import('./pages/commands').then((module) => ({ default: module.CommandsPage }))
+);
+const CreditsPage = lazy(() =>
+  import('./pages/credits').then((module) => ({ default: module.CreditsPage }))
+);
+const TermsPage = lazy(() =>
+  import('./pages/terms').then((module) => ({ default: module.TermsPage }))
+);
+const PrivacyPage = lazy(() =>
+  import('./pages/privacy').then((module) => ({ default: module.PrivacyPage }))
+);
+const LegalPage = lazy(() =>
+  import('./pages/legal').then((module) => ({ default: module.LegalPage }))
+);
 
 const DashboardPage = lazy(() =>
   import('./pages/dashboard').then((module) => ({ default: module.DashboardPage }))
@@ -48,12 +61,54 @@ export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/commands" element={<CommandsPage />} />
-        <Route path="/credits" element={<CreditsPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
-        <Route path="/legal" element={<LegalPage />} />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <HomePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/commands"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <CommandsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/credits"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <CreditsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/terms"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <TermsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/privacy"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <PrivacyPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/legal"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <LegalPage />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="/dashboard" element={<RequireAuth><DashboardLayout /></RequireAuth>}>
         <Route
