@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /c/Users/hayat/Desktop/Development/SumireVox/apps/bot && DATABASE_URL=\\\"postgresql://dummy:dummy@localhost:5432/dummy\\\" npx prisma migrate dev --name change_default_read_target_type --c...",
+  "error": "Exit code 1\nPrisma schema loaded from prisma\\schema.prisma\nDatasource \"db\": PostgreSQL database \"dummy\", schema \"public\" at \"localhost:5432\"\n\nError: P1001: Can't reach database server at `localhost:5432`\n\nPlease make sure your database server is running at `localhost:5432`.",
+  "timestamp": "2026-04-01T16:34:46.131Z",
+  "retry_count": 3
+}

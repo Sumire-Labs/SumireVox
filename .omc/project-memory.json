@@ -136,6 +136,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\bot\\prisma\\schema.prisma",
+      "accessCount": 6,
+      "lastAccessed": 1775061265944,
+      "type": "file"
+    },
+    {
       "path": "package.json",
       "accessCount": 5,
       "lastAccessed": 1774943997428,
@@ -154,12 +160,6 @@
       "type": "file"
     },
     {
-      "path": "apps\\bot\\prisma\\schema.prisma",
-      "accessCount": 4,
-      "lastAccessed": 1774942674317,
-      "type": "file"
-    },
-    {
       "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
       "accessCount": 4,
       "lastAccessed": 1774942807043,
@@ -173,8 +173,8 @@
     },
     {
       "path": "",
-      "accessCount": 3,
-      "lastAccessed": 1774942673918,
+      "accessCount": 4,
+      "lastAccessed": 1775061253955,
       "type": "directory"
     },
     {
@@ -211,6 +211,18 @@
       "path": "apps\\bot\\src\\services\\speech-queue.ts",
       "accessCount": 2,
       "lastAccessed": 1774963350316,
+      "type": "file"
+    },
+    {
+      "path": "packages\\shared\\src\\constants\\defaults.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775061264973,
+      "type": "file"
+    },
+    {
+      "path": "apps\\bot\\prisma\\migrations\\20260402000000_change_default_read_target_type\\migration.sql",
+      "accessCount": 2,
+      "lastAccessed": 1775061298890,
       "type": "file"
     },
     {

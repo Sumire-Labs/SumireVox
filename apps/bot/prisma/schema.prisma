@@ -20,7 +20,7 @@ model GuildSettings {
   greetingOnJoin        Boolean  @default(false) @map("greeting_on_join")
   // フィルタ設定
   customEmojiHandling   String   @default("read_name") @map("custom_emoji_handling") // 'read_name' | 'remove'
-  readTargetType        String   @default("text_only") @map("read_target_type") // 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment'
+  readTargetType        String   @default("text_sticker_and_attachment") @map("read_target_type") // 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment'
   // 接続設定
   defaultTextChannelId  String?  @map("default_text_channel_id")
   defaultSpeakerId      Int?     @map("default_speaker_id")

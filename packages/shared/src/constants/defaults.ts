@@ -10,7 +10,7 @@ export const GUILD_SETTINGS_DEFAULTS: Omit<GuildSettings, 'guildId'> = {
   joinLeaveNotification: false,
   greetingOnJoin: false,
   customEmojiHandling: 'read_name',
-  readTargetType: 'text_only',
+  readTargetType: 'text_sticker_and_attachment',
   defaultTextChannelId: null,
   defaultSpeakerId: null,
   adminRoleId: null,
