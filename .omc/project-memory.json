@@ -125,8 +125,20 @@
   "hotPaths": [
     {
       "path": "apps\\api\\src\\services\\stripe-webhook-handler.ts",
-      "accessCount": 8,
-      "lastAccessed": 1774942775459,
+      "accessCount": 13,
+      "lastAccessed": 1775063839439,
+      "type": "file"
+    },
+    {
+      "path": "apps\\bot\\prisma\\schema.prisma",
+      "accessCount": 7,
+      "lastAccessed": 1775063337917,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\services\\__tests__\\stripe-webhook-handler.test.ts",
+      "accessCount": 7,
+      "lastAccessed": 1775063905517,
       "type": "file"
     },
     {
@@ -136,15 +148,15 @@
       "type": "file"
     },
     {
-      "path": "apps\\bot\\prisma\\schema.prisma",
-      "accessCount": 6,
-      "lastAccessed": 1775061265944,
-      "type": "file"
-    },
-    {
       "path": "package.json",
       "accessCount": 6,
       "lastAccessed": 1775062453763,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\routes\\stripe-webhook.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775063826496,
       "type": "file"
     },
     {
@@ -160,6 +172,18 @@
       "type": "file"
     },
     {
+      "path": "",
+      "accessCount": 5,
+      "lastAccessed": 1775063797304,
+      "type": "directory"
+    },
+    {
+      "path": "apps\\api\\src\\index.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775063839726,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
       "accessCount": 4,
       "lastAccessed": 1774942807043,
@@ -170,12 +194,6 @@
       "accessCount": 4,
       "lastAccessed": 1774963643026,
       "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 4,
-      "lastAccessed": 1775061253955,
-      "type": "directory"
     },
     {
       "path": "packages\\shared\\package.json",
@@ -250,6 +268,18 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\middleware\\session-middleware.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775063105856,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\middleware\\request-logger.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775063106188,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\infrastructure\\app-error.ts",
       "accessCount": 1,
       "lastAccessed": 1774942067389,
@@ -295,6 +325,12 @@
       "path": "apps\\api\\package.json",
       "accessCount": 1,
       "lastAccessed": 1775062459742,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\stripe-client.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775062984534,
       "type": "file"
     }
   ],

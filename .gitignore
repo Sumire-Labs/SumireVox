@@ -52,3 +52,7 @@ temp/
 diff.txt
 # heroui-agents-md
 .heroui-docs/
+
+# OMC local state
+.omc/state/
+.omc/sessions/
