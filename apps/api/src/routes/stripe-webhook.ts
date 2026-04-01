@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type Stripe from 'stripe';
 import { handleStripeWebhook } from '../services/stripe-webhook-handler.js';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { config } from '../infrastructure/config.js';
@@ -30,18 +31,28 @@ stripeWebhookRouter.post('/webhook', async (c) => {
     );
   }
 
+  // フェーズ 1: 署名検証 — 失敗時のみ 400
+  let event: Stripe.Event;
   try {
     const rawBody = await c.req.text();
-    await handleStripeWebhook(rawBody, signature, config.stripeWebhookSecret);
-    return c.json({ received: true });
+    event = stripe.webhooks.constructEvent(rawBody, signature, config.stripeWebhookSecret);
   } catch (error) {
-    logger.error({ err: error }, 'Stripe webhook error');
+    logger.warn({ err: error }, 'Stripe webhook signature verification failed');
     return c.json(
       {
         success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Webhook processing failed' },
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid webhook signature' },
       },
       400,
     );
   }
+
+  // フェーズ 2: 業務処理 — 内部エラーでも 200 を返す（Stripe への再試行防止）
+  try {
+    await handleStripeWebhook(event);
+  } catch (error) {
+    logger.error({ err: error, eventId: event.id, eventType: event.type }, 'Stripe webhook processing failed');
+  }
+
+  return c.json({ received: true });
 });

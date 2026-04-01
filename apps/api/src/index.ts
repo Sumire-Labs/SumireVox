@@ -37,6 +37,9 @@ app.use(
 // リクエストログ
 app.use('*', requestLogger);
 
+// Stripe Webhook（sessionMiddleware より前にマウント: raw body パース + セッション処理不要）
+app.route('/api/stripe', stripeWebhookRouter);
+
 // セッション読み込み（全リクエスト）
 app.use('*', sessionMiddleware);
 
@@ -50,7 +53,6 @@ app.route('/auth', authRouter);
 app.route('/api/guilds', guildsRouter);
 app.route('/api/dictionary', dictionaryRouter);
 app.route('/api/user', userRouter);
-app.route('/api/stripe', stripeWebhookRouter);
 app.route('/api/admin', adminRouter);
 app.route('/api/voicevox', voicevoxRouter);
 app.route('/api/bot-instances', botInstancesRouter);

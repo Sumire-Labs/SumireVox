@@ -104,7 +104,7 @@ describe('handleStripeWebhook', () => {
   });
 
   it('creates subscription and boosts on checkout.session.completed', async () => {
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-checkout',
       type: 'checkout.session.completed',
       data: {
@@ -115,13 +115,13 @@ describe('handleStripeWebhook', () => {
           customer: 'cus-1',
         },
       },
-    });
+    };
     stripeMock.subscriptions.retrieve.mockResolvedValue({
       current_period_end: 1_800_000_000,
     });
     txMock.boost.count.mockResolvedValue(1);
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(txMock.stripeEvent.create).toHaveBeenCalledWith({
       data: { id: 'evt-checkout', type: 'checkout.session.completed' },
@@ -148,21 +148,21 @@ describe('handleStripeWebhook', () => {
   });
 
   it('skips duplicate processing when the same event id is replayed', async () => {
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-duplicate',
       type: 'checkout.session.completed',
       data: { object: {} },
-    });
+    };
     prismaMock.stripeEvent.findUnique.mockResolvedValue({ id: 'evt-duplicate' });
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
   });
 
   it('adds boosts when subscription quantity increases', async () => {
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-sub-up',
       type: 'customer.subscription.updated',
       data: {
@@ -175,13 +175,13 @@ describe('handleStripeWebhook', () => {
           },
         },
       },
-    });
+    };
     txMock.subscription.findUnique.mockResolvedValue({
       stripeSubscriptionId: 'sub-1',
       boosts: [{ id: 'boost-1' }, { id: 'boost-2' }],
     });
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
@@ -203,7 +203,7 @@ describe('handleStripeWebhook', () => {
       { id: 'boost-2', guildId: 'guild-1', assignedAt: new Date('2026-01-01T00:00:00.000Z') },
       { id: 'boost-3', guildId: 'guild-2', assignedAt: new Date('2026-01-02T00:00:00.000Z') },
     ];
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-sub-down',
       type: 'customer.subscription.updated',
       data: {
@@ -216,20 +216,20 @@ describe('handleStripeWebhook', () => {
           },
         },
       },
-    });
+    };
     txMock.subscription.findUnique.mockResolvedValue({
       stripeSubscriptionId: 'sub-1',
       boosts,
     });
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(adjustBoostSlotsMock).toHaveBeenCalledWith(txMock, 'sub-1', 1, boosts);
     expect(txMock.boost.createMany).not.toHaveBeenCalled();
   });
 
   it('unassigns all boosts when subscription is deleted', async () => {
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-sub-deleted',
       type: 'customer.subscription.deleted',
       data: {
@@ -237,9 +237,9 @@ describe('handleStripeWebhook', () => {
           id: 'sub-1',
         },
       },
-    });
+    };
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
@@ -256,7 +256,7 @@ describe('handleStripeWebhook', () => {
   });
 
   it('cancels the subscription and deletes boosts on full charge refund', async () => {
-    stripeMock.webhooks.constructEvent.mockReturnValue({
+    const event = {
       id: 'evt-refund',
       type: 'charge.refunded',
       data: {
@@ -268,7 +268,7 @@ describe('handleStripeWebhook', () => {
           amount_refunded: 3000,
         },
       },
-    });
+    };
     stripeMock.invoices.retrieve.mockResolvedValue({
       subscription: 'sub-1',
     });
@@ -276,7 +276,7 @@ describe('handleStripeWebhook', () => {
       status: 'active',
     });
 
-    await handleStripeWebhook('raw', 'sig', 'secret');
+    await handleStripeWebhook(event as never);
 
     expect(stripeMock.subscriptions.cancel).toHaveBeenCalledWith('sub-1');
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({

@@ -6,25 +6,9 @@ import { logger } from '../infrastructure/logger.js';
 import { adjustBoostSlots } from './adjust-boost-slots.js';
 
 /**
- * Stripe Webhook イベントを処理する
+ * Stripe Webhook イベントを処理する（署名検証済みイベントを受け取る）
  */
-export async function handleStripeWebhook(
-  rawBody: string,
-  signature: string,
-  webhookSecret: string,
-): Promise<void> {
-  if (!stripe) {
-    throw new Error('Stripe is not configured');
-  }
-  let event: Stripe.Event;
-
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (error) {
-    logger.error({ err: error }, 'Webhook signature verification failed');
-    throw error;
-  }
-
+export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
   logger.info({ type: event.type, id: event.id }, 'Stripe webhook received');
 
   // 冪等性チェック: 既処理イベントは早期リターン
