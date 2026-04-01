@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1774940548960,
+  "lastScanned": 1775054626016,
   "projectRoot": "C:\\Users\\hayat\\Desktop\\Development\\SumireVox",
   "techStack": {
     "languages": [
@@ -68,14 +68,14 @@
       "path": "apps",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1774940548943,
+      "lastAccessed": 1775054625984,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 10,
-      "lastAccessed": 1774940548943,
+      "lastAccessed": 1775054625984,
       "keyFiles": [
         "api-endpoints.md",
         "architecture.md",
@@ -88,7 +88,7 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1774940548947,
+      "lastAccessed": 1775054625990,
       "keyFiles": [
         "nginx.conf",
         "nginx.prod.conf"
@@ -98,14 +98,14 @@
       "path": "packages",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1774940548947,
+      "lastAccessed": 1775054625990,
       "keyFiles": []
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 1,
-      "lastAccessed": 1774940548947,
+      "lastAccessed": 1775054625990,
       "keyFiles": [
         "setup-env.sh"
       ]
@@ -114,7 +114,7 @@
       "path": "apps\\api",
       "purpose": "API routes",
       "fileCount": 5,
-      "lastAccessed": 1774940548948,
+      "lastAccessed": 1775054625991,
       "keyFiles": [
         "docker-entrypoint.sh",
         "Dockerfile",
@@ -148,6 +148,12 @@
       "type": "directory"
     },
     {
+      "path": "nginx\\nginx.prod.conf",
+      "accessCount": 5,
+      "lastAccessed": 1775054906057,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\schema.prisma",
       "accessCount": 4,
       "lastAccessed": 1774942674317,
@@ -175,6 +181,12 @@
       "path": "packages\\shared\\package.json",
       "accessCount": 3,
       "lastAccessed": 1774962256717,
+      "type": "file"
+    },
+    {
+      "path": "nginx\\nginx.conf",
+      "accessCount": 3,
+      "lastAccessed": 1775054646925,
       "type": "file"
     },
     {
