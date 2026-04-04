@@ -4,7 +4,10 @@ import { config } from '../infrastructure/config.js';
 import { createSession, deleteSession } from '../infrastructure/session.js';
 import { logger } from '../infrastructure/logger.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 import crypto from 'node:crypto';
+
+const authRateLimit = rateLimit({ max: 10, windowSeconds: 60, keyPrefix: 'auth' });
 
 export const authRouter = new Hono();
 
@@ -23,7 +26,7 @@ function getRedirectUri(): string {
  *   - http://localhost:3000/auth/callback  (開発用)
  *   - https://api.sumirevox.com/auth/callback  (本番)
  */
-authRouter.get('/login', async (c) => {
+authRouter.get('/login', authRateLimit, async (c) => {
   const from = c.req.query('from');
   const state = crypto.randomUUID();
 
@@ -59,7 +62,7 @@ authRouter.get('/login', async (c) => {
  * GET /auth/callback
  * Discord からのコールバック。トークン交換 → ユーザー情報取得 → セッション作成
  */
-authRouter.get('/callback', async (c) => {
+authRouter.get('/callback', authRateLimit, async (c) => {
   const code = c.req.query('code');
   const state = c.req.query('state');
   const storedState = getCookie(c, 'oauth_state');

@@ -17,6 +17,10 @@ import {
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
+import { rateLimit } from '../middleware/rate-limit.js';
+
+const checkoutRateLimit = rateLimit({ max: 5, windowSeconds: 60, keyPrefix: 'checkout' });
+const boostAssignRateLimit = rateLimit({ max: 20, windowSeconds: 60, keyPrefix: 'boost-assign' });
 
 const boostIdParamsSchema = z.object({ boostId: z.string().cuid() });
 const checkoutBodySchema = z
@@ -151,7 +155,7 @@ userRouter.get('/boosts', async (c) => {
  * POST /api/user/boosts/checkout
  * body: { boostCount: number }
  */
-userRouter.post('/boosts/checkout', async (c) => {
+userRouter.post('/boosts/checkout', checkoutRateLimit, async (c) => {
   if (!stripe) {
     return c.json(
       { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
@@ -170,7 +174,7 @@ userRouter.post('/boosts/checkout', async (c) => {
  * body: { guildId: string, count: number }
  * ギルドへのブースト割り当て数を設定する（増減を自動処理）
  */
-userRouter.post('/boosts/assign', async (c) => {
+userRouter.post('/boosts/assign', boostAssignRateLimit, async (c) => {
   const session = c.get('session')!;
   const body = await validate.body(c, boostAssignBodySchema);
 

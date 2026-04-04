@@ -28,6 +28,9 @@ import {
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
+import { rateLimit } from '../middleware/rate-limit.js';
+
+const dictAddRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'dict-add' });
 import { validate } from '../middleware/validate.js';
 import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
 import { getGuildRolesSorted } from '../services/guild-role-service.js';
@@ -215,7 +218,7 @@ guildsRouter.get('/:guildId/dictionary', requireGuildAdmin, async (c) => {
  * POST /api/guilds/:guildId/dictionary
  * サーバー辞書追加
  */
-guildsRouter.post('/:guildId/dictionary', requireGuildAdmin, async (c) => {
+guildsRouter.post('/:guildId/dictionary', requireGuildAdmin, dictAddRateLimit, async (c) => {
   const { guildId } = await validate.params(c, guildParamsSchema);
   const session = c.get('session')!;
   const body = await validate.body(c, dictionaryBodySchema);

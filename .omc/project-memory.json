@@ -125,8 +125,8 @@
   "hotPaths": [
     {
       "path": "apps\\api\\src\\routes\\guilds.ts",
-      "accessCount": 17,
-      "lastAccessed": 1775298008778,
+      "accessCount": 22,
+      "lastAccessed": 1775298346123,
       "type": "file"
     },
     {
@@ -148,6 +148,12 @@
       "type": "directory"
     },
     {
+      "path": "apps\\api\\src\\routes\\auth.ts",
+      "accessCount": 8,
+      "lastAccessed": 1775298323792,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\services\\__tests__\\stripe-webhook-handler.test.ts",
       "accessCount": 7,
       "lastAccessed": 1775063905517,
@@ -160,6 +166,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\index.ts",
+      "accessCount": 7,
+      "lastAccessed": 1775298233633,
+      "type": "file"
+    },
+    {
       "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
       "accessCount": 6,
       "lastAccessed": 1774971699577,
@@ -169,12 +181,6 @@
       "path": "package.json",
       "accessCount": 6,
       "lastAccessed": 1775062453763,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\index.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775264691870,
       "type": "file"
     },
     {
@@ -208,9 +214,9 @@
       "type": "file"
     },
     {
-      "path": "apps\\api\\src\\routes\\auth.ts",
+      "path": "apps\\api\\src\\middleware\\session-middleware.ts",
       "accessCount": 4,
-      "lastAccessed": 1775265929725,
+      "lastAccessed": 1775298234648,
       "type": "file"
     },
     {
@@ -241,12 +247,6 @@
       "path": "apps\\api\\src\\middleware\\request-logger.ts",
       "accessCount": 3,
       "lastAccessed": 1775264700310,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\session-middleware.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775264702549,
       "type": "file"
     },
     {
@@ -328,6 +328,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\infrastructure\\redis.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775298234054,
+      "type": "file"
+    },
+    {
       "path": "tsconfig.base.json",
       "accessCount": 1,
       "lastAccessed": 1774962208913,
@@ -379,12 +385,6 @@
       "path": "apps\\api\\src\\infrastructure\\pubsub.ts",
       "accessCount": 1,
       "lastAccessed": 1775264694780,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\redis.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264695379,
       "type": "file"
     },
     {

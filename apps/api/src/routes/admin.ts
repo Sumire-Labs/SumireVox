@@ -28,6 +28,9 @@ import {
 import { validate } from '../middleware/validate.js';
 import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
 import { getGuildRolesSorted } from '../services/guild-role-service.js';
+import { rateLimit } from '../middleware/rate-limit.js';
+
+const adminDictRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'admin-dict' });
 
 const paginationQuerySchema = z.object({
   page: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。').default(1),
@@ -230,7 +233,7 @@ adminRouter.get('/dictionary/global', async (c) => {
  * POST /api/admin/dictionary/global
  * body: { word: string, reading: string }
  */
-adminRouter.post('/dictionary/global', async (c) => {
+adminRouter.post('/dictionary/global', adminDictRateLimit, async (c) => {
   const session = c.get('session')!;
   const body = await validate.body(c, globalDictionaryBodySchema);
   const entry = await addGlobalDictionaryEntry(body.word, body.reading, session.userId);
