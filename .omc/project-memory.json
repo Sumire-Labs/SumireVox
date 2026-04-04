@@ -196,6 +196,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\services\\boost-service.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775297647339,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\src\\events\\message-create.ts",
       "accessCount": 4,
       "lastAccessed": 1774963643026,
@@ -241,12 +247,6 @@
       "path": "apps\\api\\src\\middleware\\session-middleware.ts",
       "accessCount": 3,
       "lastAccessed": 1775264702549,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\boost-service.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775264712847,
       "type": "file"
     },
     {
