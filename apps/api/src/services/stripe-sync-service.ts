@@ -4,29 +4,12 @@ import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { adjustBoostSlots } from './adjust-boost-slots.js';
+import { mapStripeStatus } from './stripe-utils.js';
 
 const SYNC_TTL_SECONDS = 300; // 5分
 
 function syncRedisKey(userId: string): string {
   return `stripe:sync:user:${userId}`;
-}
-
-function mapStripeStatus(status: Stripe.Subscription.Status): string {
-  switch (status) {
-    case 'active':
-      return 'ACTIVE';
-    case 'past_due':
-      return 'PAST_DUE';
-    case 'canceled':
-    case 'unpaid':
-      return 'CANCELED';
-    case 'incomplete':
-    case 'incomplete_expired':
-    case 'trialing':
-    case 'paused':
-    default:
-      return 'INCOMPLETE';
-  }
 }
 
 /**

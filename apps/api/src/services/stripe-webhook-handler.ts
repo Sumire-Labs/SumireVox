@@ -4,6 +4,7 @@ import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { logger } from '../infrastructure/logger.js';
 import { adjustBoostSlots } from './adjust-boost-slots.js';
+import { mapStripeStatus } from './stripe-utils.js';
 
 /**
  * Stripe Webhook イベントを処理する（署名検証済みイベントを受け取る）
@@ -285,23 +286,5 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Pro
       { subscriptionId: sid, chargeId: charge.id, amountRefunded: charge.amount_refunded, totalAmount: charge.amount },
       'Partial refund detected, no automatic boost changes applied',
     );
-  }
-}
-
-function mapStripeStatus(status: Stripe.Subscription.Status): string {
-  switch (status) {
-    case 'active':
-      return 'ACTIVE';
-    case 'past_due':
-      return 'PAST_DUE';
-    case 'canceled':
-    case 'unpaid':
-      return 'CANCELED';
-    case 'incomplete':
-    case 'incomplete_expired':
-    case 'trialing':
-    case 'paused':
-    default:
-      return 'INCOMPLETE';
   }
 }

@@ -34,55 +34,19 @@ const dictAddRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'dic
 import { validate } from '../middleware/validate.js';
 import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
 import { getGuildRolesSorted } from '../services/guild-role-service.js';
+import {
+  discordSnowflakeSchema,
+  paginationQuerySchema,
+  guildSettingsUpdateSchema,
+  instanceParamsSchema,
+  guildBotInstanceSettingsBodySchema,
+} from '../schemas/common.js';
 
-const discordSnowflakeSchema = z.string().regex(/^\d+$/, '数字文字列の Discord Snowflake を指定してください。');
-const paginationQuerySchema = z.object({
-  page: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。').default(1),
-  perPage: z.coerce
-    .number()
-    .int('整数で指定してください。')
-    .min(1, '1以上で指定してください。')
-    .max(100, '100以下で指定してください。')
-    .default(20),
-});
 const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
 const guildDictWordParamsSchema = z.object({
   guildId: discordSnowflakeSchema,
   word: z.string().min(1).transform(decodeURIComponent),
 });
-const instanceParamsSchema = z.object({
-  guildId: discordSnowflakeSchema,
-  instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
-});
-const guildSettingsUpdateSchema = z
-  .object({
-    maxReadLength: z
-      .number()
-      .int('整数で指定してください。')
-      .min(1, '1以上で指定してください。')
-      .max(500, '500以下で指定してください。')
-      .optional(),
-    readUsername: z.boolean().optional(),
-    addSanSuffix: z.boolean().optional(),
-    romajiReading: z.boolean().optional(),
-    uppercaseReading: z.boolean().optional(),
-    joinLeaveNotification: z.boolean().optional(),
-    greetingOnJoin: z.boolean().optional(),
-    customEmojiHandling: z.enum(['read_name', 'remove']).optional(),
-    readTargetType: z.enum(['text_only', 'text_and_sticker', 'text_sticker_and_attachment']).optional(),
-    defaultTextChannelId: discordSnowflakeSchema.nullable().optional(),
-    defaultSpeakerId: z.number().int('整数で指定してください。').min(0, '0以上で指定してください。').nullable().optional(),
-    adminRoleId: discordSnowflakeSchema.nullable().optional(),
-    dictionaryPermission: z.enum(['everyone', 'admin_only']).optional(),
-  })
-  .strict();
-const guildBotInstanceSettingsBodySchema = z
-  .object({
-    autoJoin: z.boolean().optional(),
-    textChannelId: z.string().nullable().optional(),
-    voiceChannelId: z.string().nullable().optional(),
-  })
-  .strict();
 const dictionaryBodySchema = z
   .object({
     word: z.string().min(1),
