@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/require-auth.js';
+import { validate } from '../middleware/validate.js';
 import { getUserBoosts, assignBoost, unassignBoost, setGuildBoostCount, getGuildBoostInfo } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription, createBillingPortalSession } from '../services/stripe-service.js';
 import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
@@ -14,6 +16,17 @@ import {
 } from '../services/bot-instance-service.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
+
+const checkoutBodySchema = z
+  .object({ boostCount: z.number().int().min(1).max(10).default(1) })
+  .strict();
+const boostAssignBodySchema = z
+  .object({
+    guildId: z.string().min(1),
+    count: z.number().int().min(0),
+  })
+  .strict();
+const boostAssignByIdBodySchema = z.object({ guildId: z.string().min(1) }).strict();
 
 const USER_GUILDS_CACHE_TTL = 60;
 const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
@@ -136,19 +149,7 @@ userRouter.post('/boosts/checkout', async (c) => {
   }
 
   const session = c.get('session')!;
-  const body = await c.req.json<{ boostCount?: number }>();
-  const boostCount = body.boostCount ?? 1;
-
-  if (!Number.isInteger(boostCount) || boostCount < 1 || boostCount > 10) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'ブースト数は1〜10の整数で指定してください。' },
-      },
-      400,
-    );
-  }
-
+  const { boostCount } = await validate.body(c, checkoutBodySchema);
   const checkoutUrl = await createCheckoutSession(session.userId, boostCount);
   return c.json({ success: true, data: { url: checkoutUrl } });
 });
@@ -160,21 +161,7 @@ userRouter.post('/boosts/checkout', async (c) => {
  */
 userRouter.post('/boosts/assign', async (c) => {
   const session = c.get('session')!;
-  const body = await c.req.json<{ guildId?: string; count?: number }>();
-
-  if (!body.guildId) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'guildId が必要です。' } },
-      400,
-    );
-  }
-
-  if (typeof body.count !== 'number' || !Number.isInteger(body.count) || body.count < 0) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'count は0以上の整数で指定してください。' } },
-      400,
-    );
-  }
+  const body = await validate.body(c, boostAssignBodySchema);
 
   const maxBoostsPerGuild = await getActiveInstanceCount();
   if (body.count > maxBoostsPerGuild) {
@@ -201,16 +188,8 @@ userRouter.post('/boosts/assign', async (c) => {
 userRouter.put('/boosts/:boostId/assign', async (c) => {
   const session = c.get('session')!;
   const boostId = c.req.param('boostId');
-  const body = await c.req.json<{ guildId?: string }>();
-
-  if (!body.guildId) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'guildId が必要です。' } },
-      400,
-    );
-  }
-
-  await assignBoost(session.userId, boostId, body.guildId);
+  const { guildId } = await validate.body(c, boostAssignByIdBodySchema);
+  await assignBoost(session.userId, boostId, guildId);
   return c.json({ success: true, data: null });
 });
 

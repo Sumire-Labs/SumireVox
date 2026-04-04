@@ -75,6 +75,12 @@ const guildBotInstanceSettingsBodySchema = z
     voiceChannelId: z.string().nullable().optional(),
   })
   .strict();
+const dictionaryBodySchema = z
+  .object({
+    word: z.string().min(1),
+    reading: z.string().min(1),
+  })
+  .strict();
 
 export const guildsRouter = new Hono();
 
@@ -201,7 +207,7 @@ guildsRouter.get('/:guildId/dictionary', requireGuildAdmin, async (c) => {
 guildsRouter.post('/:guildId/dictionary', requireGuildAdmin, async (c) => {
   const guildId = c.req.param('guildId');
   const session = c.get('session')!;
-  const body = await c.req.json<{ word: string; reading: string }>();
+  const body = await validate.body(c, dictionaryBodySchema);
   const isPremium = await isGuildPremium(guildId);
   const entry = await addServerDictionaryEntry(
     guildId,

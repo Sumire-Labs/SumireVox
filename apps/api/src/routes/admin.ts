@@ -81,6 +81,12 @@ const guildBotInstanceSettingsBodySchema = z
     voiceChannelId: z.string().nullable().optional(),
   })
   .strict();
+const manualPremiumBodySchema = z.object({ manualPremium: z.boolean() }).strict();
+const globalDictionaryBodySchema = z
+  .object({ word: z.string().min(1), reading: z.string().min(1) })
+  .strict();
+const globalDictionaryUpdateBodySchema = z.object({ reading: z.string().min(1) }).strict();
+const botInstanceActiveBodySchema = z.object({ isActive: z.boolean() }).strict();
 
 export const adminRouter = new Hono();
 
@@ -150,16 +156,7 @@ adminRouter.get('/servers', async (c) => {
  */
 adminRouter.put('/servers/:guildId/premium', async (c) => {
   const guildId = c.req.param('guildId');
-  const body = await c.req.json<{ manualPremium: boolean }>();
-  if (typeof body.manualPremium !== 'boolean') {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'manualPremium は boolean で指定してください。' },
-      },
-      400,
-    );
-  }
+  const body = await validate.body(c, manualPremiumBodySchema);
   const updated = await updateGuildSettings(guildId, { manualPremium: body.manualPremium });
   return c.json({ success: true, data: { guildId: updated.guildId, manualPremium: updated.manualPremium } });
 });
@@ -233,7 +230,7 @@ adminRouter.get('/dictionary/global', async (c) => {
  */
 adminRouter.post('/dictionary/global', async (c) => {
   const session = c.get('session')!;
-  const body = await c.req.json<{ word: string; reading: string }>();
+  const body = await validate.body(c, globalDictionaryBodySchema);
   const entry = await addGlobalDictionaryEntry(body.word, body.reading, session.userId);
   return c.json({ success: true, data: entry }, 201);
 });
@@ -244,7 +241,7 @@ adminRouter.post('/dictionary/global', async (c) => {
  */
 adminRouter.put('/dictionary/global/:word', async (c) => {
   const word = decodeURIComponent(c.req.param('word'));
-  const body = await c.req.json<{ reading: string }>();
+  const body = await validate.body(c, globalDictionaryUpdateBodySchema);
   const entry = await updateGlobalDictionaryEntry(word, body.reading);
   return c.json({ success: true, data: entry });
 });
@@ -354,18 +351,7 @@ adminRouter.get('/bot-instances', async (c) => {
  */
 adminRouter.put('/bot-instances/:instanceId/active', async (c) => {
   const { instanceId } = await validate.params(c, botInstanceParamsSchema);
-  const body = await c.req.json<{ isActive: boolean }>();
-
-  if (typeof body.isActive !== 'boolean') {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'isActive は boolean で指定してください。' },
-      },
-      400,
-    );
-  }
-
+  const body = await validate.body(c, botInstanceActiveBodySchema);
   const instance = await setBotInstanceActive(instanceId, body.isActive);
   return c.json({ success: true, data: instance });
 });
