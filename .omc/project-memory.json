@@ -124,6 +124,12 @@
   },
   "hotPaths": [
     {
+      "path": "apps\\api\\src\\routes\\guilds.ts",
+      "accessCount": 17,
+      "lastAccessed": 1775298008778,
+      "type": "file"
+    },
+    {
       "path": "apps\\api\\src\\services\\stripe-webhook-handler.ts",
       "accessCount": 14,
       "lastAccessed": 1775264714349,
@@ -131,9 +137,15 @@
     },
     {
       "path": "apps\\bot\\prisma\\schema.prisma",
-      "accessCount": 8,
-      "lastAccessed": 1775264732209,
+      "accessCount": 10,
+      "lastAccessed": 1775297948828,
       "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 8,
+      "lastAccessed": 1775297902506,
+      "type": "directory"
     },
     {
       "path": "apps\\api\\src\\services\\__tests__\\stripe-webhook-handler.test.ts",
@@ -145,12 +157,6 @@
       "path": "apps\\api\\src\\routes\\stripe-webhook.ts",
       "accessCount": 7,
       "lastAccessed": 1775264705221,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\routes\\guilds.ts",
-      "accessCount": 7,
-      "lastAccessed": 1775265945249,
       "type": "file"
     },
     {
@@ -172,10 +178,10 @@
       "type": "file"
     },
     {
-      "path": "",
+      "path": "apps\\api\\src\\services\\boost-service.ts",
       "accessCount": 6,
-      "lastAccessed": 1775264725880,
-      "type": "directory"
+      "lastAccessed": 1775297949595,
+      "type": "file"
     },
     {
       "path": "pnpm-lock.yaml",
@@ -193,12 +199,6 @@
       "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
       "accessCount": 5,
       "lastAccessed": 1775264714398,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\boost-service.ts",
-      "accessCount": 5,
-      "lastAccessed": 1775297647339,
       "type": "file"
     },
     {
@@ -262,6 +262,18 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\middleware\\validate.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775297905859,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\app-error.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775297906031,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -298,12 +310,6 @@
       "type": "file"
     },
     {
-      "path": "apps\\api\\src\\infrastructure\\app-error.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775264692153,
-      "type": "file"
-    },
-    {
       "path": "apps\\api\\src\\infrastructure\\config.ts",
       "accessCount": 2,
       "lastAccessed": 1775264692668,
@@ -319,12 +325,6 @@
       "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
       "accessCount": 2,
       "lastAccessed": 1775264715033,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\validate.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775265334938,
       "type": "file"
     },
     {

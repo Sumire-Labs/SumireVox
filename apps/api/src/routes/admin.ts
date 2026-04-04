@@ -67,8 +67,10 @@ const guildSettingsUpdateSchema = z
 const adminGuildSettingsUpdateSchema = guildSettingsUpdateSchema.extend({
   manualPremium: z.boolean().optional(),
 });
+const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
+const requestIdParamsSchema = z.object({ id: z.string().cuid() });
 const instanceParamsSchema = z.object({
-  guildId: z.string(),
+  guildId: discordSnowflakeSchema,
   instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
 });
 const botInstanceParamsSchema = z.object({
@@ -155,7 +157,7 @@ adminRouter.get('/servers', async (c) => {
  * body: { manualPremium: boolean }
  */
 adminRouter.put('/servers/:guildId/premium', async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const body = await validate.body(c, manualPremiumBodySchema);
   const updated = await updateGuildSettings(guildId, { manualPremium: body.manualPremium });
   return c.json({ success: true, data: { guildId: updated.guildId, manualPremium: updated.manualPremium } });
@@ -166,7 +168,7 @@ adminRouter.put('/servers/:guildId/premium', async (c) => {
  * サーバー設定取得（管理者用）
  */
 adminRouter.get('/servers/:guildId/settings', async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
 
   const [settings, isPremium, guildInfo] = await Promise.all([
     getGuildSettings(guildId),
@@ -198,7 +200,7 @@ adminRouter.get('/servers/:guildId/settings', async (c) => {
  * サーバー設定変更（管理者用）
  */
 adminRouter.put('/servers/:guildId/settings', async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const body = await validate.body(c, adminGuildSettingsUpdateSchema);
 
   const [updated, isPremium] = await Promise.all([
@@ -275,7 +277,7 @@ adminRouter.get('/dictionary/requests', async (c) => {
  * PUT /api/admin/dictionary/requests/:id/approve
  */
 adminRouter.put('/dictionary/requests/:id/approve', async (c) => {
-  const id = c.req.param('id');
+  const { id } = await validate.params(c, requestIdParamsSchema);
   await approveRequest(id);
   return c.json({ success: true, data: null });
 });
@@ -284,7 +286,7 @@ adminRouter.put('/dictionary/requests/:id/approve', async (c) => {
  * PUT /api/admin/dictionary/requests/:id/reject
  */
 adminRouter.put('/dictionary/requests/:id/reject', async (c) => {
-  const id = c.req.param('id');
+  const { id } = await validate.params(c, requestIdParamsSchema);
   await rejectRequest(id);
   return c.json({ success: true, data: null });
 });
@@ -298,7 +300,7 @@ adminRouter.put('/dictionary/requests/:id/reject', async (c) => {
  * サーバーで利用可能な Bot インスタンス一覧（管理者用）
  */
 adminRouter.get('/servers/:guildId/bots', async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildBotList(guildId);
 
   return c.json({
@@ -326,7 +328,7 @@ adminRouter.put('/servers/:guildId/bots/:instanceId/settings', async (c) => {
  * ギルドのチャンネル一覧（管理者用）
  */
 adminRouter.get('/servers/:guildId/channels', async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildChannelsSorted(guildId);
   return c.json({ success: true, data: result });
 });

@@ -42,8 +42,13 @@ const paginationQuerySchema = z.object({
     .max(100, '100以下で指定してください。')
     .default(20),
 });
+const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
+const guildDictWordParamsSchema = z.object({
+  guildId: discordSnowflakeSchema,
+  word: z.string().min(1).transform(decodeURIComponent),
+});
 const instanceParamsSchema = z.object({
-  guildId: z.string(),
+  guildId: discordSnowflakeSchema,
   instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
 });
 const guildSettingsUpdateSchema = z
@@ -164,7 +169,7 @@ guildsRouter.get('/', async (c) => {
  * サーバー設定取得
  */
 guildsRouter.get('/:guildId/settings', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const [settings, isPremium] = await Promise.all([
     getGuildSettings(guildId),
     isGuildPremium(guildId),
@@ -177,7 +182,7 @@ guildsRouter.get('/:guildId/settings', requireGuildAdmin, async (c) => {
  * サーバー設定変更
  */
 guildsRouter.put('/:guildId/settings', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const body = await validate.body(c, guildSettingsUpdateSchema);
 
   const [updated, isPremium] = await Promise.all([
@@ -192,7 +197,7 @@ guildsRouter.put('/:guildId/settings', requireGuildAdmin, async (c) => {
  * サーバー辞書一覧
  */
 guildsRouter.get('/:guildId/dictionary', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const { page, perPage } = await validate.query(c, paginationQuerySchema);
   const result = await getServerDictionaryEntries(guildId, page, perPage);
   return c.json({
@@ -211,7 +216,7 @@ guildsRouter.get('/:guildId/dictionary', requireGuildAdmin, async (c) => {
  * サーバー辞書追加
  */
 guildsRouter.post('/:guildId/dictionary', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const session = c.get('session')!;
   const body = await validate.body(c, dictionaryBodySchema);
   const isPremium = await isGuildPremium(guildId);
@@ -230,8 +235,7 @@ guildsRouter.post('/:guildId/dictionary', requireGuildAdmin, async (c) => {
  * サーバー辞書削除
  */
 guildsRouter.delete('/:guildId/dictionary/:word', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
-  const word = decodeURIComponent(c.req.param('word'));
+  const { guildId, word } = await validate.params(c, guildDictWordParamsSchema);
   await deleteServerDictionaryEntry(guildId, word);
   return c.json({ success: true, data: null });
 });
@@ -245,7 +249,7 @@ guildsRouter.delete('/:guildId/dictionary/:word', requireGuildAdmin, async (c) =
  * ギルドのチャンネル一覧 (テキスト・ボイス・カテゴリ別)
  */
 guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildChannelsSorted(guildId);
   return c.json({ success: true, data: result });
 });
@@ -255,7 +259,7 @@ guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
  * ギルドのロール一覧 (@everyone・Bot 管理ロール除外)
  */
 guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildRolesSorted(guildId);
   return c.json({ success: true, data: result });
 });
@@ -269,7 +273,7 @@ guildsRouter.get('/:guildId/roles', requireGuildAdmin, async (c) => {
  * サーバーで利用可能な Bot インスタンス一覧
  */
 guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
-  const guildId = c.req.param('guildId');
+  const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildBotList(guildId);
 
   return c.json({

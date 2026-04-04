@@ -18,6 +18,7 @@ import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
 
+const boostIdParamsSchema = z.object({ boostId: z.string().cuid() });
 const checkoutBodySchema = z
   .object({ boostCount: z.number().int().min(1).max(10).default(1) })
   .strict();
@@ -197,7 +198,7 @@ userRouter.post('/boosts/assign', async (c) => {
  */
 userRouter.put('/boosts/:boostId/assign', async (c) => {
   const session = c.get('session')!;
-  const boostId = c.req.param('boostId');
+  const { boostId } = await validate.params(c, boostIdParamsSchema);
   const { guildId } = await validate.body(c, boostAssignByIdBodySchema);
   await assignBoost(session.userId, boostId, guildId);
   return c.json({ success: true, data: null });
@@ -208,7 +209,7 @@ userRouter.put('/boosts/:boostId/assign', async (c) => {
  */
 userRouter.put('/boosts/:boostId/unassign', async (c) => {
   const session = c.get('session')!;
-  const boostId = c.req.param('boostId');
+  const { boostId } = await validate.params(c, boostIdParamsSchema);
 
   await unassignBoost(session.userId, boostId);
   return c.json({ success: true, data: null });
