@@ -130,6 +130,12 @@ guildsRouter.get('/', async (c) => {
           503,
         );
       }
+      if (err instanceof AppError && err.statusCode === 401) {
+        return c.json(
+          { success: false, error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' } },
+          401,
+        );
+      }
       throw err;
     }
   }

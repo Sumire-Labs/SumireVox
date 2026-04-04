@@ -136,6 +136,7 @@ authRouter.get('/callback', async (c) => {
       avatar: string | null;
     };
 
+    const tokenExpiresAt = Date.now() + tokenData.expires_in * 1000;
     const sessionId = await createSession({
       userId: userData.id,
       username: userData.username,
@@ -143,6 +144,7 @@ authRouter.get('/callback', async (c) => {
       avatar: userData.avatar,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
+      tokenExpiresAt,
     });
 
     setCookie(c, 'session_id', sessionId, {

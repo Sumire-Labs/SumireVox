@@ -11,6 +11,7 @@ export interface SessionData {
   avatar: string | null;
   accessToken: string;
   refreshToken: string;
+  tokenExpiresAt: number;
 }
 
 /**

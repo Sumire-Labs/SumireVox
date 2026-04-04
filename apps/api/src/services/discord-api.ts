@@ -25,9 +25,11 @@ export async function fetchUserGuilds(accessToken: string): Promise<DiscordGuild
     throw new AppError('RATE_LIMITED', `Discord API rate limited. Retry after ${retryAfter}s`, 429);
   }
 
+  if (response.status === 401) {
+    throw new AppError('DISCORD_TOKEN_EXPIRED', 'Discord access token has expired. Please re-login.', 401);
+  }
   if (!response.ok) {
-    logger.error({ status: response.status }, 'Failed to fetch user guilds');
-    return [];
+    throw new AppError('DISCORD_API_ERROR', `Discord API error: ${response.status}`, response.status);
   }
 
   return response.json() as Promise<DiscordGuild[]>;

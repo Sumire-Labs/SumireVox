@@ -16,6 +16,7 @@ import {
 } from '../services/bot-instance-service.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
+import { AppError } from '../infrastructure/app-error.js';
 
 const checkoutBodySchema = z
   .object({ boostCount: z.number().int().min(1).max(10).default(1) })
@@ -54,6 +55,9 @@ async function getActiveBotGuildIds(userId: string, accessToken: string): Promis
         logger.warn({ err }, 'Failed to write user all-guilds cache');
       }
     } catch (err) {
+      if (err instanceof AppError && err.statusCode === 401) {
+        throw err;
+      }
       logger.warn({ err }, 'Failed to fetch user guilds for guild boost info');
       return [];
     }
@@ -103,6 +107,12 @@ userRouter.get('/guilds', async (c) => {
         logger.warn({ err }, 'Failed to write user all-guilds cache');
       }
     } catch (err) {
+      if (err instanceof AppError && err.statusCode === 401) {
+        return c.json(
+          { success: false, error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' } },
+          401,
+        );
+      }
       logger.error({ err }, 'Failed to fetch user guilds');
       return c.json(
         { success: false, error: { code: 'INTERNAL_ERROR', message: 'ギルド一覧の取得に失敗しました。' } },

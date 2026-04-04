@@ -148,6 +148,12 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\routes\\guilds.ts",
+      "accessCount": 7,
+      "lastAccessed": 1775265945249,
+      "type": "file"
+    },
+    {
       "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
       "accessCount": 6,
       "lastAccessed": 1774971699577,
@@ -196,9 +202,9 @@
       "type": "file"
     },
     {
-      "path": "apps\\api\\src\\routes\\guilds.ts",
+      "path": "apps\\api\\src\\routes\\auth.ts",
       "accessCount": 4,
-      "lastAccessed": 1775265382864,
+      "lastAccessed": 1775265929725,
       "type": "file"
     },
     {
@@ -247,6 +253,12 @@
       "path": "packages\\shared\\src\\constants\\defaults.ts",
       "accessCount": 3,
       "lastAccessed": 1775264733055,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\session.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775265918957,
       "type": "file"
     },
     {
@@ -376,12 +388,6 @@
       "type": "file"
     },
     {
-      "path": "apps\\api\\src\\infrastructure\\session.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264695596,
-      "type": "file"
-    },
-    {
       "path": "apps\\api\\src\\infrastructure\\settings-cache.ts",
       "accessCount": 1,
       "lastAccessed": 1775264696027,
@@ -409,12 +415,6 @@
       "path": "apps\\api\\src\\middleware\\require-guild-admin.ts",
       "accessCount": 1,
       "lastAccessed": 1775264702098,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\routes\\auth.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264703427,
       "type": "file"
     },
     {
