@@ -98,9 +98,15 @@ export async function updateGuildSettings(
       greetingOnJoin: updates.greetingOnJoin ?? current.greetingOnJoin,
       customEmojiHandling: updates.customEmojiHandling ?? current.customEmojiHandling,
       readTargetType: updates.readTargetType ?? current.readTargetType,
-      defaultTextChannelId: updates.defaultTextChannelId ?? current.defaultTextChannelId,
-      defaultSpeakerId: updates.defaultSpeakerId ?? current.defaultSpeakerId,
-      adminRoleId: updates.adminRoleId ?? current.adminRoleId,
+      defaultTextChannelId: updates.defaultTextChannelId !== undefined
+        ? updates.defaultTextChannelId
+        : current.defaultTextChannelId,
+      defaultSpeakerId: updates.defaultSpeakerId !== undefined
+        ? updates.defaultSpeakerId
+        : current.defaultSpeakerId,
+      adminRoleId: updates.adminRoleId !== undefined
+        ? updates.adminRoleId
+        : current.adminRoleId,
       dictionaryPermission: updates.dictionaryPermission ?? current.dictionaryPermission,
       manualPremium: updates.manualPremium ?? current.manualPremium,
     },
