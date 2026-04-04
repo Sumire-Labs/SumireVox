@@ -10,7 +10,7 @@ function createRedisInstance(name: string): Redis {
   const client = new Redis(config.redisUrl, {
     lazyConnect: false,
     maxRetriesPerRequest: 3,
-    retryStrategy: (attempt: number) => attempt * Math.min(attempt * 200, 5000),
+    retryStrategy: (attempt: number) => Math.min(attempt * 200, 5000),
   });
 
   client.on('ready', () => {
