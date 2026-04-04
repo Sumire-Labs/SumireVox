@@ -213,7 +213,8 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
       const totalGuildBoosts = await tx.boost.count({
         where: { guildId, subscription: { status: 'ACTIVE' } },
       });
-      if (maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild) {
+      const requestedTotalGuildBoosts = totalGuildBoosts + delta;
+      if (maxBoostsPerGuild > 0 && requestedTotalGuildBoosts > maxBoostsPerGuild) {
         throw new AppError('GUILD_BOOST_LIMIT_REACHED', 'このサーバーは最大ブースト数に達しています。', 400);
       }
 
