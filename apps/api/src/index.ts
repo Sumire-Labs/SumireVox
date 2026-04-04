@@ -57,6 +57,8 @@ app.route('/api/admin', adminRouter);
 app.route('/api/voicevox', voicevoxRouter);
 app.route('/api/bot-instances', botInstancesRouter);
 
+let server: ReturnType<typeof serve> | null = null;
+
 // サーバー起動
 async function main(): Promise<void> {
   // DB 接続確認
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
 
   // サーバー起動
   const port = config.apiPort;
-  serve(
+  server = serve(
     {
       fetch: app.fetch,
       port,
@@ -83,6 +85,22 @@ async function main(): Promise<void> {
 // Graceful Shutdown
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, `Received ${signal}, shutting down...`);
+
+  if (server) {
+    await new Promise<void>((resolve, reject) => {
+      server!.close((err) => {
+        if (err) {
+          logger.error({ err }, 'Error closing HTTP server');
+          reject(err);
+        } else {
+          logger.info('HTTP server closed');
+          resolve();
+        }
+      });
+    }).catch(() => {
+      // HTTP サーバーの停止に失敗してもシャットダウンは続行する
+    });
+  }
 
   await disconnectRedis();
   logger.info('Redis disconnected');
