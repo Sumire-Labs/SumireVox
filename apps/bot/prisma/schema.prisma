@@ -137,3 +137,15 @@ model StripeEvent {
 
   @@map("stripe_events")
 }
+
+model BoostRevocation {
+  id             String    @id @default(cuid())
+  boostId         String    @map("boost_id")
+  subscriptionId  String    @map("subscription_id")
+  guildId         String?   @map("guild_id")
+  assignedAt      DateTime? @map("assigned_at")
+  revokedAt       DateTime  @default(now()) @map("revoked_at")
+  reason          String    @map("reason")
+
+  @@map("boost_revocations")
+}

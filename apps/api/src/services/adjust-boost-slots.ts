@@ -55,5 +55,19 @@ export async function adjustBoostSlots(
     );
   }
 
+  const revokedAt = new Date();
+  if (assignedToRemove.length > 0) {
+    await tx.boostRevocation.createMany({
+      data: assignedToRemove.map((boost) => ({
+        boostId: boost.id,
+        subscriptionId,
+        guildId: boost.guildId,
+        assignedAt: boost.assignedAt,
+        revokedAt,
+        reason: 'SUBSCRIPTION_QUANTITY_DECREASE',
+      })),
+    });
+  }
+
   await tx.boost.deleteMany({ where: { id: { in: assignedToRemove.map((b) => b.id) } } });
 }
