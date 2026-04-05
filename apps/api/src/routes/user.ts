@@ -37,7 +37,10 @@ const boostAssignByIdBodySchema = z.object({ guildId: z.string().min(1) }).stric
 const USER_GUILDS_CACHE_TTL = 60;
 const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
 
-async function getActiveBotGuildIds(userId: string, accessToken: string): Promise<string[]> {
+async function getUserGuilds(
+  userId: string,
+  accessToken: string,
+): Promise<Array<{ id: string; name: string; icon: string | null }>> {
   const cacheKey = userGuildsCacheKey(userId);
   let allGuilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
 
@@ -50,33 +53,59 @@ async function getActiveBotGuildIds(userId: string, accessToken: string): Promis
     logger.warn({ err }, 'Failed to read user all-guilds cache');
   }
 
-  if (!allGuilds) {
-    try {
-      const guilds = await fetchUserGuilds(accessToken);
-      allGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
-      try {
-        await getRedisClient().set(cacheKey, JSON.stringify(allGuilds), 'EX', USER_GUILDS_CACHE_TTL);
-      } catch (err) {
-        logger.warn({ err }, 'Failed to write user all-guilds cache');
-      }
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === 401) {
-        throw err;
-      }
-      logger.warn({ err }, 'Failed to fetch user guilds for guild boost info');
-      return [];
-    }
+  if (allGuilds) {
+    return allGuilds;
   }
 
-  const botInstances = await getActiveBotInstances();
-  const guildBotStatusMap = await getGuildsWithBotStatus(
-    allGuilds.map((guild) => guild.id),
-    botInstances,
-  );
+  const guilds = await fetchUserGuilds(accessToken);
+  const normalizedGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
 
-  return allGuilds
-    .filter((guild) => guildBotStatusMap.get(guild.id) ?? false)
-    .map((guild) => guild.id);
+  try {
+    await getRedisClient().set(cacheKey, JSON.stringify(normalizedGuilds), 'EX', USER_GUILDS_CACHE_TTL);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to write user all-guilds cache');
+  }
+
+  return normalizedGuilds;
+}
+
+async function ensureUserBelongsToGuild(userId: string, accessToken: string, guildId: string): Promise<void> {
+  let guilds: Array<{ id: string; name: string; icon: string | null }>;
+
+  try {
+    guilds = await getUserGuilds(userId, accessToken);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 401) {
+      throw new AppError('SESSION_EXPIRED', 'セッションの有効期限が切れました。再ログインしてください。', 401);
+    }
+    throw err;
+  }
+
+  const isMember = guilds.some((guild) => guild.id === guildId);
+  if (!isMember) {
+    throw new AppError('FORBIDDEN', '参加していないサーバーにはブーストできません。', 403);
+  }
+}
+
+async function getActiveBotGuildIds(userId: string, accessToken: string): Promise<string[]> {
+  try {
+    const allGuilds = await getUserGuilds(userId, accessToken);
+    const botInstances = await getActiveBotInstances();
+    const guildBotStatusMap = await getGuildsWithBotStatus(
+      allGuilds.map((guild) => guild.id),
+      botInstances,
+    );
+
+    return allGuilds
+      .filter((guild) => guildBotStatusMap.get(guild.id) ?? false)
+      .map((guild) => guild.id);
+  } catch (err) {
+    if (err instanceof AppError && err.statusCode === 401) {
+      throw err;
+    }
+    logger.warn({ err }, 'Failed to fetch user guilds for guild boost info');
+    return [];
+  }
 }
 
 export const userRouter = new Hono();
@@ -89,41 +118,22 @@ userRouter.use('*', requireAuth);
  */
 userRouter.get('/guilds', async (c) => {
   const session = c.get('session')!;
-  const cacheKey = userGuildsCacheKey(session.userId);
-
-  let allGuilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
+  let allGuilds: Array<{ id: string; name: string; icon: string | null }>;
 
   try {
-    const cached = await getRedisClient().get(cacheKey);
-    if (cached) {
-      allGuilds = JSON.parse(cached) as Array<{ id: string; name: string; icon: string | null }>;
-    }
+    allGuilds = await getUserGuilds(session.userId, session.accessToken);
   } catch (err) {
-    logger.warn({ err }, 'Failed to read user all-guilds cache');
-  }
-
-  if (!allGuilds) {
-    try {
-      const guilds = await fetchUserGuilds(session.accessToken);
-      allGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
-      try {
-        await getRedisClient().set(cacheKey, JSON.stringify(allGuilds), 'EX', USER_GUILDS_CACHE_TTL);
-      } catch (err) {
-        logger.warn({ err }, 'Failed to write user all-guilds cache');
-      }
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === 401) {
-        return c.json(
-          { success: false, error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' } },
-          401,
-        );
-      }
-      logger.error({ err }, 'Failed to fetch user guilds');
+    if (err instanceof AppError && err.statusCode === 401) {
       return c.json(
-        { success: false, error: { code: 'INTERNAL_ERROR', message: 'ギルド一覧の取得に失敗しました。' } },
-        500,
+        { success: false, error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' } },
+        401,
       );
     }
+    logger.error({ err }, 'Failed to fetch user guilds');
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'ギルド一覧の取得に失敗しました。' } },
+      500,
+    );
   }
 
   const botInstances = await getActiveBotInstances();
@@ -177,6 +187,7 @@ userRouter.post('/boosts/checkout', checkoutRateLimit, async (c) => {
 userRouter.post('/boosts/assign', boostAssignRateLimit, async (c) => {
   const session = c.get('session')!;
   const body = await validate.body(c, boostAssignBodySchema);
+  await ensureUserBelongsToGuild(session.userId, session.accessToken, body.guildId);
 
   const maxBoostsPerGuild = await getActiveInstanceCount();
   if (body.count > maxBoostsPerGuild) {
@@ -204,6 +215,7 @@ userRouter.put('/boosts/:boostId/assign', async (c) => {
   const session = c.get('session')!;
   const { boostId } = await validate.params(c, boostIdParamsSchema);
   const { guildId } = await validate.body(c, boostAssignByIdBodySchema);
+  await ensureUserBelongsToGuild(session.userId, session.accessToken, guildId);
   await assignBoost(session.userId, boostId, guildId);
   return c.json({ success: true, data: null });
 });
