@@ -292,7 +292,7 @@ describe('handleStripeWebhook', () => {
       data: {
         guildId: null,
         assignedAt: null,
-        unassignedAt: expect.any(Date),
+        unassignedAt: null,
       },
     });
   });

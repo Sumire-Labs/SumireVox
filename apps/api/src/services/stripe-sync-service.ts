@@ -140,7 +140,11 @@ async function syncSingleSubscription(
     if (status === 'CANCELED' || status === 'PAST_DUE') {
       await tx.boost.updateMany({
         where: { subscriptionId: stripeSub.id, guildId: { not: null } },
-        data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
+        data: {
+          guildId: null,
+          assignedAt: null,
+          unassignedAt: status === 'PAST_DUE' ? null : new Date(),
+        },
       });
     }
   });

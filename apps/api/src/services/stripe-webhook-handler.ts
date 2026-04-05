@@ -145,7 +145,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
       data: {
         guildId: null,
         assignedAt: null,
-        unassignedAt: new Date(),
+        unassignedAt: null,
       },
     });
   });
