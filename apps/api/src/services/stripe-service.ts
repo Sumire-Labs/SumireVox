@@ -18,6 +18,24 @@ export async function createCheckoutSession(
   const prisma = getPrisma();
 
   const existingSub = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      status: {
+        in: ['ACTIVE', 'PAST_DUE', 'INCOMPLETE'],
+      },
+    },
+    select: { stripeCustomerId: true, stripeSubscriptionId: true, status: true },
+  });
+
+  if (existingSub) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      '既存のサブスクリプションがあります。ブースト数の変更は Billing Portal から行ってください。',
+      400,
+    );
+  }
+
+  const existingCustomer = await prisma.subscription.findFirst({
     where: { userId },
     select: { stripeCustomerId: true },
   });
@@ -45,8 +63,8 @@ export async function createCheckoutSession(
     },
   };
 
-  if (existingSub?.stripeCustomerId) {
-    sessionParams.customer = existingSub.stripeCustomerId;
+  if (existingCustomer?.stripeCustomerId) {
+    sessionParams.customer = existingCustomer.stripeCustomerId;
   }
 
   const session = await stripe.checkout.sessions.create(sessionParams);
@@ -87,20 +105,25 @@ export async function cancelSubscription(userId: string): Promise<void> {
   }
   const prisma = getPrisma();
 
-  const sub = await prisma.subscription.findFirst({
+  const subs = await prisma.subscription.findMany({
     where: { userId, status: 'ACTIVE' },
+    select: { stripeSubscriptionId: true },
   });
 
-  if (!sub) {
+  if (subs.length === 0) {
     throw new AppError('NOT_FOUND', 'アクティブなサブスクリプションが見つかりません。', 404);
   }
 
-  await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-    cancel_at_period_end: true,
-  });
+  await Promise.all(
+    subs.map((sub) =>
+      stripe!.subscriptions.update(sub.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      }),
+    ),
+  );
 
   logger.info(
-    { userId, subscriptionId: sub.stripeSubscriptionId },
-    'Subscription set to cancel at period end',
+    { userId, subscriptionIds: subs.map((sub) => sub.stripeSubscriptionId) },
+    'Subscriptions set to cancel at period end',
   );
 }

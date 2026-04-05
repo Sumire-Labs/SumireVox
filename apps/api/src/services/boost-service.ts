@@ -169,7 +169,16 @@ export async function getUserBoosts(userId: string): Promise<{
       .flatMap((sub) => sub.boosts.map((boost) => boost.id)),
   );
 
-  const sub = subscriptions[0]; // 最新のサブスクリプションを代表値として使用
+  const representativeStatus: Subscription['status'] = subscriptions.some((subscription) => subscription.status === 'ACTIVE')
+    ? 'ACTIVE'
+    : subscriptions.some((subscription) => subscription.status === 'PAST_DUE')
+      ? 'PAST_DUE'
+      : (subscriptions[0]!.status as Subscription['status']);
+  const currentPeriodEnd = subscriptions.reduce(
+    (latest, subscription) =>
+      subscription.currentPeriodEnd.getTime() > latest.getTime() ? subscription.currentPeriodEnd : latest,
+    subscriptions[0]!.currentPeriodEnd,
+  );
   const totalBoostCount = subscriptions.reduce((sum, s) => sum + s.boostCount, 0);
 
   // ギルドごとの割り当て集計
@@ -198,9 +207,9 @@ export async function getUserBoosts(userId: string): Promise<{
   return {
     boosts,
     subscription: {
-      stripeSubscriptionId: sub.stripeSubscriptionId,
-      status: sub.status as Subscription['status'],
-      currentPeriodEnd: sub.currentPeriodEnd,
+      stripeSubscriptionId: subscriptions[0]!.stripeSubscriptionId,
+      status: representativeStatus,
+      currentPeriodEnd,
       boostCount: totalBoostCount,
     },
     totalBoosts: boosts.length,
