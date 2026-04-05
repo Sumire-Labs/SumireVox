@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775225997974,
+  "lastScanned": 1775365381554,
   "projectRoot": "C:\\Users\\hayat\\Desktop\\Development\\SumireVox",
   "techStack": {
     "languages": [
@@ -68,14 +68,14 @@
       "path": "apps",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775225997952,
+      "lastAccessed": 1775365381522,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 10,
-      "lastAccessed": 1775225997952,
+      "lastAccessed": 1775365381523,
       "keyFiles": [
         "api-endpoints.md",
         "architecture.md",
@@ -88,7 +88,7 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1775225997952,
+      "lastAccessed": 1775365381529,
       "keyFiles": [
         "nginx.conf",
         "nginx.prod.conf"
@@ -98,14 +98,14 @@
       "path": "packages",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775225997953,
+      "lastAccessed": 1775365381530,
       "keyFiles": []
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 1,
-      "lastAccessed": 1775225997953,
+      "lastAccessed": 1775365381530,
       "keyFiles": [
         "setup-env.sh"
       ]
@@ -114,7 +114,7 @@
       "path": "apps\\api",
       "purpose": "API routes",
       "fileCount": 5,
-      "lastAccessed": 1775225997953,
+      "lastAccessed": 1775365381531,
       "keyFiles": [
         "docker-entrypoint.sh",
         "Dockerfile",
@@ -131,20 +131,20 @@
     },
     {
       "path": "apps\\api\\src\\services\\stripe-webhook-handler.ts",
-      "accessCount": 14,
-      "lastAccessed": 1775264714349,
+      "accessCount": 15,
+      "lastAccessed": 1775365481839,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\index.ts",
+      "accessCount": 15,
+      "lastAccessed": 1775365702129,
       "type": "file"
     },
     {
       "path": "apps\\bot\\prisma\\schema.prisma",
       "accessCount": 10,
       "lastAccessed": 1775297948828,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\index.ts",
-      "accessCount": 10,
-      "lastAccessed": 1775298889560,
       "type": "file"
     },
     {
@@ -205,6 +205,12 @@
       "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
       "accessCount": 5,
       "lastAccessed": 1775264714398,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\config.ts",
+      "accessCount": 5,
+      "lastAccessed": 1775365677771,
       "type": "file"
     },
     {
@@ -280,6 +286,18 @@
       "type": "file"
     },
     {
+      "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775365477892,
+      "type": "file"
+    },
+    {
+      "path": "apps\\api\\src\\infrastructure\\stripe-client.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775365487320,
+      "type": "file"
+    },
+    {
       "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
       "accessCount": 2,
       "lastAccessed": 1774942394594,
@@ -313,24 +331,6 @@
       "path": "README.md",
       "accessCount": 2,
       "lastAccessed": 1775062530615,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775264692668,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\stripe-client.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775264696375,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775264715033,
       "type": "file"
     },
     {

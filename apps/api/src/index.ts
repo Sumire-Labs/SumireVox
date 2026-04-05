@@ -17,6 +17,7 @@ import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
 import { botInstancesRouter } from './routes/bot-instances.js';
 import { reconcileBoosts } from './services/boost-service.js';
+import { reconcileStripeSubscriptions } from './services/stripe-subscription-reconciler.js';
 
 const app = new Hono();
 
@@ -58,6 +59,7 @@ app.route('/api/voicevox', voicevoxRouter);
 app.route('/api/bot-instances', botInstancesRouter);
 
 let server: ReturnType<typeof serve> | null = null;
+let reconcileTimer: ReturnType<typeof setInterval> | null = null;
 
 // サーバー起動
 async function main(): Promise<void> {
@@ -80,11 +82,21 @@ async function main(): Promise<void> {
 
   // 起動後にブースト整合処理を実行
   reconcileBoosts().catch((err) => logger.error({ err }, 'Boost reconciliation failed on startup'));
+
+  // Stripe サブスクリプション定期整合処理（起動から1インターバル後に開始）
+  reconcileTimer = setInterval(() => {
+    reconcileStripeSubscriptions().catch((err) => logger.error({ err }, 'Stripe subscription reconciliation failed'));
+  }, config.stripeReconcileIntervalMs);
 }
 
 // Graceful Shutdown
 const shutdown = async (signal: string): Promise<void> => {
   logger.info({ signal }, `Received ${signal}, shutting down...`);
+
+  if (reconcileTimer) {
+    clearInterval(reconcileTimer);
+    reconcileTimer = null;
+  }
 
   if (server) {
     await new Promise<void>((resolve, reject) => {

@@ -36,6 +36,21 @@
 - `PAST_DUE` に遷移したサブスクリプションのブーストは即時解除
 - サブスクリプション数量減少で強制的に失効したブーストは監査用テーブルへ退避する
 
+## 定期整合処理
+
+Webhook 配信失敗や遅延による DB と Stripe の不整合を修復するため、API サーバーは起動後1インターバル経過後から定期的に整合処理を実行する。
+
+- 実行間隔: `STRIPE_RECONCILE_INTERVAL_MS`（デフォルト1時間）
+- 対象: DB 上で `ACTIVE` または `PAST_DUE` の全サブスクリプション
+- 処理内容:
+  - Stripe 側が `canceled` / `incomplete_expired` → DB を `CANCELED` に更新し、割り当て済みブーストを解除
+  - Stripe 側に存在しない (404) → 同上
+  - status / currentPeriodEnd / boostCount に差分あり → DB を Stripe の値で上書き
+  - `PAST_DUE` に変化かつ割り当て済みブーストあり → 即時解除
+  - boostCount 増減 → ブースト枠を追加または削除 (減少時は `adjustBoostSlots` で監査ログ付き強制解除)
+- Stripe API の rate limit 対策として各リクエスト間に 200ms の delay を挿入
+- 1件の処理失敗は他のサブスクリプションに影響しない
+
 ## FREE と PREMIUM の機能差
 
 | 機能 | FREE | PREMIUM |

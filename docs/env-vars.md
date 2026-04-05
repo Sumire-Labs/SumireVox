@@ -28,6 +28,7 @@
 | STRIPE_WEBHOOK_SECRET | Stripe Webhook 署名シークレット | （空文字 = Stripe 無効） |
 | STRIPE_PRICE_ID | ブースト Price ID | （空文字 = Stripe 無効） |
 | BOOST_COOLDOWN_DAYS | クールダウン日数 | 7 |
+| STRIPE_RECONCILE_INTERVAL_MS | Stripe サブスクリプション定期整合処理の実行間隔 (ms) | 3600000 (1時間) |
 | API_DOMAIN | API サーバーの公開ドメイン | http://localhost:3000 |
 | WEB_DOMAIN | メインサイトドメイン | http://localhost:5173 |
 | ADMIN_DOMAIN | 管理者ダッシュボードドメイン | http://localhost:5174 |

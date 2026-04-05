@@ -21,6 +21,7 @@ interface AppConfig {
   webDomain: string;
   adminDomain: string;
   settingsCacheTtlSeconds: number;
+  stripeReconcileIntervalMs: number;
 }
 
 function buildConfig(): AppConfig {
@@ -54,6 +55,7 @@ function buildConfig(): AppConfig {
     webDomain: process.env['WEB_DOMAIN'] ?? 'http://localhost:5173',
     adminDomain: process.env['ADMIN_DOMAIN'] ?? 'http://localhost:5174',
     settingsCacheTtlSeconds: requireInt('SETTINGS_CACHE_TTL_SECONDS', 300),
+    stripeReconcileIntervalMs: requireInt('STRIPE_RECONCILE_INTERVAL_MS', 3600000),
   };
 }
 
