@@ -19,12 +19,23 @@ export async function syncUserSubscriptionsIfStale(userId: string): Promise<void
   if (!stripe) return;
   const redis = getRedisClient();
   const key = syncRedisKey(userId);
-  const lastSync = await redis.get(key);
+  let lastSync: string | null = null;
+
+  try {
+    lastSync = await redis.get(key);
+  } catch (err) {
+    logger.error({ err, userId }, 'Failed to read Stripe sync TTL from Redis');
+  }
+
   if (lastSync) return; // まだ有効期限内なのでスキップ
 
   try {
     await syncUserSubscriptions(userId);
-    await redis.set(key, '1', 'EX', SYNC_TTL_SECONDS);
+    try {
+      await redis.set(key, '1', 'EX', SYNC_TTL_SECONDS);
+    } catch (err) {
+      logger.error({ err, userId }, 'Failed to write Stripe sync TTL to Redis');
+    }
   } catch (err) {
     // 同期失敗はログのみ。レスポンスは続行する
     logger.error({ err, userId }, 'Failed to sync user subscriptions from Stripe');
@@ -77,22 +88,24 @@ async function syncSingleSubscription(
 
   if (!existing) {
     // DB に存在しない場合は新規作成
-    await prisma.subscription.create({
-      data: {
-        userId,
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: stripeSub.id,
-        status,
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
-        boostCount,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.subscription.create({
+        data: {
+          userId,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: stripeSub.id,
+          status,
+          currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+          boostCount,
+        },
+      });
+      if (boostCount > 0) {
+        const boostData = Array.from({ length: boostCount }, () => ({
+          subscriptionId: stripeSub.id,
+        }));
+        await tx.boost.createMany({ data: boostData });
+      }
     });
-    if (boostCount > 0) {
-      const boostData = Array.from({ length: boostCount }, () => ({
-        subscriptionId: stripeSub.id,
-      }));
-      await prisma.boost.createMany({ data: boostData });
-    }
     logger.info({ userId, subscriptionId: stripeSub.id, boostCount }, 'New subscription synced');
     return;
   }
