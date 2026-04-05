@@ -80,18 +80,27 @@ async function processSubscription(sub: ReconcileSubject, stripeSub: Stripe.Subs
   const boostCountChanged = newBoostCount !== sub.boostCount;
   const periodEndChanged = newPeriodEnd.getTime() !== sub.currentPeriodEnd.getTime();
 
-  if (!statusChanged && !boostCountChanged && !periodEndChanged) {
-    return false;
-  }
-
-  logger.info(
-    { subscriptionId: sub.stripeSubscriptionId, statusChanged, boostCountChanged, periodEndChanged },
-    'Reconciling subscription drift',
-  );
-
   const prisma = getPrisma();
   const assignedBoosts = sub.boosts.filter((b) => b.guildId !== null);
   const affectedGuildIds = assignedBoosts.map((b) => b.guildId);
+
+  const hasStrandedBoosts = newStatus === 'PAST_DUE' && assignedBoosts.length > 0;
+
+  if (!statusChanged && !boostCountChanged && !periodEndChanged && !hasStrandedBoosts) {
+    return false;
+  }
+
+  if (!statusChanged && !boostCountChanged && !periodEndChanged && hasStrandedBoosts) {
+    logger.warn(
+      { subscriptionId: sub.stripeSubscriptionId },
+      'PAST_DUE subscription has assigned boosts, repairing missed unassignment',
+    );
+  } else {
+    logger.info(
+      { subscriptionId: sub.stripeSubscriptionId, statusChanged, boostCountChanged, periodEndChanged },
+      'Reconciling subscription drift',
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.subscription.update({
