@@ -135,6 +135,11 @@ export async function getUserBoosts(userId: string): Promise<{
       };
     }),
   );
+  const activeBoostIds = new Set(
+    subscriptions
+      .filter((sub) => sub.status === 'ACTIVE')
+      .flatMap((sub) => sub.boosts.map((boost) => boost.id)),
+  );
 
   const sub = subscriptions[0]; // 最新のサブスクリプションを代表値として使用
   const totalBoostCount = subscriptions.reduce((sum, s) => sum + s.boostCount, 0);
@@ -143,15 +148,15 @@ export async function getUserBoosts(userId: string): Promise<{
   const allocationMap = new Map<string, number>();
   let usedBoosts = 0;
   for (const boost of boosts) {
-    if (boost.guildId) {
+    if (boost.guildId && activeBoostIds.has(boost.id)) {
       usedBoosts++;
       allocationMap.set(boost.guildId, (allocationMap.get(boost.guildId) ?? 0) + 1);
     }
   }
-  const cooldownBoosts = boosts.filter((b) => !b.guildId && b.isOnCooldown).length;
-  const availableBoosts = boosts.filter((b) => !b.guildId && !b.isOnCooldown).length;
+  const cooldownBoosts = boosts.filter((b) => activeBoostIds.has(b.id) && !b.guildId && b.isOnCooldown).length;
+  const availableBoosts = boosts.filter((b) => activeBoostIds.has(b.id) && !b.guildId && !b.isOnCooldown).length;
   const cooldowns: BoostCooldownInfo[] = boosts
-    .filter((b) => !b.guildId && b.isOnCooldown && b.unassignedAt !== null && b.cooldownEndsAt !== null)
+    .filter((b) => activeBoostIds.has(b.id) && !b.guildId && b.isOnCooldown && b.unassignedAt !== null && b.cooldownEndsAt !== null)
     .map((b) => ({
       boostId: b.id,
       unassignedAt: b.unassignedAt!.toISOString(),
@@ -188,7 +193,7 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
 
   await prisma.$transaction(async (tx) => {
     const subscriptions = await tx.subscription.findMany({
-      where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
+      where: { userId, status: 'ACTIVE' },
       include: { boosts: true },
     });
 
@@ -204,11 +209,6 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
     if (delta === 0) return;
 
     if (delta > 0) {
-      const hasActiveSubscription = subscriptions.some((s) => s.status === 'ACTIVE');
-      if (!hasActiveSubscription) {
-        throw new AppError('VALIDATION_ERROR', 'サブスクリプションが有効ではありません。', 400);
-      }
-
       const maxBoostsPerGuild = await getActiveInstanceCount();
       const totalGuildBoosts = await tx.boost.count({
         where: { guildId, subscription: { status: 'ACTIVE' } },

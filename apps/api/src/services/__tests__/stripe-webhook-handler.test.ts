@@ -255,6 +255,33 @@ describe('handleStripeWebhook', () => {
     });
   });
 
+  it('unassigns all boosts when invoice payment fails', async () => {
+    const event = {
+      id: 'evt-invoice-failed',
+      type: 'invoice.payment_failed',
+      data: {
+        object: {
+          subscription: 'sub-1',
+        },
+      },
+    };
+
+    await handleStripeWebhook(event as never);
+
+    expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub-1' },
+      data: { status: 'PAST_DUE' },
+    });
+    expect(txMock.boost.updateMany).toHaveBeenCalledWith({
+      where: { subscriptionId: 'sub-1', guildId: { not: null } },
+      data: {
+        guildId: null,
+        assignedAt: null,
+        unassignedAt: expect.any(Date),
+      },
+    });
+  });
+
   it('cancels the subscription and deletes boosts on full charge refund', async () => {
     const event = {
       id: 'evt-refund',

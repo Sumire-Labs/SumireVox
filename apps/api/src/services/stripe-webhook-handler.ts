@@ -134,9 +134,18 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
       where: { stripeSubscriptionId: subscriptionId },
       data: { status: 'PAST_DUE' },
     });
+
+    await tx.boost.updateMany({
+      where: { subscriptionId, guildId: { not: null } },
+      data: {
+        guildId: null,
+        assignedAt: null,
+        unassignedAt: new Date(),
+      },
+    });
   });
 
-  logger.warn({ subscriptionId }, 'Invoice payment failed, subscription marked PAST_DUE');
+  logger.warn({ subscriptionId }, 'Invoice payment failed, subscription marked PAST_DUE and boosts unassigned');
 }
 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription, eventId: string): Promise<void> {

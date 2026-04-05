@@ -119,7 +119,7 @@ async function syncSingleSubscription(
     }
 
     // キャンセル済みの場合は全ブースト割り当てを解除
-    if (status === 'CANCELED') {
+    if (status === 'CANCELED' || status === 'PAST_DUE') {
       await tx.boost.updateMany({
         where: { subscriptionId: stripeSub.id, guildId: { not: null } },
         data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
