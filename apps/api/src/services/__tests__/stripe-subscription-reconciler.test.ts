@@ -128,7 +128,13 @@ describe('stripe-subscription-reconciler', () => {
       'Skipping Stripe subscription reconciliation because a previous run is still in progress',
     );
 
-    resolveFirstRun?.();
+    const finishFirstRun: () => void =
+      resolveFirstRun ??
+      (() => {
+        throw new Error('Expected first reconcile run to remain pending');
+      });
+
+    finishFirstRun();
     await firstRun;
 
     await runner();
