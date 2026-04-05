@@ -17,7 +17,10 @@ import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
 import { botInstancesRouter } from './routes/bot-instances.js';
 import { reconcileBoosts } from './services/boost-service.js';
-import { reconcileStripeSubscriptions } from './services/stripe-subscription-reconciler.js';
+import {
+  createStripeSubscriptionReconcileRunner,
+  reconcileStripeSubscriptions,
+} from './services/stripe-subscription-reconciler.js';
 
 const app = new Hono();
 
@@ -60,6 +63,7 @@ app.route('/api/bot-instances', botInstancesRouter);
 
 let server: ReturnType<typeof serve> | null = null;
 let reconcileTimer: ReturnType<typeof setInterval> | null = null;
+const runStripeSubscriptionReconcile = createStripeSubscriptionReconcileRunner(reconcileStripeSubscriptions);
 
 // サーバー起動
 async function main(): Promise<void> {
@@ -85,7 +89,9 @@ async function main(): Promise<void> {
 
   // Stripe サブスクリプション定期整合処理（起動から1インターバル後に開始）
   reconcileTimer = setInterval(() => {
-    reconcileStripeSubscriptions().catch((err) => logger.error({ err }, 'Stripe subscription reconciliation failed'));
+    runStripeSubscriptionReconcile().catch((err) =>
+      logger.error({ err }, 'Stripe subscription reconciliation failed'),
+    );
   }, config.stripeReconcileIntervalMs);
 }
 

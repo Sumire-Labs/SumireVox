@@ -20,8 +20,32 @@ interface ReconcileSubject {
   boosts: BoostRecord[];
 }
 
+function isCanceledStripeStatus(status: Stripe.Subscription.Status): boolean {
+  return status === 'canceled' || status === 'incomplete_expired' || status === 'unpaid';
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function createStripeSubscriptionReconcileRunner(
+  runReconcile: () => Promise<void> = reconcileStripeSubscriptions,
+): () => Promise<void> {
+  let inProgress = false;
+
+  return async () => {
+    if (inProgress) {
+      logger.warn('Skipping Stripe subscription reconciliation because a previous run is still in progress');
+      return;
+    }
+
+    inProgress = true;
+    try {
+      await runReconcile();
+    } finally {
+      inProgress = false;
+    }
+  };
 }
 
 export async function reconcileStripeSubscriptions(): Promise<void> {
@@ -63,7 +87,7 @@ export async function reconcileStripeSubscriptions(): Promise<void> {
 }
 
 async function processSubscription(sub: ReconcileSubject, stripeSub: Stripe.Subscription): Promise<boolean> {
-  if (stripeSub.status === 'canceled' || stripeSub.status === 'incomplete_expired') {
+  if (isCanceledStripeStatus(stripeSub.status)) {
     await cancelAndUnassign(sub);
     logger.info(
       { subscriptionId: sub.stripeSubscriptionId, stripeStatus: stripeSub.status },
