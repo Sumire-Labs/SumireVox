@@ -261,6 +261,7 @@ export async function assignBoost(
   guildId: string,
 ): Promise<void> {
   const prisma = getPrisma();
+  const maxBoostsPerGuild = await getActiveInstanceCount();
 
   const boost = await prisma.boost.findUnique({
     where: { id: boostId },
@@ -293,6 +294,19 @@ export async function assignBoost(
         400,
       );
     }
+  }
+
+  const totalGuildBoosts = await prisma.boost.count({
+    where: {
+      guildId,
+      subscription: {
+        status: 'ACTIVE',
+      },
+    },
+  });
+
+  if (maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild) {
+    throw new AppError('GUILD_BOOST_LIMIT_REACHED', 'このサーバーは最大ブースト数に達しています。', 400);
   }
 
   await prisma.boost.update({
