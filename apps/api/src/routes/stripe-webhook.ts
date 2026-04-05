@@ -47,11 +47,18 @@ stripeWebhookRouter.post('/webhook', async (c) => {
     );
   }
 
-  // フェーズ 2: 業務処理 — 内部エラーでも 200 を返す（Stripe への再試行防止）
+  // フェーズ 2: 業務処理 — 失敗時は 500 を返して Stripe に再試行させる
   try {
     await handleStripeWebhook(event);
   } catch (error) {
     logger.error({ err: error, eventId: event.id, eventType: event.type }, 'Stripe webhook processing failed');
+    return c.json(
+      {
+        success: false,
+        error: { code: 'INTERNAL_ERROR', message: 'Webhook processing failed' },
+      },
+      500,
+    );
   }
 
   return c.json({ received: true });
