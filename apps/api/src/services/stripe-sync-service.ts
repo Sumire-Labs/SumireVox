@@ -4,6 +4,7 @@ import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { adjustBoostSlots } from './adjust-boost-slots.js';
+import { publishGuildPremiumInvalidation } from './premium-cache-sync.js';
 import { mapStripeStatus } from './stripe-utils.js';
 
 const SYNC_TTL_SECONDS = 300; // 5分
@@ -110,6 +111,10 @@ async function syncSingleSubscription(
     return;
   }
 
+  const affectedGuildIds = existing.boosts
+    .filter((boost) => boost.guildId !== null)
+    .map((boost) => boost.guildId);
+
   await prisma.$transaction(async (tx) => {
     await tx.subscription.update({
       where: { stripeSubscriptionId: stripeSub.id },
@@ -139,6 +144,8 @@ async function syncSingleSubscription(
       });
     }
   });
+
+  await publishGuildPremiumInvalidation(affectedGuildIds);
 }
 
 /**

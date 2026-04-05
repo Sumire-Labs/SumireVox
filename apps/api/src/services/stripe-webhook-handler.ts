@@ -4,6 +4,7 @@ import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { logger } from '../infrastructure/logger.js';
 import { adjustBoostSlots } from './adjust-boost-slots.js';
+import { publishGuildPremiumInvalidation } from './premium-cache-sync.js';
 import { mapStripeStatus } from './stripe-utils.js';
 
 /**
@@ -126,6 +127,10 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
   if (!subscriptionId) return;
 
   const prisma = getPrisma();
+  const assignedBoosts = await prisma.boost.findMany({
+    where: { subscriptionId, guildId: { not: null } },
+    select: { guildId: true },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.stripeEvent.create({ data: { id: eventId, type: 'invoice.payment_failed' } });
@@ -145,6 +150,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
     });
   });
 
+  await publishGuildPremiumInvalidation(assignedBoosts.map((boost) => boost.guildId));
   logger.warn({ subscriptionId }, 'Invoice payment failed, subscription marked PAST_DUE and boosts unassigned');
 }
 
@@ -152,14 +158,16 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, even
   const prisma = getPrisma();
   const status = mapStripeStatus(subscription.status);
   const boostCount = subscription.items.data[0]?.quantity ?? 0;
+  const existingSubscription = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscription.id },
+    include: { boosts: true },
+  });
+  const affectedGuildIds = existingSubscription?.boosts
+    .filter((boost) => boost.guildId !== null)
+    .map((boost) => boost.guildId) ?? [];
 
   await prisma.$transaction(async (tx) => {
     await tx.stripeEvent.create({ data: { id: eventId, type: 'customer.subscription.updated' } });
-
-    const existing = await tx.subscription.findUnique({
-      where: { stripeSubscriptionId: subscription.id },
-      include: { boosts: true },
-    });
 
     await tx.subscription.updateMany({
       where: { stripeSubscriptionId: subscription.id },
@@ -170,24 +178,29 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, even
       },
     });
 
-    if (existing) {
-      const currentCount = existing.boosts.length;
+    if (existingSubscription) {
+      const currentCount = existingSubscription.boosts.length;
       if (boostCount > currentCount) {
         const toAdd = boostCount - currentCount;
         const boostData = Array.from({ length: toAdd }, () => ({ subscriptionId: subscription.id }));
         await tx.boost.createMany({ data: boostData });
         logger.info({ subscriptionId: subscription.id, added: toAdd }, 'Boost slots added');
       } else if (boostCount < currentCount) {
-        await adjustBoostSlots(tx, subscription.id, boostCount, existing.boosts);
+        await adjustBoostSlots(tx, subscription.id, boostCount, existingSubscription.boosts);
       }
     }
   });
 
+  await publishGuildPremiumInvalidation(affectedGuildIds);
   logger.info({ subscriptionId: subscription.id, status, boostCount }, 'Subscription updated');
 }
 
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription, eventId: string): Promise<void> {
   const prisma = getPrisma();
+  const assignedBoosts = await prisma.boost.findMany({
+    where: { subscriptionId: subscription.id, guildId: { not: null } },
+    select: { guildId: true },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.stripeEvent.create({ data: { id: eventId, type: 'customer.subscription.deleted' } });
@@ -207,6 +220,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, even
     });
   });
 
+  await publishGuildPremiumInvalidation(assignedBoosts.map((boost) => boost.guildId));
   logger.info({ subscriptionId: subscription.id }, 'Subscription deleted, all boosts unassigned');
 }
 
@@ -251,6 +265,11 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Pro
   const sid = subscriptionId;
 
   if (isFullRefund) {
+    const assignedBoosts = await prisma.boost.findMany({
+      where: { subscriptionId: sid, guildId: { not: null } },
+      select: { guildId: true },
+    });
+
     // Stripe 側のサブスクリプションキャンセル（存在する場合）
     try {
       const stripeSubscription = await stripe!.subscriptions.retrieve(sid);
@@ -285,6 +304,7 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Pro
       });
     });
 
+    await publishGuildPremiumInvalidation(assignedBoosts.map((boost) => boost.guildId));
     logger.info({ subscriptionId: sid, chargeId: charge.id }, 'Full refund processed: subscription canceled, all boosts revoked and deleted');
   } else {
     await prisma.$transaction(async (tx) => {

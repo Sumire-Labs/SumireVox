@@ -5,6 +5,7 @@ import { AppError } from '../infrastructure/app-error.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
 import { getActiveInstanceCount } from './bot-instance-service.js';
+import { publishGuildPremiumInvalidation } from './premium-cache-sync.js';
 
 export interface GuildBoostInfo {
   guildId: string;
@@ -313,6 +314,8 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
       logger.info({ userId, guildId, delta }, 'Boosts unassigned from guild');
     }
   });
+
+  await publishGuildPremiumInvalidation([guildId]);
 }
 
 /**
@@ -393,6 +396,7 @@ export async function assignBoost(
     }
   });
 
+  await publishGuildPremiumInvalidation([guildId]);
   logger.info({ userId, boostId, guildId }, 'Boost assigned');
 }
 
@@ -400,7 +404,7 @@ export async function assignBoost(
  * ブースト枠をサーバーから外す
  */
 export async function unassignBoost(userId: string, boostId: string): Promise<void> {
-  await runSerializableBoostTransaction(async (tx) => {
+  const previousGuildId = await runSerializableBoostTransaction(async (tx) => {
     const boost = await tx.boost.findUnique({
       where: { id: boostId },
       include: { subscription: true },
@@ -436,9 +440,12 @@ export async function unassignBoost(userId: string, boostId: string): Promise<vo
     if (updated.count !== 1) {
       throw new AppError('VALIDATION_ERROR', 'ブーストの状態が更新されたため、再度お試しください。', 409);
     }
+
+    return boost.guildId;
   });
 
-  logger.info({ userId, boostId }, 'Boost unassigned');
+  await publishGuildPremiumInvalidation([previousGuildId]);
+  logger.info({ userId, boostId, previousGuildId }, 'Boost unassigned');
 }
 
 /**
@@ -486,5 +493,7 @@ export async function reconcileBoosts(): Promise<void> {
       { guildId: group.guildId, removed: excess, maxBoosts },
       'Boost reconciliation: excess boosts removed without cooldown',
     );
+
+    await publishGuildPremiumInvalidation([group.guildId]);
   }
 }

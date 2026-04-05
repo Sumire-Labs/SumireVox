@@ -49,7 +49,7 @@
 
 | カラム | 型 | 備考 |
 |---|---|---|
-| id | Int @id @default(autoincrement()) | |
+| id | String @id @default(cuid()) | |
 | word | String | |
 | reading | String | |
 | reason | String? | |
@@ -76,7 +76,6 @@
 
 | カラム | 型 | 備考 |
 |---|---|---|
-| id | Int @id @default(autoincrement()) | |
 | userId | String | |
 | stripeCustomerId | String | |
 | stripeSubscriptionId | String @unique | |
@@ -86,16 +85,33 @@
 | createdAt | DateTime | |
 | updatedAt | DateTime | |
 
+主キーは `@@id([userId, stripeSubscriptionId])`。
+
 ## Boost
 
 | カラム | 型 | 備考 |
 |---|---|---|
-| id | Int @id @default(autoincrement()) | |
-| subscriptionId | Int | Subscription への FK |
+| id | String @id @default(cuid()) | |
+| subscriptionId | String | `Subscription.stripeSubscriptionId` への FK |
 | guildId | String? | 割り当て先 (null=未割り当て) |
 | assignedAt | DateTime? | |
 | unassignedAt | DateTime? | クールダウン計算用 |
 | createdAt | DateTime | |
+| updatedAt | DateTime | |
+
+## BoostRevocation
+
+強制失効した boost の監査ログ。
+
+| カラム | 型 | 備考 |
+|---|---|---|
+| id | String @id @default(cuid()) | |
+| boostId | String | 元の Boost ID |
+| subscriptionId | String | 対象サブスクリプション |
+| guildId | String? | 解除元ギルド |
+| assignedAt | DateTime? | 元の割り当て日時 |
+| revokedAt | DateTime | 失効日時 |
+| reason | String | 失効理由 |
 
 ## PREMIUM 判定ロジック
 

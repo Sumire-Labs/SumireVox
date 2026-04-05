@@ -1,5 +1,6 @@
 import { REDIS_CHANNELS } from '@sumirevox/shared';
 import { invalidateGuildSettingsCache, invalidateUserVoiceSettingCache } from '../infrastructure/settings-cache.js';
+import { invalidatePremiumCache } from './premium-service.js';
 import { invalidateGuildTrie, invalidateAllTries } from './text-pipeline/index.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -18,6 +19,17 @@ export function createBotPubSubHandlers(): Record<string, (message: string) => v
         }
       } catch (error) {
         logger.error({ err: error }, 'Error handling guild settings Pub/Sub');
+      }
+    },
+    [REDIS_CHANNELS.GUILD_PREMIUM_UPDATED]: (message: string) => {
+      try {
+        const { guildId } = JSON.parse(message) as { guildId?: string };
+        if (guildId) {
+          invalidatePremiumCache(guildId);
+          logger.debug({ guildId }, 'Premium cache invalidated via Pub/Sub');
+        }
+      } catch (error) {
+        logger.error({ err: error }, 'Error handling guild premium Pub/Sub');
       }
     },
     [REDIS_CHANNELS.USER_VOICE_SETTING_UPDATED]: (message: string) => {

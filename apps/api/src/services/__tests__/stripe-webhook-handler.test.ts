@@ -7,6 +7,10 @@ const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock } = vi.
     },
     subscription: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    boost: {
+      findMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -78,6 +82,8 @@ describe('handleStripeWebhook', () => {
   beforeEach(() => {
     prismaMock.stripeEvent.findUnique.mockReset();
     prismaMock.subscription.findFirst.mockReset();
+    prismaMock.subscription.findUnique.mockReset();
+    prismaMock.boost.findMany.mockReset();
     prismaMock.$transaction.mockReset().mockImplementation(async (callback: (tx: typeof txMock) => Promise<unknown>) => callback(txMock));
 
     txMock.stripeEvent.create.mockReset();
@@ -101,6 +107,7 @@ describe('handleStripeWebhook', () => {
     adjustBoostSlotsMock.mockReset();
 
     prismaMock.stripeEvent.findUnique.mockResolvedValue(null);
+    prismaMock.boost.findMany.mockResolvedValue([]);
   });
 
   it('creates subscription and boosts on checkout.session.completed', async () => {
@@ -180,6 +187,10 @@ describe('handleStripeWebhook', () => {
       stripeSubscriptionId: 'sub-1',
       boosts: [{ id: 'boost-1' }, { id: 'boost-2' }],
     });
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      stripeSubscriptionId: 'sub-1',
+      boosts: [{ id: 'boost-1' }, { id: 'boost-2' }],
+    });
 
     await handleStripeWebhook(event as never);
 
@@ -218,6 +229,10 @@ describe('handleStripeWebhook', () => {
       },
     };
     txMock.subscription.findUnique.mockResolvedValue({
+      stripeSubscriptionId: 'sub-1',
+      boosts,
+    });
+    prismaMock.subscription.findUnique.mockResolvedValue({
       stripeSubscriptionId: 'sub-1',
       boosts,
     });

@@ -15,6 +15,9 @@
 | VALIDATION_ERROR | 400 | 入力値不正 |
 | BOOST_COOLDOWN | 400 | クールダウン中 |
 | BOOST_LIMIT_REACHED | 400 | 枠上限 |
+| GUILD_BOOST_LIMIT_REACHED | 400 | ギルドのブースト上限到達 |
+| RATE_LIMITED | 429 | レート制限 |
+| SESSION_EXPIRED | 401 | Discord セッション期限切れ |
 | DICTIONARY_LIMIT_REACHED | 400 | 辞書上限 |
 | INTERNAL_ERROR | 500 | 内部エラー |
 
