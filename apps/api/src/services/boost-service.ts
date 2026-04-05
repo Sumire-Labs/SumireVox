@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { type Subscription } from '@sumirevox/shared';
 import { getPrisma } from '../infrastructure/database.js';
 import { AppError } from '../infrastructure/app-error.js';
@@ -89,6 +90,33 @@ export interface BoostCooldownInfo {
   boostId: string;
   unassignedAt: string;
   availableAt: string;
+}
+
+const BOOST_TRANSACTION_RETRY_LIMIT = 3;
+
+async function runSerializableBoostTransaction<T>(
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  const prisma = getPrisma();
+
+  for (let attempt = 1; attempt <= BOOST_TRANSACTION_RETRY_LIMIT; attempt += 1) {
+    try {
+      return await prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      const isSerializationFailure =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
+      if (!isSerializationFailure || attempt === BOOST_TRANSACTION_RETRY_LIMIT) {
+        throw error;
+      }
+
+      logger.warn({ attempt }, 'Boost transaction serialization conflict, retrying');
+    }
+  }
+
+  throw new AppError('INTERNAL_ERROR', 'ブースト処理に失敗しました。', 500);
 }
 
 export async function getUserBoosts(userId: string): Promise<{
@@ -189,9 +217,7 @@ export async function getUserBoosts(userId: string): Promise<{
  * ギルドへのブースト割り当て数を設定する（増減を自動処理）
  */
 export async function setGuildBoostCount(userId: string, guildId: string, count: number): Promise<void> {
-  const prisma = getPrisma();
-
-  await prisma.$transaction(async (tx) => {
+  await runSerializableBoostTransaction(async (tx) => {
     const subscriptions = await tx.subscription.findMany({
       where: { userId, status: 'ACTIVE' },
       include: { boosts: true },
@@ -234,18 +260,46 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
       }
 
       const toAssign = availableBoosts.slice(0, delta);
-      await tx.boost.updateMany({
-        where: { id: { in: toAssign.map((b) => b.id) } },
-        data: { guildId, assignedAt: new Date(), unassignedAt: null },
-      });
+      const now = new Date();
+      for (const boost of toAssign) {
+        const updated = await tx.boost.updateMany({
+          where: {
+            id: boost.id,
+            guildId: null,
+            subscription: {
+              userId,
+              status: 'ACTIVE',
+            },
+          },
+          data: { guildId, assignedAt: now, unassignedAt: null },
+        });
+
+        if (updated.count !== 1) {
+          throw new AppError('VALIDATION_ERROR', 'ブーストの状態が更新されたため、再度お試しください。', 409);
+        }
+      }
 
       logger.info({ userId, guildId, delta }, 'Boosts assigned to guild');
     } else {
       const toUnassign = guildBoosts.slice(0, Math.abs(delta));
-      await tx.boost.updateMany({
-        where: { id: { in: toUnassign.map((b) => b.id) } },
-        data: { guildId: null, assignedAt: null, unassignedAt: new Date() },
-      });
+      const now = new Date();
+      for (const boost of toUnassign) {
+        const updated = await tx.boost.updateMany({
+          where: {
+            id: boost.id,
+            subscription: {
+              userId,
+              status: 'ACTIVE',
+            },
+            guildId,
+          },
+          data: { guildId: null, assignedAt: null, unassignedAt: now },
+        });
+
+        if (updated.count !== 1) {
+          throw new AppError('VALIDATION_ERROR', 'ブーストの状態が更新されたため、再度お試しください。', 409);
+        }
+      }
 
       logger.info({ userId, guildId, delta }, 'Boosts unassigned from guild');
     }
@@ -260,62 +314,74 @@ export async function assignBoost(
   boostId: string,
   guildId: string,
 ): Promise<void> {
-  const prisma = getPrisma();
   const maxBoostsPerGuild = await getActiveInstanceCount();
 
-  const boost = await prisma.boost.findUnique({
-    where: { id: boostId },
-    include: { subscription: true },
-  });
+  await runSerializableBoostTransaction(async (tx) => {
+    const boost = await tx.boost.findUnique({
+      where: { id: boostId },
+      include: { subscription: true },
+    });
 
-  if (!boost) {
-    throw new AppError('NOT_FOUND', 'ブースト枠が見つかりません。', 404);
-  }
-
-  if (boost.subscription.userId !== userId) {
-    throw new AppError('FORBIDDEN', 'このブースト枠の所有者ではありません。', 403);
-  }
-
-  if (boost.subscription.status !== 'ACTIVE') {
-    throw new AppError('VALIDATION_ERROR', 'サブスクリプションが有効ではありません。', 400);
-  }
-
-  if (boost.guildId) {
-    throw new AppError('VALIDATION_ERROR', 'このブースト枠は既にサーバーに割り当てられています。', 400);
-  }
-
-  if (boost.unassignedAt) {
-    const cooldownEnd = boost.unassignedAt.getTime() + config.boostCooldownDays * 24 * 60 * 60 * 1000;
-    if (Date.now() < cooldownEnd) {
-      const remaining = Math.ceil((cooldownEnd - Date.now()) / (24 * 60 * 60 * 1000));
-      throw new AppError(
-        'BOOST_COOLDOWN',
-        `クールダウン中です。あと約${remaining}日後に割り当て可能になります。`,
-        400,
-      );
+    if (!boost) {
+      throw new AppError('NOT_FOUND', 'ブースト枠が見つかりません。', 404);
     }
-  }
 
-  const totalGuildBoosts = await prisma.boost.count({
-    where: {
-      guildId,
-      subscription: {
-        status: 'ACTIVE',
+    if (boost.subscription.userId !== userId) {
+      throw new AppError('FORBIDDEN', 'このブースト枠の所有者ではありません。', 403);
+    }
+
+    if (boost.subscription.status !== 'ACTIVE') {
+      throw new AppError('VALIDATION_ERROR', 'サブスクリプションが有効ではありません。', 400);
+    }
+
+    if (boost.guildId) {
+      throw new AppError('VALIDATION_ERROR', 'このブースト枠は既にサーバーに割り当てられています。', 400);
+    }
+
+    if (boost.unassignedAt) {
+      const cooldownEnd = boost.unassignedAt.getTime() + config.boostCooldownDays * 24 * 60 * 60 * 1000;
+      if (Date.now() < cooldownEnd) {
+        const remaining = Math.ceil((cooldownEnd - Date.now()) / (24 * 60 * 60 * 1000));
+        throw new AppError(
+          'BOOST_COOLDOWN',
+          `クールダウン中です。あと約${remaining}日後に割り当て可能になります。`,
+          400,
+        );
+      }
+    }
+
+    const totalGuildBoosts = await tx.boost.count({
+      where: {
+        guildId,
+        subscription: {
+          status: 'ACTIVE',
+        },
       },
-    },
-  });
+    });
 
-  if (maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild) {
-    throw new AppError('GUILD_BOOST_LIMIT_REACHED', 'このサーバーは最大ブースト数に達しています。', 400);
-  }
+    if (maxBoostsPerGuild > 0 && totalGuildBoosts >= maxBoostsPerGuild) {
+      throw new AppError('GUILD_BOOST_LIMIT_REACHED', 'このサーバーは最大ブースト数に達しています。', 400);
+    }
 
-  await prisma.boost.update({
-    where: { id: boostId },
-    data: {
-      guildId,
-      assignedAt: new Date(),
-      unassignedAt: null,
-    },
+    const updated = await tx.boost.updateMany({
+      where: {
+        id: boostId,
+        guildId: null,
+        subscription: {
+          userId,
+          status: 'ACTIVE',
+        },
+      },
+      data: {
+        guildId,
+        assignedAt: new Date(),
+        unassignedAt: null,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError('VALIDATION_ERROR', 'ブーストの状態が更新されたため、再度お試しください。', 409);
+    }
   });
 
   logger.info({ userId, boostId, guildId }, 'Boost assigned');
@@ -325,35 +391,45 @@ export async function assignBoost(
  * ブースト枠をサーバーから外す
  */
 export async function unassignBoost(userId: string, boostId: string): Promise<void> {
-  const prisma = getPrisma();
+  await runSerializableBoostTransaction(async (tx) => {
+    const boost = await tx.boost.findUnique({
+      where: { id: boostId },
+      include: { subscription: true },
+    });
 
-  const boost = await prisma.boost.findUnique({
-    where: { id: boostId },
-    include: { subscription: true },
+    if (!boost) {
+      throw new AppError('NOT_FOUND', 'ブースト枠が見つかりません。', 404);
+    }
+
+    if (boost.subscription.userId !== userId) {
+      throw new AppError('FORBIDDEN', 'このブースト枠の所有者ではありません。', 403);
+    }
+
+    if (!boost.guildId) {
+      throw new AppError('VALIDATION_ERROR', 'このブースト枠はサーバーに割り当てられていません。', 400);
+    }
+
+    const updated = await tx.boost.updateMany({
+      where: {
+        id: boostId,
+        subscription: {
+          userId,
+        },
+        guildId: boost.guildId,
+      },
+      data: {
+        guildId: null,
+        assignedAt: null,
+        unassignedAt: new Date(),
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new AppError('VALIDATION_ERROR', 'ブーストの状態が更新されたため、再度お試しください。', 409);
+    }
   });
 
-  if (!boost) {
-    throw new AppError('NOT_FOUND', 'ブースト枠が見つかりません。', 404);
-  }
-
-  if (boost.subscription.userId !== userId) {
-    throw new AppError('FORBIDDEN', 'このブースト枠の所有者ではありません。', 403);
-  }
-
-  if (!boost.guildId) {
-    throw new AppError('VALIDATION_ERROR', 'このブースト枠はサーバーに割り当てられていません。', 400);
-  }
-
-  await prisma.boost.update({
-    where: { id: boostId },
-    data: {
-      guildId: null,
-      assignedAt: null,
-      unassignedAt: new Date(),
-    },
-  });
-
-  logger.info({ userId, boostId, previousGuildId: boost.guildId }, 'Boost unassigned');
+  logger.info({ userId, boostId }, 'Boost unassigned');
 }
 
 /**
