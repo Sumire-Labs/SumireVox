@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
-import { getRedisClient } from '../infrastructure/redis.js';
+import { getRedisClient, isRedisReady } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
 interface RateLimitOptions {
@@ -7,6 +7,14 @@ interface RateLimitOptions {
   windowSeconds: number;
   keyPrefix: string;
 }
+
+const REDIS_UNAVAILABLE_RESPONSE = {
+  success: false,
+  error: {
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'サービスが一時的に利用できません。しばらくしてから再度お試しください。',
+  },
+} as const;
 
 function getRateLimitIdentifier(c: Parameters<MiddlewareHandler>[0]): string {
   const session = c.get('session');
@@ -32,6 +40,11 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
     const window = Math.floor(Date.now() / 1000 / windowSeconds);
     const key = `ratelimit:${identifier}:${keyPrefix}:${window}`;
 
+    if (!isRedisReady()) {
+      c.header('Retry-After', '30');
+      return c.json(REDIS_UNAVAILABLE_RESPONSE, 503);
+    }
+
     try {
       const redis = getRedisClient();
       const count = await redis.incr(key);
@@ -56,7 +69,9 @@ export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
         );
       }
     } catch (err) {
-      logger.error({ err }, 'Rate limit Redis error, skipping');
+      logger.error({ err, key }, 'Rate limit Redis error');
+      c.header('Retry-After', '30');
+      return c.json(REDIS_UNAVAILABLE_RESPONSE, 503);
     }
 
     await next();

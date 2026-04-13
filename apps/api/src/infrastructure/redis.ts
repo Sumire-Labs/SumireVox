@@ -5,8 +5,11 @@ import { logger } from './logger.js';
 let redisClient: Redis | null = null;
 let redisSubscriber: Redis | null = null;
 let redisPublisher: Redis | null = null;
+let redisReady = false;
 
-function createRedisInstance(name: string): Redis {
+type RedisInstanceName = 'client' | 'subscriber' | 'publisher';
+
+function createRedisInstance(name: RedisInstanceName): Redis {
   const client = new Redis(config.redisUrl, {
     lazyConnect: false,
     maxRetriesPerRequest: 3,
@@ -14,14 +17,45 @@ function createRedisInstance(name: string): Redis {
   });
 
   client.on('ready', () => {
+    if (name === 'client') {
+      redisReady = true;
+    }
     logger.info(`Redis ${name} connected`);
   });
 
   client.on('error', (err: Error) => {
+    if (name === 'client') {
+      redisReady = false;
+    }
     logger.error({ err }, `Redis ${name} error`);
   });
 
+  client.on('close', () => {
+    if (name === 'client') {
+      redisReady = false;
+    }
+    logger.warn(`Redis ${name} connection closed`);
+  });
+
+  client.on('end', () => {
+    if (name === 'client') {
+      redisReady = false;
+    }
+    logger.warn(`Redis ${name} connection ended`);
+  });
+
+  client.on('reconnecting', (delay: number) => {
+    if (name === 'client') {
+      redisReady = false;
+    }
+    logger.warn({ delay }, `Redis ${name} reconnecting`);
+  });
+
   return client;
+}
+
+export function isRedisReady(): boolean {
+  return redisReady;
 }
 
 export function getRedisClient(): Redis {

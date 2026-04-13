@@ -25,11 +25,12 @@ export function setupPubSub(handlers: Partial<Record<string, PubSubHandler>>): v
   });
 }
 
-export async function publishEvent(channel: string, message: string): Promise<void> {
+export async function publishEvent(channel: string, message: string): Promise<number> {
   try {
-    await getRedisPublisher().publish(channel, message);
+    return await getRedisPublisher().publish(channel, message);
   } catch (err) {
     logger.error({ err, channel }, 'Failed to publish Redis event');
+    throw err;
   }
 }
 
