@@ -12,7 +12,7 @@ interface InstanceHealth {
 const instances: Map<string, InstanceHealth> = new Map(
   config.voicevoxUrls.map((url) => [
     url,
-    { url, healthy: true, consecutiveFailures: 0, lastCheckedAt: null },
+    { url, healthy: false, consecutiveFailures: 0, lastCheckedAt: null },
   ]),
 );
 

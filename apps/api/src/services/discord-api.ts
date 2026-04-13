@@ -4,6 +4,21 @@ import { config } from '../infrastructure/config.js';
 
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
+async function fetchDiscord(input: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(10000),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new AppError('DISCORD_API_ERROR', 'Discord API request timed out', 504);
+    }
+
+    throw error;
+  }
+}
+
 export interface DiscordGuild {
   id: string;
   name: string;
@@ -16,7 +31,7 @@ export interface DiscordGuild {
  * ユーザーの所属ギルド一覧を取得する
  */
 export async function fetchUserGuilds(accessToken: string): Promise<DiscordGuild[]> {
-  const response = await fetch(`${DISCORD_API_BASE}/users/@me/guilds`, {
+  const response = await fetchDiscord(`${DISCORD_API_BASE}/users/@me/guilds`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
@@ -92,7 +107,7 @@ export async function fetchGuildChannels(guildId: string): Promise<DiscordChanne
   if (!config.discordBotToken) {
     throw new AppError('DISCORD_API_ERROR', 'Bot token not configured', 503);
   }
-  const response = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
+  const response = await fetchDiscord(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
     headers: { Authorization: `Bot ${config.discordBotToken}` },
   });
   if (response.status === 429) {
@@ -113,7 +128,7 @@ export async function fetchGuildRoles(guildId: string): Promise<DiscordRole[]> {
   if (!config.discordBotToken) {
     throw new AppError('DISCORD_API_ERROR', 'Bot token not configured', 503);
   }
-  const response = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/roles`, {
+  const response = await fetchDiscord(`${DISCORD_API_BASE}/guilds/${guildId}/roles`, {
     headers: { Authorization: `Bot ${config.discordBotToken}` },
   });
   if (response.status === 429) {

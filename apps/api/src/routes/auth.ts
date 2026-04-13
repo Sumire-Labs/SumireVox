@@ -101,6 +101,7 @@ authRouter.get('/callback', authRateLimit, async (c) => {
         code,
         redirect_uri: getRedirectUri(),
       }),
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!tokenResponse.ok) {
@@ -122,6 +123,7 @@ authRouter.get('/callback', authRateLimit, async (c) => {
 
     const userResponse = await fetch(`${DISCORD_API_BASE}/users/@me`, {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!userResponse.ok) {

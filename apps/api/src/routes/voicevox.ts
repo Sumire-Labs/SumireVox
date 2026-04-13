@@ -38,7 +38,9 @@ voicevoxRouter.get('/speakers', async (c) => {
 
   let response: Response;
   try {
-    response = await fetch(`${voicevoxUrl}/speakers`);
+    response = await fetch(`${voicevoxUrl}/speakers`, {
+      signal: AbortSignal.timeout(10000),
+    });
   } catch (err) {
     logger.error({ err }, 'Failed to connect to VOICEVOX engine');
     throw new AppError('VOICEVOX_ERROR', 'VOICEVOX エンジンに接続できませんでした', 503);
