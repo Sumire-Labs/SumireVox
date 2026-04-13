@@ -1,6 +1,4 @@
 import type { MiddlewareHandler } from 'hono';
-import { getCookie, setCookie } from 'hono/cookie';
-import crypto from 'node:crypto';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -10,28 +8,20 @@ interface RateLimitOptions {
   keyPrefix: string;
 }
 
-const ANON_RATE_LIMIT_COOKIE = 'anon_rate_limit_id';
-const ANON_RATE_LIMIT_COOKIE_MAX_AGE = 60 * 60;
-
 function getRateLimitIdentifier(c: Parameters<MiddlewareHandler>[0]): string {
   const session = c.get('session');
   if (session?.userId) {
-    return session.userId;
+    return `user:${session.userId}`;
   }
 
-  let anonId = getCookie(c, ANON_RATE_LIMIT_COOKIE);
-  if (!anonId) {
-    anonId = crypto.randomUUID();
-    setCookie(c, ANON_RATE_LIMIT_COOKIE, anonId, {
-      httpOnly: true,
-      sameSite: 'Lax',
-      secure: new URL(c.req.url).protocol === 'https:',
-      maxAge: ANON_RATE_LIMIT_COOKIE_MAX_AGE,
-      path: '/',
-    });
+  const forwardedFor = c.req.header('x-forwarded-for');
+  if (forwardedFor) {
+    const [firstIp] = forwardedFor.split(',');
+    return `ip:${firstIp?.trim() || 'unknown'}`;
   }
 
-  return `anon:${anonId}`;
+  const realIp = c.req.header('x-real-ip');
+  return `ip:${realIp?.trim() || 'unknown'}`;
 }
 
 export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
