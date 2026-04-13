@@ -6,10 +6,15 @@ interface TrieState {
   trie: TrieNode | null;
   /** true の場合、次回アクセス時に再構築が必要 */
   invalidated: boolean;
+  /** トライ木の最終構築時刻（epoch ms） */
+  builtAt: number | null;
 }
 
 // guildId → TrieState
 const trieCache = new Map<string, TrieState>();
+
+// 将来的に環境変数化しやすいよう定数化しておく
+const TRIE_TTL_MS = 60_000;
 
 /**
  * ギルドのトライ木を取得する（遅延構築）
@@ -22,7 +27,12 @@ export async function getDictionaryTrie(guildId: string): Promise<TrieNode | nul
     return null;
   }
 
-  if (state.trie && !state.invalidated) {
+  if (
+    state.trie &&
+    !state.invalidated &&
+    state.builtAt !== null &&
+    Date.now() - state.builtAt < TRIE_TTL_MS
+  ) {
     return state.trie;
   }
 
@@ -42,6 +52,7 @@ export async function getDictionaryTrie(guildId: string): Promise<TrieNode | nul
     const trie = buildMergedTrie(serverEntries, globalEntries);
     state.trie = trie;
     state.invalidated = false;
+    state.builtAt = Date.now();
 
     logger.debug(
       { guildId, serverCount: serverEntries.length, globalCount: globalEntries.length },
@@ -59,7 +70,7 @@ export async function getDictionaryTrie(guildId: string): Promise<TrieNode | nul
  * ギルドのトライ木スロットを初期化する（VC 接続時に呼ぶ）
  */
 export function initTrieSlot(guildId: string): void {
-  trieCache.set(guildId, { trie: null, invalidated: true });
+  trieCache.set(guildId, { trie: null, invalidated: true, builtAt: null });
 }
 
 /**
