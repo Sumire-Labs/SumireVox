@@ -4,6 +4,7 @@ import { getPrisma } from '../infrastructure/database.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
+import { getRedisClient } from '../infrastructure/redis.js';
 
 /**
  * Stripe Checkout Session を作成する
@@ -12,6 +13,10 @@ export async function createCheckoutSession(
   userId: string,
   boostCount: number,
 ): Promise<string> {
+  const lockKey = `checkout_lock:${userId}`;
+  const timeWindow = Math.floor(Date.now() / 1000 / 300);
+  const idempotencyKey = `checkout:${userId}:${timeWindow}`;
+
   if (!stripe) {
     throw new AppError('INTERNAL_ERROR', 'Stripe is not configured', 503);
   }
@@ -32,6 +37,28 @@ export async function createCheckoutSession(
       'VALIDATION_ERROR',
       '既存のサブスクリプションがあります。ブースト数の変更は Billing Portal から行ってください。',
       400,
+    );
+  }
+
+  try {
+    const redis = getRedisClient();
+    const lockResult = await redis.set(lockKey, '1', 'EX', 300, 'NX');
+
+    if (lockResult !== 'OK') {
+      throw new AppError(
+        'CHECKOUT_IN_PROGRESS',
+        '決済処理が進行中です。完了するまでお待ちください。',
+        409,
+      );
+    }
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    logger.warn(
+      { err: error, userId, lockKey },
+      'Redis unavailable, skipping checkout lock and relying on Stripe idempotency',
     );
   }
 
@@ -67,13 +94,16 @@ export async function createCheckoutSession(
     sessionParams.customer = existingCustomer.stripeCustomerId;
   }
 
-  const session = await stripe.checkout.sessions.create(sessionParams);
+  const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
 
   if (!session.url) {
     throw new Error('Checkout session URL is null');
   }
 
-  logger.info({ userId, boostCount, sessionId: session.id }, 'Checkout session created');
+  logger.info(
+    { userId, boostCount, sessionId: session.id, idempotencyKey },
+    'Checkout session created',
+  );
   return session.url;
 }
 

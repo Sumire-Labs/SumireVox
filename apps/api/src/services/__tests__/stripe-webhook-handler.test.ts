@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock } = vi.hoisted(() => ({
+const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock, redisPublisherMock } = vi.hoisted(() => ({
   prismaMock: {
     stripeEvent: {
       findUnique: vi.fn(),
@@ -49,6 +49,9 @@ const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock } = vi.
     debug: vi.fn(),
   },
   adjustBoostSlotsMock: vi.fn(),
+  redisPublisherMock: {
+    publish: vi.fn(),
+  },
 }));
 
 vi.mock('../../infrastructure/database.js', () => ({
@@ -61,6 +64,7 @@ vi.mock('../../infrastructure/stripe-client.js', () => ({
 
 vi.mock('../../infrastructure/redis.js', () => ({
   getRedisClient: vi.fn(),
+  getRedisPublisher: vi.fn(() => redisPublisherMock),
 }));
 
 vi.mock('../../infrastructure/logger.js', () => ({
@@ -105,6 +109,7 @@ describe('handleStripeWebhook', () => {
     loggerMock.error.mockReset();
     loggerMock.debug.mockReset();
     adjustBoostSlotsMock.mockReset();
+    redisPublisherMock.publish.mockReset().mockResolvedValue(1);
 
     prismaMock.stripeEvent.findUnique.mockResolvedValue(null);
     prismaMock.boost.findMany.mockResolvedValue([]);
