@@ -10,7 +10,6 @@ interface AppConfig {
   voicevoxUrls: string[];
   botAdminUserIds: string[];
   apiPort: number;
-  sessionSecret: string;
   corsOrigin: string[];
   logLevel: string;
   stripeSecretKey: string;
@@ -41,7 +40,6 @@ function buildConfig(): AppConfig {
       .map((id) => id.trim())
       .filter(Boolean),
     apiPort: requireInt('API_PORT', 3000),
-    sessionSecret: requireEnv('SESSION_SECRET'),
     corsOrigin: requireEnv('CORS_ORIGIN')
       .split(',')
       .map((o) => o.trim())
