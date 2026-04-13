@@ -3,10 +3,10 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: sumirevox
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sumirevox_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: sumirevox
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -20,8 +20,10 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+      - "127.0.0.1:6379:6379"
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -57,7 +59,7 @@ services:
       dockerfile: apps/bot/Dockerfile
       target: migrate
     environment:
-      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
+      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sumirevox
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,8 +83,8 @@ services:
       - .env
     environment:
       BOT_INSTANCE_ID: 1
-      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sumirevox
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       VOICEVOX_URLS: http://voicevox:50021
     restart: unless-stopped
 
@@ -103,8 +105,8 @@ services:
       - .env
     environment:
       BOT_INSTANCE_ID: 2
-      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sumirevox
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       VOICEVOX_URLS: http://voicevox:50021
     restart: unless-stopped
 
@@ -122,8 +124,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:-sumirevox_dev}@postgres:5432/sumirevox
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://sumirevox:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/sumirevox
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
     restart: unless-stopped
 
   web:
