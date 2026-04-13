@@ -2,6 +2,7 @@ import { logger } from './logger.js';
 import { getRedisPublisher, getRedisSubscriber } from './redis.js';
 
 type PubSubHandler = (message: string) => void;
+const PUBLISH_RETRY_DELAYS_MS = [100, 250, 500] as const;
 
 export function setupPubSub(handlers: Partial<Record<string, PubSubHandler>>): void {
   const subscriber = getRedisSubscriber();
@@ -26,11 +27,23 @@ export function setupPubSub(handlers: Partial<Record<string, PubSubHandler>>): v
 }
 
 export async function publishEvent(channel: string, message: string): Promise<number> {
-  try {
-    return await getRedisPublisher().publish(channel, message);
-  } catch (err) {
-    logger.error({ err, channel }, 'Failed to publish Redis event');
-    throw err;
+  for (let attempt = 1; attempt <= PUBLISH_RETRY_DELAYS_MS.length + 1; attempt++) {
+    try {
+      return await getRedisPublisher().publish(channel, message);
+    } catch (err) {
+      const retryDelay = PUBLISH_RETRY_DELAYS_MS[attempt - 1];
+
+      if (retryDelay === undefined) {
+        logger.error({ err, channel, attempt }, 'Failed to publish Redis event after retries');
+        return 0;
+      }
+
+      logger.warn(
+        { err, channel, attempt, retryDelay },
+        'Failed to publish Redis event, retrying',
+      );
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+    }
   }
 }
 

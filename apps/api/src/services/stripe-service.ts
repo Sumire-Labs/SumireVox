@@ -16,6 +16,7 @@ export async function createCheckoutSession(
   const lockKey = `checkout_lock:${userId}`;
   const timeWindow = Math.floor(Date.now() / 1000 / 300);
   const idempotencyKey = `checkout:${userId}:${timeWindow}`;
+  let lockAcquired = false;
 
   if (!stripe) {
     throw new AppError('INTERNAL_ERROR', 'Stripe is not configured', 503);
@@ -51,6 +52,8 @@ export async function createCheckoutSession(
         409,
       );
     }
+
+    lockAcquired = true;
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -94,17 +97,27 @@ export async function createCheckoutSession(
     sessionParams.customer = existingCustomer.stripeCustomerId;
   }
 
-  const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
+  try {
+    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey });
 
-  if (!session.url) {
-    throw new Error('Checkout session URL is null');
+    if (!session.url) {
+      throw new Error('Checkout session URL is null');
+    }
+
+    logger.info(
+      { userId, boostCount, sessionId: session.id, idempotencyKey },
+      'Checkout session created',
+    );
+    return session.url;
+  } finally {
+    if (lockAcquired) {
+      try {
+        await getRedisClient().del(lockKey);
+      } catch (error) {
+        logger.warn({ err: error, userId, lockKey }, 'Failed to release checkout lock');
+      }
+    }
   }
-
-  logger.info(
-    { userId, boostCount, sessionId: session.id, idempotencyKey },
-    'Checkout session created',
-  );
-  return session.url;
 }
 
 /**

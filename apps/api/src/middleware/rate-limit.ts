@@ -22,14 +22,22 @@ function getRateLimitIdentifier(c: Parameters<MiddlewareHandler>[0]): string {
     return `user:${session.userId}`;
   }
 
-  const forwardedFor = c.req.header('x-forwarded-for');
-  if (forwardedFor) {
-    const [firstIp] = forwardedFor.split(',');
-    return `ip:${firstIp?.trim() || 'unknown'}`;
+  const realIp = c.req.header('x-real-ip');
+  if (realIp) {
+    return `ip:${realIp.trim() || 'unknown'}`;
   }
 
-  const realIp = c.req.header('x-real-ip');
-  return `ip:${realIp?.trim() || 'unknown'}`;
+  const forwardedFor = c.req.header('x-forwarded-for');
+  if (forwardedFor) {
+    const forwardedIps = forwardedFor
+      .split(',')
+      .map((ip) => ip.trim())
+      .filter(Boolean);
+    const trustedIp = forwardedIps.at(-1);
+    return `ip:${trustedIp || 'unknown'}`;
+  }
+
+  return 'ip:unknown';
 }
 
 export function rateLimit(options: RateLimitOptions): MiddlewareHandler {
