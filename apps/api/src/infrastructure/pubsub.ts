@@ -45,6 +45,8 @@ export async function publishEvent(channel: string, message: string): Promise<nu
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
     }
   }
+
+  return 0;
 }
 
 export async function cleanupPubSub(): Promise<void> {
