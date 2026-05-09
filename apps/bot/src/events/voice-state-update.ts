@@ -3,6 +3,7 @@ import { getVcSession, createVcSession } from '../services/vc-session-manager.js
 import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
 import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
 import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
+import { getDictionaryTrie, trieReplace } from '../services/text-pipeline/index.js';
 import { startDisconnectTimer, cancelDisconnectTimer } from '../services/auto-disconnect-timer.js';
 import { canInstanceConnect } from '../services/premium-service.js';
 import { getClient } from '../infrastructure/discord-client.js';
@@ -162,7 +163,9 @@ async function handleJoinLeaveNotification(
     const settings = await getGuildSettings(guildId);
     if (!settings.joinLeaveNotification) return;
 
-    const nameWithSuffix = settings.addSanSuffix ? `${displayName}さん` : displayName;
+    const trie = await getDictionaryTrie(guildId);
+    const baseName = trie ? trieReplace(trie, displayName) : displayName;
+    const nameWithSuffix = settings.addSanSuffix ? `${baseName}さん` : baseName;
     const templateText = event === 'join' ? 'が参加しました' : 'が退出しました';
     const fullText = `${nameWithSuffix}${templateText}`;
 
