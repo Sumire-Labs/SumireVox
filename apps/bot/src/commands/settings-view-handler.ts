@@ -311,8 +311,13 @@ function buildConnectionCategory(
 
   const textChannelSelect = new ChannelSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'connection_text_channel', userId))
-    .setPlaceholder('テキストチャンネルを選択')
-    .setChannelTypes(ChannelType.GuildText)
+    .setPlaceholder('読み上げチャンネルを選択（VCのテキストチャットも可）')
+    .setChannelTypes(
+      ChannelType.GuildText,
+      ChannelType.GuildAnnouncement,
+      ChannelType.GuildVoice,
+      ChannelType.GuildStageVoice,
+    )
     .setMinValues(0)
     .setMaxValues(1);
 
@@ -356,7 +361,7 @@ function buildConnectionCategory(
     )
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `**読み上げチャンネル**\n自動接続時に読み上げるテキストチャンネルを指定します。\n現在: ${textChannelId ? `<#${textChannelId}>` : '未設定'}`,
+        `**読み上げチャンネル**\n自動接続時に読み上げるテキストチャンネル（VC内テキストチャット含む）を指定します。\n現在: ${textChannelId ? `<#${textChannelId}>` : '未設定'}`,
       ),
     )
     .addActionRowComponents(
