@@ -1,6 +1,7 @@
 {
   "name": "sumirevox",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "dev:bot": "pnpm --filter @sumirevox/bot dev",
     "dev:api": "pnpm --filter @sumirevox/api dev",
