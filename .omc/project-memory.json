@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775365381554,
+  "lastScanned": 1779292073404,
   "projectRoot": "C:\\Users\\hayat\\Desktop\\Development\\SumireVox",
   "techStack": {
     "languages": [
@@ -68,14 +68,14 @@
       "path": "apps",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775365381522,
+      "lastAccessed": 1779292073369,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 10,
-      "lastAccessed": 1775365381523,
+      "lastAccessed": 1779292073369,
       "keyFiles": [
         "api-endpoints.md",
         "architecture.md",
@@ -88,7 +88,7 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1775365381529,
+      "lastAccessed": 1779292073376,
       "keyFiles": [
         "nginx.conf",
         "nginx.prod.conf"
@@ -98,14 +98,14 @@
       "path": "packages",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775365381530,
+      "lastAccessed": 1779292073376,
       "keyFiles": []
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
       "fileCount": 1,
-      "lastAccessed": 1775365381530,
+      "lastAccessed": 1779292073376,
       "keyFiles": [
         "setup-env.sh"
       ]
@@ -114,7 +114,7 @@
       "path": "apps\\api",
       "purpose": "API routes",
       "fileCount": 5,
-      "lastAccessed": 1775365381531,
+      "lastAccessed": 1779292073377,
       "keyFiles": [
         "docker-entrypoint.sh",
         "Dockerfile",
@@ -124,303 +124,21 @@
   },
   "hotPaths": [
     {
-      "path": "apps\\api\\src\\routes\\guilds.ts",
-      "accessCount": 22,
-      "lastAccessed": 1775298346123,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\stripe-webhook-handler.ts",
-      "accessCount": 15,
-      "lastAccessed": 1775365481839,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\index.ts",
-      "accessCount": 15,
-      "lastAccessed": 1775365702129,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\prisma\\schema.prisma",
-      "accessCount": 10,
-      "lastAccessed": 1775297948828,
-      "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 8,
-      "lastAccessed": 1775297902506,
-      "type": "directory"
-    },
-    {
-      "path": "apps\\api\\src\\routes\\auth.ts",
-      "accessCount": 8,
-      "lastAccessed": 1775298323792,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\__tests__\\stripe-webhook-handler.test.ts",
-      "accessCount": 7,
-      "lastAccessed": 1775063905517,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\routes\\stripe-webhook.ts",
-      "accessCount": 7,
-      "lastAccessed": 1775264705221,
-      "type": "file"
-    },
-    {
-      "path": "apps\\web\\src\\pages\\dashboard\\boost.tsx",
-      "accessCount": 6,
-      "lastAccessed": 1774971699577,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 6,
-      "lastAccessed": 1775062453763,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\boost-service.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775297949595,
-      "type": "file"
-    },
-    {
-      "path": "pnpm-lock.yaml",
-      "accessCount": 5,
-      "lastAccessed": 1774944009556,
-      "type": "directory"
-    },
-    {
-      "path": "nginx\\nginx.prod.conf",
-      "accessCount": 5,
-      "lastAccessed": 1775054906057,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\stripe-sync-service.ts",
-      "accessCount": 5,
-      "lastAccessed": 1775264714398,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\config.ts",
-      "accessCount": 5,
-      "lastAccessed": 1775365677771,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\src\\events\\message-create.ts",
+      "path": "apps\\web\\src\\components\\layout.tsx",
       "accessCount": 4,
-      "lastAccessed": 1774963643026,
+      "lastAccessed": 1779292103056,
       "type": "file"
     },
     {
-      "path": "apps\\api\\src\\middleware\\session-middleware.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775298234648,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\redis.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775298711116,
-      "type": "file"
-    },
-    {
-      "path": "packages\\shared\\package.json",
-      "accessCount": 3,
-      "lastAccessed": 1774962256717,
-      "type": "file"
-    },
-    {
-      "path": "nginx\\nginx.conf",
-      "accessCount": 3,
-      "lastAccessed": 1775054646925,
-      "type": "file"
-    },
-    {
-      "path": "apps\\web\\src\\App.tsx",
-      "accessCount": 3,
-      "lastAccessed": 1775062008080,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\package.json",
-      "accessCount": 3,
-      "lastAccessed": 1775062459590,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\request-logger.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775264700310,
-      "type": "file"
-    },
-    {
-      "path": "packages\\shared\\src\\constants\\defaults.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775264733055,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\session.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775265918957,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\validate.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775297905859,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\app-error.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775297906031,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\services\\adjust-boost-slots.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775365477892,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\stripe-client.ts",
-      "accessCount": 3,
-      "lastAccessed": 1775365487320,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\prisma\\migrations\\20260331000001_add_stripe_events\\migration.sql",
-      "accessCount": 2,
-      "lastAccessed": 1774942394594,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\src\\services\\speech-queue.ts",
-      "accessCount": 2,
-      "lastAccessed": 1774963350316,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\prisma\\migrations\\20260402000000_change_default_read_target_type\\migration.sql",
-      "accessCount": 2,
-      "lastAccessed": 1775061298890,
-      "type": "file"
-    },
-    {
-      "path": "apps\\web\\vite.config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775061999334,
-      "type": "file"
-    },
-    {
-      "path": "apps\\admin\\vite.config.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775062000883,
-      "type": "file"
-    },
-    {
-      "path": "README.md",
-      "accessCount": 2,
-      "lastAccessed": 1775062530615,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.base.json",
+      "path": ".env.example",
       "accessCount": 1,
-      "lastAccessed": 1774962208913,
+      "lastAccessed": 1779292094871,
       "type": "file"
     },
     {
-      "path": "apps\\web\\src\\pages\\dashboard\\server-bots.tsx",
+      "path": ".env.prod.example",
       "accessCount": 1,
-      "lastAccessed": 1774970088635,
-      "type": "file"
-    },
-    {
-      "path": "docker-compose.yml",
-      "accessCount": 1,
-      "lastAccessed": 1775062453829,
-      "type": "file"
-    },
-    {
-      "path": "apps\\bot\\src\\infrastructure\\config.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775062459375,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\package.json",
-      "accessCount": 1,
-      "lastAccessed": 1775062459742,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\database.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264692906,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\discord-guild-info.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264694075,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\logger.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264694277,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\pubsub.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264694780,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\infrastructure\\settings-cache.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264696027,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\error-handler.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264699871,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\require-auth.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264700783,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\require-bot-admin.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264701637,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\middleware\\require-guild-admin.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264702098,
-      "type": "file"
-    },
-    {
-      "path": "apps\\api\\src\\routes\\dictionary.ts",
-      "accessCount": 1,
-      "lastAccessed": 1775264704313,
+      "lastAccessed": 1779292098438,
       "type": "file"
     }
   ],

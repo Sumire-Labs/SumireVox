@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth-context';
 import { API_BASE } from '../lib/api';
 
 const DISCORD_SUPPORT_URL = import.meta.env.VITE_DISCORD_SUPPORT_URL || '#';
+const GITHUB_URL = import.meta.env.VITE_GITHUB_URL || '';
 
 const NAV_LINKS = [
   { to: '/', label: 'ホーム' },
@@ -237,6 +238,17 @@ export function Layout() {
                 <ExternalLink size={13} />
                 VOICEVOX 公式
               </a>
+              {GITHUB_URL && (
+                <a
+                  href={GITHUB_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors"
+                >
+                  <ExternalLink size={13} />
+                  GitHub
+                </a>
+              )}
             </div>
           </div>
         </div>
