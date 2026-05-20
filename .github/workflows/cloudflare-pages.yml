@@ -71,6 +71,7 @@ jobs:
           VITE_API_URL: https://api.sumirevox.com
           VITE_BOT_INVITE_URL: ${{ vars.VITE_BOT_INVITE_URL }}
           VITE_DISCORD_SUPPORT_URL: ${{ vars.VITE_DISCORD_SUPPORT_URL }}
+          VITE_GITHUB_URL: ${{ vars.VITE_GITHUB_URL }}
       - name: Deploy to Cloudflare Pages
         run: npx wrangler@3.114.17 pages deploy apps/web/dist --project-name=sumirevox-web
         env:
