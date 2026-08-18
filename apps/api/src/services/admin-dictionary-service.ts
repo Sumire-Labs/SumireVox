@@ -1,4 +1,5 @@
 import { GlobalDictionaryEntry, GlobalDictionaryRequest, REDIS_CHANNELS, validateDictionaryEntry } from '@sumirevox/shared';
+import { Prisma } from '@prisma/client';
 import { getPrisma } from '../infrastructure/database.js';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { AppError } from '../infrastructure/app-error.js';
@@ -49,9 +50,17 @@ export async function addGlobalDictionaryEntry(
   if (existing) {
     throw new AppError('VALIDATION_ERROR', `「${word.trim()}」は既に登録されています。`, 400);
   }
-  const entry = await prisma.globalDictionary.create({
-    data: { word: word.trim(), reading: reading.trim(), registeredBy },
-  });
+  let entry;
+  try {
+    entry = await prisma.globalDictionary.create({
+      data: { word: word.trim(), reading: reading.trim(), registeredBy },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new AppError('VALIDATION_ERROR', `「${word.trim()}」は既に登録されています。`, 400);
+    }
+    throw error;
+  }
   await publishEvent(REDIS_CHANNELS.GLOBAL_DICTIONARY_UPDATED, JSON.stringify({}));
   logger.info({ word: word.trim() }, 'Global dictionary entry added');
   return {
@@ -72,31 +81,38 @@ export async function updateGlobalDictionaryEntry(
     throw new AppError('VALIDATION_ERROR', validation.error!, 400);
   }
   const prisma = getPrisma();
+  let entry;
   try {
-    const entry = await prisma.globalDictionary.update({
+    entry = await prisma.globalDictionary.update({
       where: { word },
       data: { reading: reading.trim() },
     });
-    await publishEvent(REDIS_CHANNELS.GLOBAL_DICTIONARY_UPDATED, JSON.stringify({}));
-    logger.info({ word }, 'Global dictionary entry updated');
-    return {
-      word: entry.word,
-      reading: entry.reading,
-      registeredBy: entry.registeredBy,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-    };
-  } catch {
-    throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+    }
+    throw error;
   }
+  await publishEvent(REDIS_CHANNELS.GLOBAL_DICTIONARY_UPDATED, JSON.stringify({}));
+  logger.info({ word }, 'Global dictionary entry updated');
+  return {
+    word: entry.word,
+    reading: entry.reading,
+    registeredBy: entry.registeredBy,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
 }
 
 export async function deleteGlobalDictionaryEntry(word: string): Promise<void> {
   const prisma = getPrisma();
   try {
     await prisma.globalDictionary.delete({ where: { word } });
-  } catch {
-    throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+    }
+    throw error;
   }
   await publishEvent(REDIS_CHANNELS.GLOBAL_DICTIONARY_UPDATED, JSON.stringify({}));
   logger.info({ word }, 'Global dictionary entry deleted');

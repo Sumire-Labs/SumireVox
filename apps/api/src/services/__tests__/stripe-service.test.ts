@@ -87,4 +87,15 @@ describe('createCheckoutSession', () => {
     await expect(createCheckoutSession('user-1', 2)).rejects.toThrow('stripe down');
     expect(redisMock.del).toHaveBeenCalledWith('checkout_lock:user-1');
   });
+
+  it('uses an idempotency key that includes the boostCount', async () => {
+    stripeMock.checkout.sessions.create.mockResolvedValue({
+      id: 'cs_456',
+      url: 'https://checkout.stripe.test/session5',
+    });
+
+    await createCheckoutSession('user-1', 5);
+
+    expect(stripeMock.checkout.sessions.create.mock.calls[0][1].idempotencyKey).toContain(':5');
+  });
 });

@@ -5,6 +5,8 @@
 成功: `{ "success": true, "data": { ... } }`
 エラー: `{ "success": false, "error": { "code": "ERROR_CODE", "message": "説明" } }`
 
+> エラーは未知パス・未対応メソッドを含め、すべて上記の JSON エンベロープで返す。未対応メソッドは Hono 4.12.8 の現行挙動により 405 ではなく 404 を返し、未知パスと同様に `NOT_FOUND` を返す。
+
 ### エラーコード
 
 | コード | HTTP | 説明 |
@@ -12,13 +14,18 @@
 | UNAUTHORIZED | 401 | 未認証 |
 | FORBIDDEN | 403 | 権限不足 |
 | NOT_FOUND | 404 | リソースなし |
-| VALIDATION_ERROR | 400 | 入力値不正 |
+| VALIDATION_ERROR | 400 | 入力値不正（競合系では 409 を返す場合あり） |
 | BOOST_COOLDOWN | 400 | クールダウン中 |
 | BOOST_LIMIT_REACHED | 400 | 枠上限 |
 | GUILD_BOOST_LIMIT_REACHED | 400 | ギルドのブースト上限到達 |
-| RATE_LIMITED | 429 | レート制限 |
-| SESSION_EXPIRED | 401 | Discord セッション期限切れ |
+| CHECKOUT_IN_PROGRESS | 409 | 決済処理進行中 |
+| RATE_LIMITED | 429 | レート制限（Discord API 起因の場合は 503 を返す） |
+| SESSION_EXPIRED | 401 | Discord 認可の期限切れ（クライアントに返る唯一のコード） |
 | DICTIONARY_LIMIT_REACHED | 400 | 辞書上限 |
+| DISCORD_TOKEN_EXPIRED | 401 | Discord アクセストークン失効（内部用。クライアントには返らない） |
+| DISCORD_API_ERROR | 500/504 | Discord API 呼び出しエラー/タイムアウト |
+| VOICEVOX_ERROR | 503 | VOICEVOX 接続エラー |
+| SERVICE_UNAVAILABLE | 503 | サービス利用不可 |
 | INTERNAL_ERROR | 500 | 内部エラー |
 
 ### ページネーション (オフセットベース)
@@ -54,6 +61,21 @@
 |---|---|---|
 | POST | /api/stripe/webhook | Stripe Webhook 受信 |
 
+> 成功応答は `{ "received": true }`（共通エンベロープ外の機械連携用レスポンス）。イベントは `stripe_events` に outbox 化され、非同期処理される（`docs/boost-system.md` 参照）。
+
+## その他（未認可）
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | /health | ヘルスチェック（`{ "status": "ok" }`） |
+
+## 認証済みユーザー向け（認証のみ・ManageGuild 不要）
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | /api/voicevox/speakers | VOICEVOX スピーカー一覧（認証必要） |
+| GET | /api/dictionary/global | グローバル辞書一覧（閲覧のみ） |
+
 ## サーバー管理者向け (認証 + ManageGuild)
 
 | メソッド | パス | 説明 |
@@ -69,7 +91,6 @@
 | GET | /api/guilds/:guildId/dictionary | サーバー辞書一覧 |
 | POST | /api/guilds/:guildId/dictionary | サーバー辞書追加 |
 | DELETE | /api/guilds/:guildId/dictionary/:word | サーバー辞書削除 |
-| GET | /api/dictionary/global | グローバル辞書一覧 (閲覧のみ) |
 
 ## 認証済みユーザー向け Bot インスタンス情報
 
@@ -100,7 +121,7 @@
 
 ## ミドルウェア
 
-- CORS (credentials: true, sumirevox.com + admin.sumirevox.com)
+- CORS (credentials: true, 許可オリジンは `CORS_ORIGIN` で設定)
 - リクエストログ (pino)
 - セッション読み込み (Cookie → Redis)
 - 認証必須チェック

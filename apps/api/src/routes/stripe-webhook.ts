@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import type Stripe from 'stripe';
-import { handleStripeWebhook } from '../services/stripe-webhook-handler.js';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
+import { enqueueStripeEvent, drainStripeEventOutbox } from '../services/stripe-event-outbox.js';
 
 export const stripeWebhookRouter = new Hono();
 
@@ -47,19 +47,24 @@ stripeWebhookRouter.post('/webhook', async (c) => {
     );
   }
 
-  // フェーズ 2: 業務処理 — 失敗時は 500 を返して Stripe に再試行させる
+  // フェーズ 2: 永続化（outbox）してから 200 を返す。
+  // これにより、その後の業務処理の失敗やプロセスクラッシュでもイベントが失われず、
+  // drainStripeEventOutbox（起動時・定期）が必ず再生する。Stripe の配信デッドライン
+  // （約10秒）を守るため、業務処理そのものは直後に非同期で実行する。
   try {
-    await handleStripeWebhook(event);
+    await enqueueStripeEvent(event);
   } catch (error) {
-    logger.error({ err: error, eventId: event.id, eventType: event.type }, 'Stripe webhook processing failed');
+    logger.error({ err: error, eventId: event.id, eventType: event.type }, 'Failed to persist Stripe webhook event');
     return c.json(
-      {
-        success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Webhook processing failed' },
-      },
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Webhook event could not be persisted' } },
       500,
     );
   }
+
+  // 非同期で処理（処理は冪等なので、多重実行しても安全）
+  void drainStripeEventOutbox().catch((error) => {
+    logger.error({ err: error }, 'Failed to drain Stripe event outbox');
+  });
 
   return c.json({ received: true });
 });

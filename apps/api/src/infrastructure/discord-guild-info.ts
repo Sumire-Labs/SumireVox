@@ -23,6 +23,7 @@ export async function getGuildInfo(guildId: string): Promise<DiscordGuildInfo> {
   try {
     const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}`, {
       headers: { Authorization: `Bot ${config.discordBotToken}` },
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
@@ -35,7 +36,7 @@ export async function getGuildInfo(guildId: string): Promise<DiscordGuildInfo> {
     try {
       const memberRes = await fetch(
         `https://discord.com/api/v10/guilds/${guildId}/members/${config.discordClientId}`,
-        { headers: { Authorization: `Bot ${config.discordBotToken}` } },
+        { headers: { Authorization: `Bot ${config.discordBotToken}` }, signal: AbortSignal.timeout(10000) },
       );
       if (memberRes.ok) {
         const memberData = (await memberRes.json()) as { joined_at: string };
