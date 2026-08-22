@@ -1,65 +1,17 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
 import { disconnectRedis } from './infrastructure/redis.js';
-import { requestLogger } from './middleware/request-logger.js';
-import { sessionMiddleware } from './middleware/session-middleware.js';
-import { errorHandler } from './middleware/error-handler.js';
-import { authRouter } from './routes/auth.js';
-import { guildsRouter } from './routes/guilds.js';
-import { dictionaryRouter } from './routes/dictionary.js';
-import { userRouter } from './routes/user.js';
-import { stripeWebhookRouter } from './routes/stripe-webhook.js';
-import { adminRouter } from './routes/admin.js';
-import { voicevoxRouter } from './routes/voicevox.js';
-import { botInstancesRouter } from './routes/bot-instances.js';
+import { createApp } from './app.js';
 import { reconcileBoosts } from './services/boost-service.js';
 import {
   createStripeSubscriptionReconcileRunner,
   reconcileStripeSubscriptions,
 } from './services/stripe-subscription-reconciler.js';
+import { drainStripeEventOutbox } from './services/stripe-event-outbox.js';
 
-const app = new Hono();
-
-// グローバルエラーハンドラ
-app.onError(errorHandler);
-
-// CORS
-app.use(
-  '*',
-  cors({
-    origin: config.corsOrigin,
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  }),
-);
-
-// リクエストログ
-app.use('*', requestLogger);
-
-// Stripe Webhook（sessionMiddleware より前にマウント: raw body パース + セッション処理不要）
-app.route('/api/stripe', stripeWebhookRouter);
-
-// セッション読み込み（全リクエスト）
-app.use('*', sessionMiddleware);
-
-// ヘルスチェック（認証不要）
-app.get('/health', (c) => {
-  return c.json({ status: 'ok' });
-});
-
-// ルート定義
-app.route('/auth', authRouter);
-app.route('/api/guilds', guildsRouter);
-app.route('/api/dictionary', dictionaryRouter);
-app.route('/api/user', userRouter);
-app.route('/api/admin', adminRouter);
-app.route('/api/voicevox', voicevoxRouter);
-app.route('/api/bot-instances', botInstancesRouter);
+const app = createApp();
 
 let server: ReturnType<typeof serve> | null = null;
 let reconcileTimer: ReturnType<typeof setInterval> | null = null;
@@ -87,11 +39,15 @@ async function main(): Promise<void> {
   // 起動後にブースト整合処理を実行
   reconcileBoosts().catch((err) => logger.error({ err }, 'Boost reconciliation failed on startup'));
 
+  // 起動時に未処理の Stripe イベント（outbox）をドレイン（クラッシュからの回復）
+  drainStripeEventOutbox().catch((err) => logger.error({ err }, 'Stripe event outbox drain failed on startup'));
+
   // Stripe サブスクリプション定期整合処理（起動から1インターバル後に開始）
   reconcileTimer = setInterval(() => {
     runStripeSubscriptionReconcile().catch((err) =>
       logger.error({ err }, 'Stripe subscription reconciliation failed'),
     );
+    drainStripeEventOutbox().catch((err) => logger.error({ err }, 'Stripe event outbox drain failed'));
   }, config.stripeReconcileIntervalMs);
 }
 

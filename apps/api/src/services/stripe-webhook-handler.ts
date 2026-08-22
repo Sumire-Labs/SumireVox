@@ -1,5 +1,4 @@
 import Stripe from 'stripe';
-import { Prisma } from '@prisma/client';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { logger } from '../infrastructure/logger.js';
@@ -8,53 +7,59 @@ import { publishGuildPremiumInvalidation } from './premium-cache-sync.js';
 import { mapStripeStatus } from './stripe-utils.js';
 
 /**
- * Stripe Webhook イベントを処理する（署名検証済みイベントを受け取る）
+ * Stripe API が resource_missing（404）を返したかを判定する。
+ * リトライ遅延中に対象リソース（サブスクリプション等）が Stripe 上で削除済みの場合、
+ * 成功扱いにしてスキップするための判定。
  */
-export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
-  logger.info({ type: event.type, id: event.id }, 'Stripe webhook received');
+function isStripeResourceMissing(error: unknown): boolean {
+  return error instanceof Stripe.errors.StripeError && error.statusCode === 404;
+}
 
-  // 冪等性チェック: 既処理イベントは早期リターン
-  const prisma = getPrisma();
-  const existingEvent = await prisma.stripeEvent.findUnique({ where: { id: event.id } });
-  if (existingEvent) {
-    logger.info({ eventId: event.id, type: event.type }, 'Stripe webhook already processed, skipping');
-    return;
-  }
+/**
+ * 永続化済み（outbox）の Stripe Webhook イベントを処理する。
+ *
+ * イベントの受信・永続化は stripe-event-outbox.ts が担う。本関数は業務処理のみを行い、
+ * 冪等性マーカ（stripe_events レコード）の生成はしない（outbox 側で管理する）。
+ */
+export async function processStripeEvent(event: Stripe.Event): Promise<void> {
+  logger.info({ type: event.type, id: event.id }, 'Processing Stripe webhook event');
 
   try {
     switch (event.type) {
       case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session, event.id);
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
         break;
       case 'invoice.paid':
-        await handleInvoicePaid(event.data.object as Stripe.Invoice, event.id);
+        await handleInvoicePaid(event.data.object as Stripe.Invoice);
         break;
       case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice, event.id);
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
         break;
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, event.id);
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
         break;
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, event.id);
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
         break;
       case 'charge.refunded':
-        await handleChargeRefunded(event.data.object as Stripe.Charge, event.id);
+        await handleChargeRefunded(event.data.object as Stripe.Charge);
         break;
       default:
         logger.debug({ type: event.type }, 'Unhandled webhook event type');
     }
   } catch (error) {
-    // 競合状態: 別リクエストが同じイベントを先に処理済みにした場合
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      logger.info({ eventId: event.id, type: event.type }, 'Stripe webhook processed concurrently, skipping');
+    // リトライ遅延中に対象リソースが Stripe 上で削除済み（resource_missing）の場合も
+    // 成功扱いでスキップする。残状態は定期整合処理が修復する。
+    if (isStripeResourceMissing(error)) {
+      logger.info({ eventId: event.id, type: event.type }, 'Stripe webhook resource missing, skipping');
       return;
     }
+
     throw error;
   }
 }
 
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId: string): Promise<void> {
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
   const userId = session.metadata?.userId;
   const boostCount = parseInt(session.metadata?.boostCount ?? '0', 10);
   const subscriptionId = session.subscription as string;
@@ -66,12 +71,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId
   }
 
   const prisma = getPrisma();
-  // stripe is guaranteed non-null here: handleStripeWebhook guards at entry
+  // stripe は enqueue 時点（ルート）と drain 時点（outbox）で有効性を検査済み
   const stripeSubscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
   await prisma.$transaction(async (tx) => {
-    await tx.stripeEvent.create({ data: { id: eventId, type: 'checkout.session.completed' } });
-
     await tx.subscription.upsert({
       where: { stripeSubscriptionId: subscriptionId },
       create: {
@@ -100,7 +103,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session, eventId
   logger.info({ userId, subscriptionId, boostCount }, 'Subscription created from checkout');
 }
 
-async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string): Promise<void> {
+async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   const subscriptionId = invoice.subscription as string;
   if (!subscriptionId) return;
 
@@ -108,8 +111,6 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string): Prom
   const stripeSubscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
   await prisma.$transaction(async (tx) => {
-    await tx.stripeEvent.create({ data: { id: eventId, type: 'invoice.paid' } });
-
     await tx.subscription.updateMany({
       where: { stripeSubscriptionId: subscriptionId },
       data: {
@@ -122,7 +123,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, eventId: string): Prom
   logger.info({ subscriptionId }, 'Invoice paid, subscription updated');
 }
 
-async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: string): Promise<void> {
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   const subscriptionId = invoice.subscription as string;
   if (!subscriptionId) return;
 
@@ -133,8 +134,6 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.stripeEvent.create({ data: { id: eventId, type: 'invoice.payment_failed' } });
-
     await tx.subscription.updateMany({
       where: { stripeSubscriptionId: subscriptionId },
       data: { status: 'PAST_DUE' },
@@ -154,7 +153,7 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, eventId: stri
   logger.warn({ subscriptionId }, 'Invoice payment failed, subscription marked PAST_DUE and boosts unassigned');
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription, eventId: string): Promise<void> {
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Promise<void> {
   const prisma = getPrisma();
   const status = mapStripeStatus(subscription.status);
   const boostCount = subscription.items.data[0]?.quantity ?? 0;
@@ -167,8 +166,6 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, even
     .map((boost) => boost.guildId) ?? [];
 
   await prisma.$transaction(async (tx) => {
-    await tx.stripeEvent.create({ data: { id: eventId, type: 'customer.subscription.updated' } });
-
     await tx.subscription.updateMany({
       where: { stripeSubscriptionId: subscription.id },
       data: {
@@ -195,7 +192,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription, even
   logger.info({ subscriptionId: subscription.id, status, boostCount }, 'Subscription updated');
 }
 
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription, eventId: string): Promise<void> {
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
   const prisma = getPrisma();
   const assignedBoosts = await prisma.boost.findMany({
     where: { subscriptionId: subscription.id, guildId: { not: null } },
@@ -203,8 +200,6 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, even
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.stripeEvent.create({ data: { id: eventId, type: 'customer.subscription.deleted' } });
-
     await tx.subscription.updateMany({
       where: { stripeSubscriptionId: subscription.id },
       data: { status: 'CANCELED' },
@@ -224,7 +219,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription, even
   logger.info({ subscriptionId: subscription.id }, 'Subscription deleted, all boosts unassigned');
 }
 
-async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Promise<void> {
+async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
   const prisma = getPrisma();
   let subscriptionId: string | null = null;
 
@@ -283,8 +278,6 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Pro
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.stripeEvent.create({ data: { id: eventId, type: 'charge.refunded' } });
-
       await tx.subscription.updateMany({
         where: { stripeSubscriptionId: sid },
         data: { status: 'CANCELED' },
@@ -307,10 +300,6 @@ async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Pro
     await publishGuildPremiumInvalidation(assignedBoosts.map((boost) => boost.guildId));
     logger.info({ subscriptionId: sid, chargeId: charge.id }, 'Full refund processed: subscription canceled, all boosts revoked and deleted');
   } else {
-    await prisma.$transaction(async (tx) => {
-      await tx.stripeEvent.create({ data: { id: eventId, type: 'charge.refunded' } });
-    });
-
     logger.info(
       { subscriptionId: sid, chargeId: charge.id, amountRefunded: charge.amount_refunded, totalAmount: charge.amount },
       'Partial refund detected, no automatic boost changes applied',

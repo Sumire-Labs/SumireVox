@@ -14,8 +14,7 @@ export async function createCheckoutSession(
   boostCount: number,
 ): Promise<string> {
   const lockKey = `checkout_lock:${userId}`;
-  const timeWindow = Math.floor(Date.now() / 1000 / 300);
-  const idempotencyKey = `checkout:${userId}:${timeWindow}`;
+  const idempotencyKey = `checkout:${userId}:${boostCount}`;
   let lockAcquired = false;
 
   if (!stripe) {

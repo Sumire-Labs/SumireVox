@@ -18,6 +18,7 @@ import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { rateLimit } from '../middleware/rate-limit.js';
+import { discordSnowflakeSchema } from '../schemas/common.js';
 
 const checkoutRateLimit = rateLimit({ max: 5, windowSeconds: 60, keyPrefix: 'checkout' });
 const boostAssignRateLimit = rateLimit({ max: 20, windowSeconds: 60, keyPrefix: 'boost-assign' });
@@ -28,11 +29,11 @@ const checkoutBodySchema = z
   .strict();
 const boostAssignBodySchema = z
   .object({
-    guildId: z.string().min(1),
+    guildId: discordSnowflakeSchema,
     count: z.number().int().min(0),
   })
   .strict();
-const boostAssignByIdBodySchema = z.object({ guildId: z.string().min(1) }).strict();
+const boostAssignByIdBodySchema = z.object({ guildId: discordSnowflakeSchema }).strict();
 
 const USER_GUILDS_CACHE_TTL = 60;
 const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
@@ -127,6 +128,12 @@ userRouter.get('/guilds', async (c) => {
       return c.json(
         { success: false, error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' } },
         401,
+      );
+    }
+    if (err instanceof AppError && err.statusCode === 429) {
+      return c.json(
+        { success: false, error: { code: 'RATE_LIMITED', message: err.message } },
+        503,
       );
     }
     logger.error({ err }, 'Failed to fetch user guilds');

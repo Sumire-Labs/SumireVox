@@ -56,3 +56,6 @@ diff.txt
 # OMC local state
 .omc/state/
 .omc/sessions/
+
+# Deepwork local progress
+.slim/deepwork/

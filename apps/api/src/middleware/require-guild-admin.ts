@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono';
 import { hasManageGuildPermission } from '../services/discord-api.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
+import { AppError } from '../infrastructure/app-error.js';
 
 const GUILD_ADMIN_CACHE_TTL = 300; // 5分
 
@@ -43,7 +44,23 @@ export const requireGuildAdmin: MiddlewareHandler = async (c, next) => {
     logger.warn({ err }, 'Failed to read guild admin cache');
   }
 
-  const hasPermission = await hasManageGuildPermission(session.accessToken, guildId);
+  let hasPermission: boolean;
+  try {
+    hasPermission = await hasManageGuildPermission(session.accessToken, guildId);
+  } catch (err) {
+    // Discord アクセストークン失効（AppError 401）は user/guild ルートと同様に SESSION_EXPIRED へ変換する。
+    // それ以外のエラーはそのまま伝播させる。
+    if (err instanceof AppError && err.statusCode === 401) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'SESSION_EXPIRED', message: 'セッションの有効期限が切れました。再ログインしてください。' },
+        },
+        401,
+      );
+    }
+    throw err;
+  }
 
   try {
     await getRedisClient().set(cacheKey, String(hasPermission), 'EX', GUILD_ADMIN_CACHE_TTL);

@@ -321,6 +321,7 @@ export async function setBotInstanceActive(instanceId: number, isActive: boolean
   // アクティブインスタンス数のキャッシュをクリア
   try {
     await getRedisClient().del(ACTIVE_INSTANCE_COUNT_CACHE_KEY);
+    await getRedisClient().del('bot:instances:all');
   } catch {
     // キャッシュ削除失敗は無視
   }

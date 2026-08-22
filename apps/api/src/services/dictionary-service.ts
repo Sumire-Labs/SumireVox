@@ -5,6 +5,7 @@ import {
   REDIS_CHANNELS,
   validateDictionaryEntry,
 } from '@sumirevox/shared';
+import { Prisma } from '@prisma/client';
 import { getPrisma } from '../infrastructure/database.js';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { AppError } from '../infrastructure/app-error.js';
@@ -63,9 +64,17 @@ export async function addServerDictionaryEntry(
     throw new AppError('VALIDATION_ERROR', `「${word.trim()}」は既に登録されています。`, 400);
   }
 
-  const entry = await prisma.serverDictionary.create({
-    data: { guildId, word: word.trim(), reading: reading.trim(), registeredBy },
-  });
+  let entry;
+  try {
+    entry = await prisma.serverDictionary.create({
+      data: { guildId, word: word.trim(), reading: reading.trim(), registeredBy },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new AppError('VALIDATION_ERROR', `「${word.trim()}」は既に登録されています。`, 400);
+    }
+    throw error;
+  }
 
   await publishEvent(REDIS_CHANNELS.SERVER_DICTIONARY_UPDATED, JSON.stringify({ guildId }));
   logger.info({ guildId, word: word.trim() }, 'Server dictionary entry added via API');
@@ -79,8 +88,11 @@ export async function deleteServerDictionaryEntry(guildId: string, word: string)
     await prisma.serverDictionary.delete({
       where: { guildId_word: { guildId, word } },
     });
-  } catch {
-    throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw new AppError('NOT_FOUND', '辞書エントリが見つかりません。', 404);
+    }
+    throw error;
   }
 
   await publishEvent(REDIS_CHANNELS.SERVER_DICTIONARY_UPDATED, JSON.stringify({ guildId }));

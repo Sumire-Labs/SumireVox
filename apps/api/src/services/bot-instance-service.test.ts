@@ -34,7 +34,11 @@ vi.mock('../infrastructure/database.js', () => ({
   getPrisma: vi.fn(() => prismaMock),
 }));
 
-import { getGuildBotList, getGuildsWithBotStatus } from './bot-instance-service.js';
+import {
+  getGuildBotList,
+  getGuildsWithBotStatus,
+  updateGuildBotInstanceSettings,
+} from './bot-instance-service.js';
 
 describe('getGuildsWithBotStatus', () => {
   const instances: BotInstance[] = [
@@ -174,6 +178,38 @@ describe('getGuildsWithBotStatus', () => {
       ],
       boostCount: 2,
       maxBots: 2,
+    });
+  });
+
+  it('persists a voice channel chat ID unchanged as textChannelId', async () => {
+    const voiceChannelId = 'voice-channel-chat-id';
+    prismaMock.guildSettings.findUnique.mockResolvedValue(null);
+
+    await updateGuildBotInstanceSettings('guild-1', 1, {
+      textChannelId: voiceChannelId,
+    });
+
+    expect(prismaMock.guildSettings.upsert).toHaveBeenCalledWith({
+      where: { guildId: 'guild-1' },
+      create: {
+        guildId: 'guild-1',
+        botInstanceSettings: {
+          '1': {
+            autoJoin: false,
+            textChannelId: voiceChannelId,
+            voiceChannelId: null,
+          },
+        },
+      },
+      update: {
+        botInstanceSettings: {
+          '1': {
+            autoJoin: false,
+            textChannelId: voiceChannelId,
+            voiceChannelId: null,
+          },
+        },
+      },
     });
   });
 });

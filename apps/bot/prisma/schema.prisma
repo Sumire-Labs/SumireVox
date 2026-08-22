@@ -131,9 +131,14 @@ model Boost {
 }
 
 model StripeEvent {
-  id          String   @id
+  id          String    @id
   type        String
-  processedAt DateTime @default(now()) @map("processed_at")
+  payload     Json      @map("payload")
+  status      String    @default("PENDING") @map("status") // 'PENDING' | 'PROCESSED'
+  attempts    Int       @default(0) @map("attempts")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  processedAt DateTime? @map("processed_at")
 
   @@map("stripe_events")
 }

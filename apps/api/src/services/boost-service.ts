@@ -456,6 +456,11 @@ export async function reconcileBoosts(): Promise<void> {
   const prisma = getPrisma();
   const maxBoosts = await getActiveInstanceCount();
 
+  if (maxBoosts <= 0) {
+    logger.info('Boost reconciliation skipped: no active bot instances');
+    return;
+  }
+
   const guildBoosts = await prisma.boost.groupBy({
     by: ['guildId'],
     where: {
