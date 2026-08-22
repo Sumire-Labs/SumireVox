@@ -92,6 +92,19 @@
 | POST | /api/guilds/:guildId/dictionary | サーバー辞書追加 |
 | DELETE | /api/guilds/:guildId/dictionary/:word | サーバー辞書削除 |
 
+### GET /api/guilds/:guildId/channels
+
+成功時の `data` は、チャンネル項目を `{ id, name, parentId, type }` で返す。`type` は `text | announcement | voice | stage` のいずれかで、カテゴリは `{ id, name }` で返す。
+
+| フィールド | 内容 |
+|---|---|
+| categories | カテゴリ一覧 |
+| textChannels | `type: text` のチャンネル一覧（通常のテキスト） |
+| voiceChannels | `type: voice` または `type: stage` のチャンネル一覧（Bot の接続候補） |
+| readableChannels | `type: text | announcement | voice | stage` の全チャンネル一覧（Bot の読み上げ対象） |
+
+ボイスチャンネルまたはステージチャンネルのテキストチャットを選択する場合は、そのチャンネル自身の `channelId` を指定する。Bot インスタンス設定の `textChannelId` はこのチャンネル ID を使用する。
+
 ## 認証済みユーザー向け Bot インスタンス情報
 
 | メソッド | パス | 説明 |
