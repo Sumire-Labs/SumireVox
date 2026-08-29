@@ -395,7 +395,7 @@ export function HomePage() {
             >
               Bot を導入する
             </a>
-            <p className="text-sm text-gray-500">※ 完全無料・クレジットカード不要</p>
+            <p className="text-sm text-gray-500">※ 一部無料・クレジットカード不要</p>
           </div>
         </motion.div>
       </section>
