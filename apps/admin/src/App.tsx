@@ -21,6 +21,9 @@ const AdminRequestsPage = lazy(() =>
 const BotInstancesPage = lazy(() =>
   import('./pages/bot-instances').then((module) => ({ default: module.BotInstancesPage }))
 );
+const AdminAnnouncementsPage = lazy(() =>
+  import('./pages/announcements').then((module) => ({ default: module.AdminAnnouncementsPage }))
+);
 
 function RouteLoadingFallback() {
   return (
@@ -49,6 +52,7 @@ export function App() {
             <Route path="/dictionary" element={<AdminDictionaryPage />} />
             <Route path="/requests" element={<AdminRequestsPage />} />
             <Route path="/bot-instances" element={<BotInstancesPage />} />
+            <Route path="/announcements" element={<AdminAnnouncementsPage />} />
           </Route>
         </Routes>
       </Suspense>

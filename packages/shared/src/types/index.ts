@@ -6,3 +6,4 @@ export * from './vc-session.js';
 export * from './api-response.js';
 export * from './voicevox.js';
 export * from './bot-instance.js';
+export * from './announcement.js';

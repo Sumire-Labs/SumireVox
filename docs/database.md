@@ -120,3 +120,18 @@
 - そのサーバーに有効なブースト (active な Subscription に紐づき、guildId が割り当てられている Boost) が1つ以上ある
 
 いずれも満たさない場合は FREE。
+
+## Announcement
+
+運営からユーザーへ公開するお知らせ。`published = true` かつ `publishedAt <= 現在時刻` のレコードだけを公開 API から返す。
+
+| カラム | 型 | 備考 |
+|---|---|---|
+| id | String | CUID の主キー |
+| title | String | 最大120文字 |
+| body | String | Markdown原文、最大20,000文字。表示時にHTMLと画像を無効化 |
+| type | String | `info` / `update` / `maintenance` / `important` |
+| published | Boolean | 公開状態。デフォルト false |
+| publishedAt | DateTime? | 公開日時。未来日時で予約公開可能 |
+| createdAt | DateTime | 作成日時 |
+| updatedAt | DateTime | 更新日時 |

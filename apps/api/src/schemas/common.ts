@@ -47,3 +47,47 @@ export const guildBotInstanceSettingsBodySchema = z
     voiceChannelId: z.string().nullable().optional(),
   })
   .strict();
+
+export const announcementTypeSchema = z.enum(['info', 'update', 'maintenance', 'important']);
+
+export const announcementIdParamsSchema = z.object({ id: z.string().cuid() });
+
+const announcementTitleSchema = z
+  .string()
+  .trim()
+  .min(1, 'タイトルを入力してください。')
+  .max(120, 'タイトルは120文字以内で入力してください。');
+
+const announcementBodySchema = z
+  .string()
+  .trim()
+  .min(1, '本文を入力してください。')
+  .max(20000, '本文は20,000文字以内で入力してください。');
+
+const announcementPublishedAtSchema = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value))
+  .nullable()
+  .optional();
+
+export const announcementCreateBodySchema = z
+  .object({
+    title: announcementTitleSchema,
+    body: announcementBodySchema,
+    type: announcementTypeSchema.default('info'),
+    published: z.boolean().default(false),
+    publishedAt: announcementPublishedAtSchema,
+  })
+  .strict();
+
+export const announcementUpdateBodySchema = z
+  .object({
+    title: announcementTitleSchema.optional(),
+    body: announcementBodySchema.optional(),
+    type: announcementTypeSchema.optional(),
+    published: z.boolean().optional(),
+    publishedAt: announcementPublishedAtSchema,
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, '更新項目を1つ以上指定してください。');

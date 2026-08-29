@@ -128,6 +128,11 @@
 | POST | /api/admin/dictionary/global | グローバル辞書追加 |
 | PUT | /api/admin/dictionary/global/:word | グローバル辞書編集 |
 | DELETE | /api/admin/dictionary/global/:word | グローバル辞書削除 |
+| GET | /api/admin/announcements | お知らせ一覧 |
+| GET | /api/admin/announcements/:id | お知らせ取得 |
+| POST | /api/admin/announcements | お知らせ作成 |
+| PUT | /api/admin/announcements/:id | お知らせ更新（公開状態の切替を含む） |
+| DELETE | /api/admin/announcements/:id | お知らせ削除 |
 | GET | /api/admin/dictionary/requests | 申請一覧 |
 | PUT | /api/admin/dictionary/requests/:id/approve | 承認 |
 | PUT | /api/admin/dictionary/requests/:id/reject | 却下 |
@@ -140,3 +145,14 @@
 - 認証必須チェック
 - ManageGuild 権限チェック (Discord API でギルド権限確認)
 - Bot 管理者チェック (BOT_ADMIN_USER_IDS)
+
+## 公開お知らせ
+
+お知らせの `body` はMarkdown原文を返す。クライアントはGFM形式で描画し、raw HTML・画像・危険なURLは表示しない。一覧の抜粋ではMarkdown記法を除去したプレーンテキストを表示する。
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | /api/announcements | 公開済みお知らせ一覧（公開日時の新しい順） |
+| GET | /api/announcements/:id | 公開済みお知らせ詳細 |
+
+公開 API は下書き・非公開・公開開始前のお知らせを返さない。

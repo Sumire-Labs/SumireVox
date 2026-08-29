@@ -28,6 +28,8 @@
 | /terms | 利用規約 |
 | /privacy | プライバシーポリシー |
 | /legal | 特定商取引法に基づく表記 |
+| /announcements | 公開済みのお知らせ一覧 |
+| /announcements/:id | お知らせ本文の詳細 |
 
 ### ダッシュボード (認証必要)
 
@@ -49,6 +51,15 @@ Bot 管理者 (BOT_ADMIN_USER_IDS) のみ。
 | /servers | 全サーバー一覧、手動 PREMIUM 切替 |
 | /dictionary | グローバル辞書管理 |
 | /requests | グローバル辞書申請管理 |
+| /announcements | お知らせの作成・編集・公開管理。本文はMarkdown入力とプレビューに対応 |
+
+## お知らせ表示
+
+- お知らせ詳細ページと管理画面のプレビューはGFM形式のMarkdownを描画する。
+- 既存本文との互換性のため、単一改行は表示上も保持する。
+- raw HTML、Markdown画像、`javascript:` や `data:` などの危険なURLは無効化する。
+- `http` / `https` の外部リンクは安全属性付きで新しいタブに開く。
+- お知らせ一覧とトップページの抜粋はMarkdown記法を除去したプレーンテキストで表示する。
 
 ## フロントエンド共通方針
 

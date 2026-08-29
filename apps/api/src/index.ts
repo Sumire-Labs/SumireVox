@@ -4,6 +4,17 @@ import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
 import { disconnectRedis } from './infrastructure/redis.js';
 import { createApp } from './app.js';
+import { requestLogger } from './middleware/request-logger.js';
+import { sessionMiddleware } from './middleware/session-middleware.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { authRouter } from './routes/auth.js';
+import { guildsRouter } from './routes/guilds.js';
+import { dictionaryRouter } from './routes/dictionary.js';
+import { userRouter } from './routes/user.js';
+import { stripeWebhookRouter } from './routes/stripe-webhook.js';
+import { adminRouter } from './routes/admin.js';
+import { voicevoxRouter } from './routes/voicevox.js';
+import { botInstancesRouter } from './routes/bot-instances.js';
 import { reconcileBoosts } from './services/boost-service.js';
 import {
   createStripeSubscriptionReconcileRunner,
@@ -12,6 +23,28 @@ import {
 import { drainStripeEventOutbox } from './services/stripe-event-outbox.js';
 
 const app = createApp();
+// リクエストログ
+app.use('*', requestLogger);
+
+// Stripe Webhook（sessionMiddleware より前にマウント: raw body パース + セッション処理不要）
+app.route('/api/stripe', stripeWebhookRouter);
+
+// セッション読み込み（全リクエスト）
+app.use('*', sessionMiddleware);
+
+// ヘルスチェック（認証不要）
+app.get('/health', (c) => {
+  return c.json({ status: 'ok' });
+});
+
+// ルート定義
+app.route('/auth', authRouter);
+app.route('/api/guilds', guildsRouter);
+app.route('/api/dictionary', dictionaryRouter);
+app.route('/api/user', userRouter);
+app.route('/api/admin', adminRouter);
+app.route('/api/voicevox', voicevoxRouter);
+app.route('/api/bot-instances', botInstancesRouter);
 
 let server: ReturnType<typeof serve> | null = null;
 let reconcileTimer: ReturnType<typeof setInterval> | null = null;

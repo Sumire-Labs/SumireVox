@@ -35,7 +35,17 @@ import {
   guildSettingsUpdateSchema,
   instanceParamsSchema,
   guildBotInstanceSettingsBodySchema,
+  announcementIdParamsSchema,
+  announcementCreateBodySchema,
+  announcementUpdateBodySchema,
 } from '../schemas/common.js';
+import {
+  createAnnouncement,
+  deleteAnnouncement,
+  getAdminAnnouncement,
+  getAdminAnnouncements,
+  updateAnnouncement,
+} from '../services/announcement-service.js';
 
 const adminDictRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'admin-dict' });
 
@@ -64,6 +74,44 @@ export const adminRouter = new Hono();
 
 // 全ルートに認証 + Bot 管理者チェック
 adminRouter.use('*', requireAuth, requireBotAdmin);
+
+// ========================================
+// お知らせ管理
+// ========================================
+
+adminRouter.get('/announcements', async (c) => {
+  const { page, perPage } = await validate.query(c, paginationQuerySchema);
+  const result = await getAdminAnnouncements(page, perPage);
+  return c.json({
+    success: true,
+    data: { items: result.items, total: result.total, page, perPage },
+  });
+});
+
+adminRouter.get('/announcements/:id', async (c) => {
+  const { id } = await validate.params(c, announcementIdParamsSchema);
+  const announcement = await getAdminAnnouncement(id);
+  return c.json({ success: true, data: announcement });
+});
+
+adminRouter.post('/announcements', async (c) => {
+  const body = await validate.body(c, announcementCreateBodySchema);
+  const announcement = await createAnnouncement(body);
+  return c.json({ success: true, data: announcement }, 201);
+});
+
+adminRouter.put('/announcements/:id', async (c) => {
+  const { id } = await validate.params(c, announcementIdParamsSchema);
+  const body = await validate.body(c, announcementUpdateBodySchema);
+  const announcement = await updateAnnouncement(id, body);
+  return c.json({ success: true, data: announcement });
+});
+
+adminRouter.delete('/announcements/:id', async (c) => {
+  const { id } = await validate.params(c, announcementIdParamsSchema);
+  await deleteAnnouncement(id);
+  return c.json({ success: true, data: null });
+});
 
 /**
  * GET /api/admin/servers
