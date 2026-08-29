@@ -61,7 +61,7 @@ export async function addServerDictionaryEntry(
       if (currentCount >= limit) {
         throw new AppError(
           'DICTIONARY_LIMIT_REACHED',
-          `サーバー辞書のエントリ上限（${limit}件）に達しています。${!isPremium ? 'PREMIUM にアップグレードすると100件まで登録できます。' : ''}`,
+          `サーバー辞書のエントリ上限（${limit}件）に達しています。${!isPremium ? `PREMIUM にアップグレードすると${LIMITS.PREMIUM_DICTIONARY_ENTRIES}件まで登録できます。` : ''}`,
         );
       }
 

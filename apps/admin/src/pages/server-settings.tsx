@@ -491,7 +491,9 @@ export function AdminServerSettingsPage() {
                       <span className="text-sm font-semibold text-white">{bot.name}</span>
                       <BotStatusBadge label="利用不可" variant="unavailable" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">このインスタンスを利用するにはブーストが必要です。</p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      必要Boost数: {Math.max(bot.instanceNumber - 1, 0)}（このインスタンスを利用するにはブーストが必要です）
+                    </p>
                   </div>
                 );
               }

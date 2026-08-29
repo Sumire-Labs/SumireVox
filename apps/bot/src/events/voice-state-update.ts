@@ -91,7 +91,7 @@ async function handleAutoJoin(
     // 指定 VC チャンネルがある場合、そのチャンネルへの参加のみ対象
     if (instanceSettings.voiceChannelId && newState.channelId !== instanceSettings.voiceChannelId) return;
 
-    // インスタンス接続制限チェック (2号機以降はブースト数が必要)
+    // インスタンス接続制限チェック (2号機以降はインスタンス番号 - 1 Boost が必要)
     if (config.botInstanceId > 1) {
       const allowed = await canInstanceConnect(guildId, config.botInstanceId);
       if (!allowed) {

@@ -87,15 +87,10 @@ export function BoostPage() {
         setData(boostData);
         setGuilds(guildsData);
 
-        const boostedGuildIds = guildsData
-          .filter((guild) => {
-            const info = boostData.guildBoostInfo.find((g) => g.guildId === guild.id);
-            return info && (info.totalGuildBoosts > 0 || info.isManualPremium);
-          })
-          .map((guild) => guild.id);
+        const guildIds = guildsData.map((guild) => guild.id);
 
-        if (boostedGuildIds.length > 0) {
-          Promise.all(boostedGuildIds.map(fetchBotsForGuild)).then((results) => {
+        if (guildIds.length > 0) {
+          Promise.all(guildIds.map(fetchBotsForGuild)).then((results) => {
             const entries = results.filter(
               (r): r is { guildId: string; bots: BotInstanceInfo[] } => r !== null,
             );
@@ -239,6 +234,9 @@ export function BoostPage() {
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">ブースト管理</h1>
         <p className="text-gray-400">サーバーにブーストを割り当てて機能を拡張します</p>
+        <p className="text-sm text-gray-500 mt-2">
+          1 Boostで2台目のBotを解禁。Boostを1つ追加するごとに利用可能なBotが1台増え、最大5台まで利用できます。
+        </p>
       </div>
 
       {/* ブースト概要 */}

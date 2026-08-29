@@ -252,6 +252,7 @@ export function ServerBotsPage() {
         {data.bots.map((bot) => {
           const isSaving = savingId === bot.instanceNumber;
           const isEffectivelyAvailable = bot.isAvailable && bot.instanceNumber <= totalInstances;
+          const requiredBoosts = Math.max(bot.instanceNumber - 1, 0);
 
           if (!isEffectivelyAvailable) {
             return (
@@ -263,7 +264,9 @@ export function ServerBotsPage() {
                   <span className="text-white font-semibold">{bot.name}</span>
                   <StatusBadge label="利用不可" variant="unavailable" />
                 </div>
-                <p className="text-sm text-gray-500 mt-2">このインスタンスを利用するにはブーストが必要です。</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  必要Boost数: {requiredBoosts}（このインスタンスを利用するにはブーストが必要です）
+                </p>
               </div>
             );
           }

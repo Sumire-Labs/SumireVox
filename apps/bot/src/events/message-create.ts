@@ -115,7 +115,7 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     finalText = truncateForSpeech(finalText, effectiveMax, '、以下省略');
 
     // 9. 音声パラメータの解決
-    const voiceParams = await resolveVoiceParams(message.author.id, guildId, isPremium);
+    const voiceParams = await resolveVoiceParams(message.author.id, guildId);
 
     // 10. キューに追加
     enqueue(guildId, finalText, voiceParams.speakerId, voiceParams.speedScale, voiceParams.pitchScale);
