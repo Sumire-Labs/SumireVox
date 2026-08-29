@@ -1,10 +1,9 @@
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
 import { disconnectRedis } from './infrastructure/redis.js';
+import { createApp } from './app.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { sessionMiddleware } from './middleware/session-middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -22,23 +21,9 @@ import {
   createStripeSubscriptionReconcileRunner,
   reconcileStripeSubscriptions,
 } from './services/stripe-subscription-reconciler.js';
+import { drainStripeEventOutbox } from './services/stripe-event-outbox.js';
 
-const app = new Hono();
-
-// グローバルエラーハンドラ
-app.onError(errorHandler);
-
-// CORS
-app.use(
-  '*',
-  cors({
-    origin: config.corsOrigin,
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  }),
-);
-
+const app = createApp();
 // リクエストログ
 app.use('*', requestLogger);
 
@@ -89,11 +74,15 @@ async function main(): Promise<void> {
   // 起動後にブースト整合処理を実行
   reconcileBoosts().catch((err) => logger.error({ err }, 'Boost reconciliation failed on startup'));
 
+  // 起動時に未処理の Stripe イベント（outbox）をドレイン（クラッシュからの回復）
+  drainStripeEventOutbox().catch((err) => logger.error({ err }, 'Stripe event outbox drain failed on startup'));
+
   // Stripe サブスクリプション定期整合処理（起動から1インターバル後に開始）
   reconcileTimer = setInterval(() => {
     runStripeSubscriptionReconcile().catch((err) =>
       logger.error({ err }, 'Stripe subscription reconciliation failed'),
     );
+    drainStripeEventOutbox().catch((err) => logger.error({ err }, 'Stripe event outbox drain failed'));
   }, config.stripeReconcileIntervalMs);
 }
 

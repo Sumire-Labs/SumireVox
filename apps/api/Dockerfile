@@ -17,8 +17,10 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY packages/shared/ packages/shared/
 COPY apps/bot/prisma/ apps/bot/prisma/
 COPY apps/api/ apps/api/
+COPY --from=deps /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+COPY tsconfig.base.json ./
 RUN pnpm --filter @sumirevox/shared build
-RUN cd apps/api && npx prisma generate --schema=../bot/prisma/schema.prisma
+RUN ./apps/bot/node_modules/.bin/prisma generate --schema=apps/bot/prisma/schema.prisma
 RUN pnpm --filter @sumirevox/api build
 
 FROM base AS runner

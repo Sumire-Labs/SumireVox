@@ -1,8 +1,26 @@
 import { fetchGuildChannels } from './discord-api.js';
+import type { DiscordChannel } from './discord-api.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 
 const CHANNEL_CACHE_TTL = 120;
-const channelCacheKey = (guildId: string) => `guild:${guildId}:channels`;
+const channelCacheKey = (guildId: string) => `guild:${guildId}:channels:v2`;
+
+const DISCORD_CHANNEL_TYPES = {
+  GuildText: 0,
+  GuildVoice: 2,
+  GuildCategory: 4,
+  GuildAnnouncement: 5,
+  GuildStageVoice: 13,
+} as const;
+
+type GuildChannelSemanticType = 'text' | 'announcement' | 'voice' | 'stage';
+
+const DISCORD_READABLE_CHANNEL_TYPES = new Map<number, GuildChannelSemanticType>([
+  [DISCORD_CHANNEL_TYPES.GuildText, 'text'],
+  [DISCORD_CHANNEL_TYPES.GuildAnnouncement, 'announcement'],
+  [DISCORD_CHANNEL_TYPES.GuildVoice, 'voice'],
+  [DISCORD_CHANNEL_TYPES.GuildStageVoice, 'stage'],
+]);
 
 export interface GuildChannelCategory {
   id: string;
@@ -13,12 +31,18 @@ export interface GuildChannelItem {
   id: string;
   name: string;
   parentId: string | null;
+  type: GuildChannelSemanticType;
 }
 
 export interface GuildChannelsSorted {
   textChannels: GuildChannelItem[];
   voiceChannels: GuildChannelItem[];
+  readableChannels: GuildChannelItem[];
   categories: GuildChannelCategory[];
+}
+
+function toGuildChannelItem(channel: DiscordChannel, type: GuildChannelSemanticType): GuildChannelItem {
+  return { id: channel.id, name: channel.name, parentId: channel.parent_id, type };
 }
 
 export async function getGuildChannelsSorted(guildId: string): Promise<GuildChannelsSorted> {
@@ -33,21 +57,22 @@ export async function getGuildChannelsSorted(guildId: string): Promise<GuildChan
   const channels = await fetchGuildChannels(guildId);
 
   const categories = channels
-    .filter((ch) => ch.type === 4)
+    .filter((ch) => ch.type === DISCORD_CHANNEL_TYPES.GuildCategory)
     .sort((a, b) => a.position - b.position)
     .map((ch) => ({ id: ch.id, name: ch.name }));
 
-  const textChannels = channels
-    .filter((ch) => ch.type === 0)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
+  const readableChannels = channels
+    .flatMap((channel) => {
+      const type = DISCORD_READABLE_CHANNEL_TYPES.get(channel.type);
+      return type === undefined ? [] : [{ channel, type }];
+    })
+    .sort((a, b) => a.channel.position - b.channel.position)
+    .map(({ channel, type }) => toGuildChannelItem(channel, type));
 
-  const voiceChannels = channels
-    .filter((ch) => ch.type === 2 || ch.type === 13)
-    .sort((a, b) => a.position - b.position)
-    .map((ch) => ({ id: ch.id, name: ch.name, parentId: ch.parent_id }));
+  const textChannels = readableChannels.filter((channel) => channel.type === 'text');
+  const voiceChannels = readableChannels.filter((channel) => channel.type === 'voice' || channel.type === 'stage');
 
-  const result = { textChannels, voiceChannels, categories };
+  const result = { textChannels, voiceChannels, readableChannels, categories };
   await redis.set(cacheKey, JSON.stringify(result), 'EX', CHANNEL_CACHE_TTL);
 
   return result;

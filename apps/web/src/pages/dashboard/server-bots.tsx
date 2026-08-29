@@ -30,6 +30,7 @@ interface Channel {
   id: string;
   name: string;
   parentId: string | null;
+  type: 'text' | 'announcement' | 'voice' | 'stage';
 }
 
 interface Category {
@@ -40,6 +41,7 @@ interface Category {
 interface ChannelsData {
   textChannels: Channel[];
   voiceChannels: Channel[];
+  readableChannels: Channel[];
   categories: Category[];
 }
 
@@ -64,6 +66,26 @@ function channelLabel(ch: Channel, categories: Category[]): string {
   return ch.name;
 }
 
+function channelTypeLabel(type: Channel['type']): { prefix: string; label: string } {
+  switch (type) {
+    case 'text':
+      return { prefix: '#', label: 'テキスト' };
+    case 'announcement':
+      return { prefix: '📣', label: 'アナウンス' };
+    case 'voice':
+      return { prefix: '🔊', label: 'ボイス' };
+    case 'stage':
+      return { prefix: '🎙', label: 'ステージ' };
+  }
+}
+
+function channelDisplayLabel(ch: Channel, categories: Category[]): string {
+  const type = channelTypeLabel(ch.type);
+  const category = ch.parentId ? categories.find((c) => c.id === ch.parentId) : undefined;
+  const name = category ? `${category.name} > ${type.prefix} ${ch.name}` : `${type.prefix} ${ch.name}`;
+  return `${name}（${type.label}）`;
+}
+
 function ChannelSelect({
   label,
   value,
@@ -71,6 +93,7 @@ function ChannelSelect({
   categories,
   placeholder,
   disabled,
+  showChannelType = false,
   onChange,
 }: {
   label: string;
@@ -79,6 +102,7 @@ function ChannelSelect({
   categories: Category[];
   placeholder: string;
   disabled?: boolean;
+  showChannelType?: boolean;
   onChange: (v: string | null) => void;
 }) {
   return (
@@ -100,8 +124,12 @@ function ChannelSelect({
               <span className="text-gray-500">未設定</span>
             </ListBox.Item>
             {channels.map((ch) => (
-              <ListBox.Item key={ch.id} id={ch.id} textValue={channelLabel(ch, categories)}>
-                {channelLabel(ch, categories)}
+              <ListBox.Item
+                key={ch.id}
+                id={ch.id}
+                textValue={showChannelType ? channelDisplayLabel(ch, categories) : channelLabel(ch, categories)}
+              >
+                {showChannelType ? channelDisplayLabel(ch, categories) : channelLabel(ch, categories)}
               </ListBox.Item>
             ))}
           </ListBox>
@@ -203,7 +231,7 @@ export function ServerBotsPage() {
   const totalInstances = data.bots.length;
   const effectiveMaxBots = Math.min(data.maxBots, totalInstances);
   const cats = channels?.categories ?? [];
-  const textChannels = channels?.textChannels ?? [];
+  const readableChannels = channels?.readableChannels ?? [];
   const voiceChannels = channels?.voiceChannels ?? [];
 
   return (
@@ -308,10 +336,11 @@ export function ServerBotsPage() {
                 <ChannelSelect
                   label="テキストチャンネル（読み上げ対象チャンネル）"
                   value={settings.textChannelId}
-                  channels={textChannels}
+                  channels={readableChannels}
                   categories={cats}
                   placeholder="テキストチャンネルを選択"
                   disabled={!bot.isInGuild || isSaving}
+                  showChannelType
                   onChange={(v) => updateSettings(bot.instanceNumber, { textChannelId: v })}
                 />
               </div>

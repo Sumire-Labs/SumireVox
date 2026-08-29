@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import Stripe from 'stripe';
 
 const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock, redisPublisherMock } = vi.hoisted(() => ({
   prismaMock: {
-    stripeEvent: {
-      findUnique: vi.fn(),
-    },
     subscription: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -15,12 +13,8 @@ const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock, redisP
     $transaction: vi.fn(),
   },
   txMock: {
-    stripeEvent: {
-      create: vi.fn(),
-    },
     subscription: {
       upsert: vi.fn(),
-      findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
     boost: {
@@ -80,19 +74,16 @@ vi.mock('../adjust-boost-slots.js', async () => {
   };
 });
 
-import { handleStripeWebhook } from '../stripe-webhook-handler.js';
+import { processStripeEvent } from '../stripe-webhook-handler.js';
 
-describe('handleStripeWebhook', () => {
+describe('processStripeEvent', () => {
   beforeEach(() => {
-    prismaMock.stripeEvent.findUnique.mockReset();
     prismaMock.subscription.findFirst.mockReset();
     prismaMock.subscription.findUnique.mockReset();
     prismaMock.boost.findMany.mockReset();
     prismaMock.$transaction.mockReset().mockImplementation(async (callback: (tx: typeof txMock) => Promise<unknown>) => callback(txMock));
 
-    txMock.stripeEvent.create.mockReset();
     txMock.subscription.upsert.mockReset();
-    txMock.subscription.findUnique.mockReset();
     txMock.subscription.updateMany.mockReset();
     txMock.boost.count.mockReset();
     txMock.boost.createMany.mockReset();
@@ -111,7 +102,6 @@ describe('handleStripeWebhook', () => {
     adjustBoostSlotsMock.mockReset();
     redisPublisherMock.publish.mockReset().mockResolvedValue(1);
 
-    prismaMock.stripeEvent.findUnique.mockResolvedValue(null);
     prismaMock.boost.findMany.mockResolvedValue([]);
   });
 
@@ -133,11 +123,8 @@ describe('handleStripeWebhook', () => {
     });
     txMock.boost.count.mockResolvedValue(1);
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
-    expect(txMock.stripeEvent.create).toHaveBeenCalledWith({
-      data: { id: 'evt-checkout', type: 'checkout.session.completed' },
-    });
     expect(txMock.subscription.upsert).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
       create: {
@@ -159,20 +146,6 @@ describe('handleStripeWebhook', () => {
     });
   });
 
-  it('skips duplicate processing when the same event id is replayed', async () => {
-    const event = {
-      id: 'evt-duplicate',
-      type: 'checkout.session.completed',
-      data: { object: {} },
-    };
-    prismaMock.stripeEvent.findUnique.mockResolvedValue({ id: 'evt-duplicate' });
-
-    await handleStripeWebhook(event as never);
-
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-    expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
-  });
-
   it('adds boosts when subscription quantity increases', async () => {
     const event = {
       id: 'evt-sub-up',
@@ -188,16 +161,12 @@ describe('handleStripeWebhook', () => {
         },
       },
     };
-    txMock.subscription.findUnique.mockResolvedValue({
-      stripeSubscriptionId: 'sub-1',
-      boosts: [{ id: 'boost-1' }, { id: 'boost-2' }],
-    });
     prismaMock.subscription.findUnique.mockResolvedValue({
       stripeSubscriptionId: 'sub-1',
       boosts: [{ id: 'boost-1' }, { id: 'boost-2' }],
     });
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
@@ -233,16 +202,12 @@ describe('handleStripeWebhook', () => {
         },
       },
     };
-    txMock.subscription.findUnique.mockResolvedValue({
-      stripeSubscriptionId: 'sub-1',
-      boosts,
-    });
     prismaMock.subscription.findUnique.mockResolvedValue({
       stripeSubscriptionId: 'sub-1',
       boosts,
     });
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
     expect(adjustBoostSlotsMock).toHaveBeenCalledWith(txMock, 'sub-1', 1, boosts);
     expect(txMock.boost.createMany).not.toHaveBeenCalled();
@@ -259,7 +224,7 @@ describe('handleStripeWebhook', () => {
       },
     };
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
@@ -286,7 +251,7 @@ describe('handleStripeWebhook', () => {
       },
     };
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
       where: { stripeSubscriptionId: 'sub-1' },
@@ -323,7 +288,7 @@ describe('handleStripeWebhook', () => {
       status: 'active',
     });
 
-    await handleStripeWebhook(event as never);
+    await processStripeEvent(event as never);
 
     expect(stripeMock.subscriptions.cancel).toHaveBeenCalledWith('sub-1');
     expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
@@ -341,5 +306,33 @@ describe('handleStripeWebhook', () => {
     expect(txMock.boost.deleteMany).toHaveBeenCalledWith({
       where: { subscriptionId: 'sub-1' },
     });
+  });
+
+  it('skips processing when the Stripe resource is missing (404)', async () => {
+    const event = {
+      id: 'evt-resource-missing',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_123',
+          metadata: { userId: 'user-1', boostCount: '3' },
+          subscription: 'sub-gone',
+          customer: 'cus-1',
+        },
+      },
+    };
+    const resourceMissingError = Object.assign(
+      new Stripe.errors.StripeError({
+        type: 'invalid_request_error',
+        message: 'No such subscription: sub-gone',
+      }),
+      { statusCode: 404 },
+    );
+    stripeMock.subscriptions.retrieve.mockRejectedValue(resourceMissingError);
+
+    await expect(processStripeEvent(event as never)).resolves.toBeUndefined();
+
+    expect(stripeMock.subscriptions.retrieve).toHaveBeenCalledWith('sub-gone');
+    expect(txMock.subscription.upsert).not.toHaveBeenCalled();
   });
 });

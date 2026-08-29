@@ -57,6 +57,9 @@ const adminGuildSettingsUpdateSchema = guildSettingsUpdateSchema.extend({
 });
 const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
 const requestIdParamsSchema = z.object({ id: z.string().cuid() });
+const globalDictWordParamsSchema = z.object({
+  word: z.string().min(1).transform(decodeURIComponent),
+});
 const botInstanceParamsSchema = z.object({
   instanceId: z.coerce.number().int('整数で指定してください。').positive('1以上で指定してください。'),
 });
@@ -257,7 +260,7 @@ adminRouter.post('/dictionary/global', adminDictRateLimit, async (c) => {
  * body: { reading: string }
  */
 adminRouter.put('/dictionary/global/:word', async (c) => {
-  const word = decodeURIComponent(c.req.param('word'));
+  const { word } = await validate.params(c, globalDictWordParamsSchema);
   const body = await validate.body(c, globalDictionaryUpdateBodySchema);
   const entry = await updateGlobalDictionaryEntry(word, body.reading);
   return c.json({ success: true, data: entry });
@@ -267,7 +270,7 @@ adminRouter.put('/dictionary/global/:word', async (c) => {
  * DELETE /api/admin/dictionary/global/:word
  */
 adminRouter.delete('/dictionary/global/:word', async (c) => {
-  const word = decodeURIComponent(c.req.param('word'));
+  const { word } = await validate.params(c, globalDictWordParamsSchema);
   await deleteGlobalDictionaryEntry(word);
   return c.json({ success: true, data: null });
 });

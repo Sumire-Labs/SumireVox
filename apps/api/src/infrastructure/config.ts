@@ -24,6 +24,14 @@ interface AppConfig {
 }
 
 function buildConfig(): AppConfig {
+  const stripeSecretKey = process.env['STRIPE_SECRET_KEY'] ?? '';
+  // Stripe 有効時（STRIPE_SECRET_KEY 設定時）は Webhook signing secret を必須にする。
+  // 未設定のまま起動すると署名検証が必ず失敗し、Stripe 側で全配信が 400 扱いとなり
+  // エンドポイントが無効化されるため、起動時に即失敗させる。
+  const stripeWebhookSecret = stripeSecretKey
+    ? requireEnv('STRIPE_WEBHOOK_SECRET')
+    : (process.env['STRIPE_WEBHOOK_SECRET'] ?? '');
+
   return {
     nodeEnv: process.env['NODE_ENV'] ?? 'production',
     discordClientId: requireEnv('DISCORD_CLIENT_ID'),
@@ -45,8 +53,8 @@ function buildConfig(): AppConfig {
       .map((o) => o.trim())
       .filter(Boolean),
     logLevel: process.env['LOG_LEVEL'] ?? 'info',
-    stripeSecretKey: process.env['STRIPE_SECRET_KEY'] ?? '',
-    stripeWebhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] ?? '',
+    stripeSecretKey,
+    stripeWebhookSecret,
     stripePriceId: process.env['STRIPE_PRICE_ID'] ?? '',
     boostCooldownDays: requireInt('BOOST_COOLDOWN_DAYS', 7),
     apiDomain: process.env['API_DOMAIN'] ?? 'http://localhost:3000',

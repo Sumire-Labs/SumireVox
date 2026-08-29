@@ -25,7 +25,7 @@
 | CORS_ORIGIN | CORS 許可オリジン (カンマ区切り) | (必須) |
 | LOG_LEVEL | ログレベル | info |
 | STRIPE_SECRET_KEY | Stripe シークレットキー | （空文字 = Stripe 無効） |
-| STRIPE_WEBHOOK_SECRET | Stripe Webhook 署名シークレット | （空文字 = Stripe 無効） |
+| STRIPE_WEBHOOK_SECRET | Stripe Webhook 署名シークレット | `STRIPE_SECRET_KEY` 設定時は必須（未設定だと起動エラー） |
 | STRIPE_PRICE_ID | ブースト Price ID | （空文字 = Stripe 無効） |
 | BOOST_COOLDOWN_DAYS | クールダウン日数 | 7 |
 | STRIPE_RECONCILE_INTERVAL_MS | Stripe サブスクリプション定期整合処理の実行間隔 (ms) | 3600000 (1時間) |

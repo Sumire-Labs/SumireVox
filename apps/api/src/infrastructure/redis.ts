@@ -13,6 +13,11 @@ function createRedisInstance(name: RedisInstanceName): Redis {
   const client = new Redis(config.redisUrl, {
     lazyConnect: false,
     maxRetriesPerRequest: 3,
+    // Publisher は Pub/Sub 通知専用。Redis 断中に publish がオフラインキューへ積まれて
+    // resolve/reject されず永久にハングするのを防ぐため、即時失敗させる。
+    ...(name === 'publisher'
+      ? { enableOfflineQueue: false, commandTimeout: 2000 }
+      : {}),
     retryStrategy: (attempt: number) => Math.min(attempt * 200, 5000),
   });
 
@@ -83,7 +88,7 @@ export async function disconnectRedis(): Promise<void> {
   await Promise.all(
     [redisClient, redisSubscriber, redisPublisher]
       .filter((instance): instance is Redis => instance !== null)
-      .map((instance) => instance.quit()),
+      .map((instance) => instance.disconnect()),
   );
   redisClient = null;
   redisSubscriber = null;

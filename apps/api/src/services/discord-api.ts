@@ -64,6 +64,8 @@ export async function hasManageGuildPermission(
 
   if (guild.owner) return true;
 
+  if (!guild.permissions) return false;
+
   const permissions = BigInt(guild.permissions);
   const MANAGE_GUILD = BigInt(0x20);
   const ADMINISTRATOR = BigInt(0x8);
@@ -77,6 +79,7 @@ export async function fetchManagedGuilds(accessToken: string): Promise<DiscordGu
   const guilds = await fetchUserGuilds(accessToken);
   return guilds.filter((guild) => {
     if (guild.owner) return true;
+    if (!guild.permissions) return false;
     const permissions = BigInt(guild.permissions);
     const MANAGE_GUILD = BigInt(0x20);
     const ADMINISTRATOR = BigInt(0x8);
