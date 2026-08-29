@@ -22,6 +22,12 @@ const PrivacyPage = lazy(() =>
 const LegalPage = lazy(() =>
   import('./pages/legal').then((module) => ({ default: module.LegalPage }))
 );
+const AnnouncementsPage = lazy(() =>
+  import('./pages/announcements').then((module) => ({ default: module.AnnouncementsPage }))
+);
+const AnnouncementDetailPage = lazy(() =>
+  import('./pages/announcement-detail').then((module) => ({ default: module.AnnouncementDetailPage }))
+);
 
 const DashboardPage = lazy(() =>
   import('./pages/dashboard').then((module) => ({ default: module.DashboardPage }))
@@ -106,6 +112,22 @@ export function App() {
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
               <LegalPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/announcements"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <AnnouncementsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/announcements/:id"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <AnnouncementDetailPage />
             </Suspense>
           }
         />

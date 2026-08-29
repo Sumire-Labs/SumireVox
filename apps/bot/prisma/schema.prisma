@@ -149,3 +149,18 @@ model BoostRevocation {
 
   @@map("boost_revocations")
 }
+
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String    @db.VarChar(120)
+  body        String    @db.Text
+  type        String    @default("info") @db.VarChar(20)
+  published   Boolean   @default(false)
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([published, publishedAt])
+  @@index([createdAt])
+  @@map("announcements")
+}

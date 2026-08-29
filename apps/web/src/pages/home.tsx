@@ -1,8 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Terminal, Sparkles, Check, MonitorSpeakerIcon } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
-import { API_BASE } from '../lib/api';
+import { API_BASE, api } from '../lib/api';
 
 const BOT_INVITE_URL =
   import.meta.env.VITE_BOT_INVITE_URL ||
@@ -60,6 +61,83 @@ const fadeUp = {
     transition: { duration: 0.5, delay: i * 0.1 },
   }),
 };
+
+type AnnouncementType = 'info' | 'update' | 'maintenance' | 'important';
+
+interface AnnouncementPreview {
+  id: string;
+  title: string;
+  body: string;
+  type: AnnouncementType;
+  publishedAt: string | null;
+}
+
+interface AnnouncementListResponse {
+  items: AnnouncementPreview[];
+  total: number;
+  page: number;
+  perPage: number;
+}
+
+const ANNOUNCEMENT_TYPE_LABELS: Record<AnnouncementType, string> = {
+  info: '通常',
+  update: 'アップデート',
+  maintenance: 'メンテナンス',
+  important: '重要',
+};
+
+function formatAnnouncementDate(value: string | null): string {
+  if (!value) return '—';
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).format(new Date(value));
+}
+
+function LatestAnnouncements() {
+  const [items, setItems] = useState<AnnouncementPreview[]>([]);
+
+  useEffect(() => {
+    api.get<AnnouncementListResponse>('/api/announcements?perPage=3')
+      .then((response) => setItems(response.items))
+      .catch(() => setItems([]));
+  }, []);
+
+  if (items.length === 0) return null;
+
+  return (
+    <section className="px-4 md:px-8 pb-8">
+      <div className="max-w-6xl mx-auto rounded-2xl border border-purple-400/15 bg-purple-400/[0.04] p-5 md:p-6">
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-purple-300 font-semibold mb-1">Latest</p>
+            <h2 className="text-xl font-semibold text-white">最新のお知らせ</h2>
+          </div>
+          <Link to="/announcements" className="text-sm text-purple-300 hover:text-white transition-colors whitespace-nowrap">すべて見る →</Link>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {items.map((item) => (
+            <Link
+              key={item.id}
+              to={`/announcements/${item.id}`}
+              className={`rounded-xl border p-4 hover:bg-white/[0.05] transition-colors ${item.type === 'important' ? 'border-red-400/30 bg-red-400/[0.05]' : 'border-white/10 bg-[#12121a]/70'}`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className={`text-xs font-medium ${item.type === 'important' ? 'text-red-300' : 'text-purple-300'}`}>
+                  {ANNOUNCEMENT_TYPE_LABELS[item.type]}
+                </span>
+                <time dateTime={item.publishedAt ?? undefined} className="text-[11px] text-gray-500">{formatAnnouncementDate(item.publishedAt)}</time>
+              </div>
+              <h3 className="text-sm font-semibold text-white line-clamp-2">{item.title}</h3>
+              <p className="text-xs text-gray-500 mt-2 line-clamp-2">{item.body.replace(/\s+/g, ' ').trim()}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function HomePage() {
   const { user, loading } = useAuth();
@@ -156,6 +234,8 @@ export function HomePage() {
           </motion.div>
         </div>
       </section>
+
+      <LatestAnnouncements />
 
       {/* ── Features ── */}
       <section className="py-24 px-4 md:px-8">

@@ -9,6 +9,7 @@ const GITHUB_URL = import.meta.env.VITE_GITHUB_URL || '';
 
 const NAV_LINKS = [
   { to: '/', label: 'ホーム' },
+  { to: '/announcements', label: 'お知らせ' },
   { to: '/commands', label: 'コマンド' },
   { to: '/credits', label: 'クレジット' },
 ];
@@ -210,6 +211,7 @@ export function Layout() {
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">リンク</p>
             <div className="flex flex-col gap-2">
               <Link to="/terms" className="text-sm text-gray-500 hover:text-white transition-colors">利用規約</Link>
+              <Link to="/announcements" className="text-sm text-gray-500 hover:text-white transition-colors">お知らせ</Link>
               <Link to="/privacy" className="text-sm text-gray-500 hover:text-white transition-colors">プライバシーポリシー</Link>
               <Link to="/legal" className="text-sm text-gray-500 hover:text-white transition-colors">特定商取引法に基づく表記</Link>
               <Link to="/credits" className="text-sm text-gray-500 hover:text-white transition-colors">クレジット</Link>

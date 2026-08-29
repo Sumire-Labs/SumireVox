@@ -7,6 +7,7 @@ const navItems = [
   { path: '/dictionary', label: 'グローバル辞書' },
   { path: '/requests', label: '申請管理' },
   { path: '/bot-instances', label: 'Bot インスタンス' },
+  { path: '/announcements', label: 'お知らせ管理' },
 ];
 
 export function AdminLayout() {
