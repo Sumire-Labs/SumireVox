@@ -15,7 +15,6 @@ import { stripeWebhookRouter } from './routes/stripe-webhook.js';
 import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
 import { botInstancesRouter } from './routes/bot-instances.js';
-import { announcementsRouter } from './routes/announcements.js';
 import { reconcileBoosts } from './services/boost-service.js';
 import {
   createStripeSubscriptionReconcileRunner,
@@ -46,7 +45,6 @@ app.route('/api/user', userRouter);
 app.route('/api/admin', adminRouter);
 app.route('/api/voicevox', voicevoxRouter);
 app.route('/api/bot-instances', botInstancesRouter);
-app.route('/api/announcements', announcementsRouter);
 
 let server: ReturnType<typeof serve> | null = null;
 let reconcileTimer: ReturnType<typeof setInterval> | null = null;

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { BookOpen, Terminal, Sparkles, Check, MonitorSpeakerIcon } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { API_BASE, api } from '../lib/api';
+import { getMarkdownExcerpt } from '../lib/markdown-excerpt';
 
 const BOT_INVITE_URL =
   import.meta.env.VITE_BOT_INVITE_URL ||
@@ -130,7 +131,7 @@ function LatestAnnouncements() {
                 <time dateTime={item.publishedAt ?? undefined} className="text-[11px] text-gray-500">{formatAnnouncementDate(item.publishedAt)}</time>
               </div>
               <h3 className="text-sm font-semibold text-white line-clamp-2">{item.title}</h3>
-              <p className="text-xs text-gray-500 mt-2 line-clamp-2">{item.body.replace(/\s+/g, ' ').trim()}</p>
+              <p className="text-xs text-gray-500 mt-2 line-clamp-2">{getMarkdownExcerpt(item.body)}</p>
             </Link>
           ))}
         </div>

@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { AlertTriangle, ArrowRight, Info, Sparkles, Wrench } from 'lucide-react';
 import { Spinner } from '@heroui/react';
 import { api, ApiError } from '../lib/api';
+import { getMarkdownExcerpt } from '../lib/markdown-excerpt';
 
 type AnnouncementType = 'info' | 'update' | 'maintenance' | 'important';
 
@@ -52,8 +53,7 @@ function formatDate(value: string | null): string {
 }
 
 function getExcerpt(body: string): string {
-  const excerpt = body.replace(/\s+/g, ' ').trim();
-  return excerpt.length > 160 ? `${excerpt.slice(0, 160)}…` : excerpt;
+  return getMarkdownExcerpt(body);
 }
 
 function AnnouncementTypeTag({ type }: { type: AnnouncementType }) {

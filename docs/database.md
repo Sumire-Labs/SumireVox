@@ -129,7 +129,7 @@
 |---|---|---|
 | id | String | CUID の主キー |
 | title | String | 最大120文字 |
-| body | String | プレーンテキスト、最大20,000文字 |
+| body | String | Markdown原文、最大20,000文字。表示時にHTMLと画像を無効化 |
 | type | String | `info` / `update` / `maintenance` / `important` |
 | published | Boolean | 公開状態。デフォルト false |
 | publishedAt | DateTime? | 公開日時。未来日時で予約公開可能 |

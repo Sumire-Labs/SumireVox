@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { AlertTriangle, Info, Sparkles, Wrench } from 'lucide-react';
 import { Spinner } from '@heroui/react';
 import { api, ApiError } from '../lib/api';
+import { MarkdownContent } from '../components/markdown-content';
 
 type AnnouncementType = 'info' | 'update' | 'maintenance' | 'important';
 
@@ -90,7 +91,7 @@ export function AnnouncementDetailPage() {
             </div>
             <h1 className="text-3xl md:text-4xl font-bold leading-tight text-white">{item.title}</h1>
             <div className="border-t border-white/10 my-8" />
-            <p className="text-gray-300 leading-8 whitespace-pre-wrap break-words">{item.body}</p>
+            <MarkdownContent content={item.body} className="text-gray-300 leading-8 break-words" />
           </article>
         )}
       </div>

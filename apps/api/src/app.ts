@@ -12,6 +12,7 @@ import { stripeWebhookRouter } from './routes/stripe-webhook.js';
 import { adminRouter } from './routes/admin.js';
 import { voicevoxRouter } from './routes/voicevox.js';
 import { botInstancesRouter } from './routes/bot-instances.js';
+import { announcementsRouter } from './routes/announcements.js';
 
 /**
  * Hono アプリケーションを構築する。
@@ -56,6 +57,7 @@ export function createApp(): Hono {
   app.route('/api/admin', adminRouter);
   app.route('/api/voicevox', voicevoxRouter);
   app.route('/api/bot-instances', botInstancesRouter);
+  app.route('/api/announcements', announcementsRouter);
 
   // 未知パス・未対応メソッド（404）。Hono 4.12.8 は未対応メソッドも 405 ではなく 404 を返す
   app.notFound((c) => {

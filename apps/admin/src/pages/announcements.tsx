@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Chip, Input, Label, ListBox, Modal, Select, Spinner, TextField } from '@heroui/react';
+import { Button, Chip, Input, Label, ListBox, Modal, Select, Spinner, Tabs, TextField } from '@heroui/react';
 import { api, ApiError } from '../lib/api';
 import { Toast, useToast } from '../components/toast';
+import { MarkdownPreview } from '../components/markdown-preview';
 
 type AnnouncementType = 'info' | 'update' | 'maintenance' | 'important';
 
@@ -131,6 +132,7 @@ export function AdminAnnouncementsPage() {
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null);
   const [form, setForm] = useState<AnnouncementForm>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+  const [bodyTab, setBodyTab] = useState<'input' | 'preview'>('input');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -160,6 +162,7 @@ export function AdminAnnouncementsPage() {
     setEditingId(null);
     setForm(emptyForm());
     setFormError(null);
+    setBodyTab('input');
     setEditorOpen(true);
   };
 
@@ -173,6 +176,7 @@ export function AdminAnnouncementsPage() {
       publishedAt: toDateTimeLocal(item.publishedAt),
     });
     setFormError(null);
+    setBodyTab('input');
     setEditorOpen(true);
   };
 
@@ -358,16 +362,47 @@ export function AdminAnnouncementsPage() {
                   />
                 </TextField>
                 <div>
-                  <label htmlFor="announcement-body" className="text-sm text-gray-300 block mb-2">本文</label>
-                  <textarea
-                    id="announcement-body"
-                    value={form.body}
-                    onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
-                    maxLength={MAX_BODY_LENGTH}
-                    rows={9}
-                    placeholder="お知らせの本文を入力してください。"
-                    className="w-full resize-y bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50"
-                  />
+                  <p className="text-sm text-gray-300 mb-2">本文（Markdown）</p>
+                  <Tabs
+                    selectedKey={bodyTab}
+                    onSelectionChange={(key) => {
+                      if (key === 'input' || key === 'preview') setBodyTab(key);
+                    }}
+                  >
+                    <Tabs.ListContainer>
+                      <Tabs.List aria-label="本文の編集モード" className="bg-white/5 border border-white/5 rounded-xl">
+                        <Tabs.Tab id="input" className="text-gray-400 data-[selected=true]:text-white px-4 py-2 text-sm">
+                          入力
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                        <Tabs.Tab id="preview" className="text-gray-400 data-[selected=true]:text-white px-4 py-2 text-sm">
+                          プレビュー
+                          <Tabs.Indicator />
+                        </Tabs.Tab>
+                      </Tabs.List>
+                    </Tabs.ListContainer>
+                    <Tabs.Panel id="input" className="pt-3">
+                      <label htmlFor="announcement-body" className="sr-only">本文</label>
+                      <textarea
+                        id="announcement-body"
+                        value={form.body}
+                        onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
+                        maxLength={MAX_BODY_LENGTH}
+                        rows={9}
+                        placeholder="## お知らせ\n本文を入力してください。"
+                        className="w-full resize-y bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 placeholder:text-gray-600 focus:outline-none focus:border-purple-500/50"
+                      />
+                    </Tabs.Panel>
+                    <Tabs.Panel id="preview" className="pt-3">
+                      <div className="min-h-[13.5rem] rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                        {form.body.trim() ? (
+                          <MarkdownPreview content={form.body} />
+                        ) : (
+                          <p className="text-sm text-gray-500">プレビューする本文がありません。</p>
+                        )}
+                      </div>
+                    </Tabs.Panel>
+                  </Tabs>
                   <p className="text-xs text-gray-500 text-right mt-1">{form.body.length.toLocaleString()} / {MAX_BODY_LENGTH.toLocaleString()}</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
