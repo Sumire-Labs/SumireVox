@@ -57,8 +57,9 @@ export async function fetchUserGuilds(accessToken: string): Promise<DiscordGuild
 export async function hasManageGuildPermission(
   accessToken: string,
   guildId: string,
+  cachedGuilds?: DiscordGuild[],
 ): Promise<boolean> {
-  const guilds = await fetchUserGuilds(accessToken);
+  const guilds = cachedGuilds ?? await fetchUserGuilds(accessToken);
   const guild = guilds.find((g) => g.id === guildId);
   if (!guild) return false;
 

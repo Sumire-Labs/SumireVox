@@ -8,13 +8,12 @@ import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { config } from '../infrastructure/config.js';
-import { fetchUserGuilds } from '../services/discord-api.js';
+import { getUserGuilds as getCachedUserGuilds } from '../services/user-guild-service.js';
 import {
   getActiveBotInstances,
   getActiveInstanceCount,
   getGuildsWithBotStatus,
 } from '../services/bot-instance-service.js';
-import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { rateLimit } from '../middleware/rate-limit.js';
@@ -35,39 +34,12 @@ const boostAssignBodySchema = z
   .strict();
 const boostAssignByIdBodySchema = z.object({ guildId: discordSnowflakeSchema }).strict();
 
-const USER_GUILDS_CACHE_TTL = 60;
-const userGuildsCacheKey = (userId: string) => `user:${userId}:all-guilds`;
-
 async function getUserGuilds(
   userId: string,
   accessToken: string,
 ): Promise<Array<{ id: string; name: string; icon: string | null }>> {
-  const cacheKey = userGuildsCacheKey(userId);
-  let allGuilds: Array<{ id: string; name: string; icon: string | null }> | null = null;
-
-  try {
-    const cached = await getRedisClient().get(cacheKey);
-    if (cached) {
-      allGuilds = JSON.parse(cached) as Array<{ id: string; name: string; icon: string | null }>;
-    }
-  } catch (err) {
-    logger.warn({ err }, 'Failed to read user all-guilds cache');
-  }
-
-  if (allGuilds) {
-    return allGuilds;
-  }
-
-  const guilds = await fetchUserGuilds(accessToken);
-  const normalizedGuilds = guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
-
-  try {
-    await getRedisClient().set(cacheKey, JSON.stringify(normalizedGuilds), 'EX', USER_GUILDS_CACHE_TTL);
-  } catch (err) {
-    logger.warn({ err }, 'Failed to write user all-guilds cache');
-  }
-
-  return normalizedGuilds;
+  const guilds = await getCachedUserGuilds(userId, accessToken);
+  return guilds.map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
 }
 
 async function ensureUserBelongsToGuild(userId: string, accessToken: string, guildId: string): Promise<void> {

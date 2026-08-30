@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../infrastructure/app-error.js';
 
-const { hasManageGuildPermissionMock, redisMock } = vi.hoisted(() => ({
+const { hasManageGuildPermissionMock, getUserGuildsMock, redisMock } = vi.hoisted(() => ({
   hasManageGuildPermissionMock: vi.fn(),
+  getUserGuildsMock: vi.fn(),
   redisMock: {
     get: vi.fn(),
     set: vi.fn(),
@@ -12,6 +13,10 @@ const { hasManageGuildPermissionMock, redisMock } = vi.hoisted(() => ({
 
 vi.mock('../../services/discord-api.js', () => ({
   hasManageGuildPermission: hasManageGuildPermissionMock,
+}));
+
+vi.mock('../../services/user-guild-service.js', () => ({
+  getUserGuilds: getUserGuildsMock,
 }));
 
 vi.mock('../../infrastructure/redis.js', () => ({
@@ -44,6 +49,7 @@ function buildApp(): Hono {
 describe('requireGuildAdmin', () => {
   beforeEach(() => {
     hasManageGuildPermissionMock.mockReset();
+    getUserGuildsMock.mockReset().mockResolvedValue([]);
     redisMock.get.mockReset();
     redisMock.set.mockReset();
     redisMock.get.mockResolvedValue(null);
