@@ -48,7 +48,7 @@ Bot 管理者 (BOT_ADMIN_USER_IDS) のみ。
 | パス | 内容 |
 |---|---|
 | / | 概要 (接続サーバー数等の統計) |
-| /servers | 全サーバー一覧、手動 PREMIUM 切替 |
+| /servers | 全サーバー一覧、手動 PREMIUM 切替、有効ブースト数・導入済み Bot インスタンス表示 |
 | /dictionary | グローバル辞書管理 |
 | /requests | グローバル辞書申請管理 |
 | /announcements | お知らせの作成・編集・公開管理。本文はMarkdown入力とプレビューに対応 |

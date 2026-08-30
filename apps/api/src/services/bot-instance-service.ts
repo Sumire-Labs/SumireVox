@@ -76,6 +76,32 @@ export async function getAllBotInstances(): Promise<BotInstance[]> {
 }
 
 /**
+ * 登録済み Bot インスタンスごとの Redis 参加情報をギルド単位にまとめて取得する。
+ * Redis の個別セット取得に失敗したインスタンスは、そのインスタンスの参加情報なしとして扱う。
+ */
+export async function getBotGuildMemberships(instances: BotInstance[]): Promise<Map<string, number[]>> {
+  const redis = getRedisClient();
+  const guildIdSets = await Promise.all(
+    instances.map((instance) =>
+      redis.smembers(REDIS_KEYS.BOT_GUILDS(instance.instanceId)).catch(() => [] as string[]),
+    ),
+  );
+  const memberships = new Map<string, number[]>();
+
+  guildIdSets.forEach((guildIds, index) => {
+    const instance = instances[index];
+    if (!instance) return;
+
+    guildIds.forEach((guildId) => {
+      const currentInstanceIds = memberships.get(guildId) ?? [];
+      memberships.set(guildId, [...currentInstanceIds, instance.instanceId]);
+    });
+  });
+
+  return memberships;
+}
+
+/**
  * 特定の Bot インスタンスを取得
  */
 export async function getBotInstance(instanceId: number): Promise<BotInstance | null> {
