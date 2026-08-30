@@ -163,12 +163,6 @@ export function BoostPage() {
         fetchBotsForGuild(guildId).then((r) => {
           if (r) setGuildBots((prev) => new Map(prev).set(r.guildId, r.bots));
         });
-      } else {
-        setGuildBots((prev) => {
-          const next = new Map(prev);
-          next.delete(guildId);
-          return next;
-        });
       }
     } catch (err) {
       setData(prevData);
