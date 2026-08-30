@@ -116,7 +116,7 @@
 
 | メソッド | パス | 説明 |
 |---|---|---|
-| GET | /api/admin/servers | 全サーバー一覧 |
+| GET | /api/admin/servers | 全サーバー一覧（有効ブースト数・導入Botインスタンスを含む） |
 | PUT | /api/admin/servers/:guildId/premium | 手動 PREMIUM 切替 |
 | GET | /api/admin/servers/:guildId/settings | サーバー設定取得（管理者用） |
 | PUT | /api/admin/servers/:guildId/settings | サーバー設定変更（管理者用） |
@@ -137,6 +137,17 @@
 | GET | /api/admin/dictionary/requests | 申請一覧 |
 | PUT | /api/admin/dictionary/requests/:id/approve | 承認 |
 | PUT | /api/admin/dictionary/requests/:id/reject | 却下 |
+
+### GET /api/admin/servers
+
+各サーバー項目には、現在有効なサブスクリプションに紐づく割り当て済みブースト数と、Redis の参加情報から判定した導入済み Bot インスタンスを含む。
+
+追加フィールド:
+
+| フィールド | 内容 |
+|---|---|
+| boostCount | `ACTIVE` サブスクリプションに紐づく割り当て済み Boost 数。Manual PREMIUM は含まない |
+| botInstances | 導入済み Bot の一覧。`instanceId`、`name`、`isActive` を持ち、非アクティブな登録済みインスタンスも含む |
 
 ## ミドルウェア
 

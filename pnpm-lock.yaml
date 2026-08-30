@@ -30,6 +30,9 @@ importers:
       '@heroui/styles':
         specifier: ^3.0.1
         version: 3.0.1(tailwind-merge@3.4.0)(tailwindcss@4.2.2)
+      '@sumirevox/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       react:
         specifier: ^19.0.0
         version: 19.2.4
