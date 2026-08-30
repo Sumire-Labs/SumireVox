@@ -11,7 +11,7 @@ import { config } from '../infrastructure/config.js';
 import { getUserGuilds as getCachedUserGuilds } from '../services/user-guild-service.js';
 import {
   getActiveBotInstances,
-  getActiveInstanceCount,
+  getMaxBoostsPerGuild,
   getGuildsWithBotStatus,
 } from '../services/bot-instance-service.js';
 import { logger } from '../infrastructure/logger.js';
@@ -134,7 +134,7 @@ userRouter.get('/boosts', async (c) => {
   const botGuildIds = await getActiveBotGuildIds(session.userId, session.accessToken);
   const [result, maxBoostsPerGuild, guildBoostInfo] = await Promise.all([
     getUserBoosts(session.userId),
-    getActiveInstanceCount(),
+    getMaxBoostsPerGuild(),
     getGuildBoostInfo(session.userId, botGuildIds),
   ]);
   return c.json({ success: true, data: { ...result, maxBoostsPerGuild, guildBoostInfo } });
@@ -168,7 +168,7 @@ userRouter.post('/boosts/assign', boostAssignRateLimit, async (c) => {
   const body = await validate.body(c, boostAssignBodySchema);
   await ensureUserBelongsToGuild(session.userId, session.accessToken, body.guildId);
 
-  const maxBoostsPerGuild = await getActiveInstanceCount();
+  const maxBoostsPerGuild = await getMaxBoostsPerGuild();
   if (body.count > maxBoostsPerGuild) {
     return c.json(
       { success: false, error: { code: 'VALIDATION_ERROR', message: '1サーバーあたりの最大ブースト数を超えています。' } },

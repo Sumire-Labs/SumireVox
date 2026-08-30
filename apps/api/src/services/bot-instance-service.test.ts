@@ -7,11 +7,14 @@ const { pipelineMock, redisMock, prismaMock } = vi.hoisted(() => ({
     exec: vi.fn(),
   },
   redisMock: {
+    get: vi.fn(),
+    set: vi.fn(),
     pipeline: vi.fn(),
     sismember: vi.fn(),
   },
   prismaMock: {
     botInstance: {
+      count: vi.fn(),
       findMany: vi.fn(),
     },
     guildSettings: {
@@ -36,6 +39,7 @@ vi.mock('../infrastructure/database.js', () => ({
 
 import {
   getAvailableBotCount,
+  getMaxBoostsPerGuild,
   getGuildBotList,
   getGuildsWithBotStatus,
   updateGuildBotInstanceSettings,
@@ -66,11 +70,20 @@ describe('getGuildsWithBotStatus', () => {
   beforeEach(() => {
     pipelineMock.sismember.mockReset().mockReturnValue(pipelineMock);
     pipelineMock.exec.mockReset();
+    redisMock.get.mockReset().mockResolvedValue(null);
+    redisMock.set.mockReset().mockResolvedValue('OK');
     redisMock.pipeline.mockClear();
+    prismaMock.botInstance.count.mockReset();
     prismaMock.botInstance.findMany.mockReset();
     prismaMock.guildSettings.findUnique.mockReset();
     prismaMock.guildSettings.upsert.mockReset();
     prismaMock.boost.count.mockReset();
+  });
+
+  it('reserves the first bot slot when calculating the guild boost limit', async () => {
+    prismaMock.botInstance.count.mockResolvedValue(5);
+
+    await expect(getMaxBoostsPerGuild()).resolves.toBe(4);
   });
 
   it('returns true when any instance is in the guild', async () => {

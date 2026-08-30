@@ -4,7 +4,7 @@ import { getPrisma } from '../infrastructure/database.js';
 import { AppError } from '../infrastructure/app-error.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
-import { getActiveInstanceCount } from './bot-instance-service.js';
+import { getMaxBoostsPerGuild } from './bot-instance-service.js';
 import { publishGuildPremiumInvalidation } from './premium-cache-sync.js';
 
 export interface GuildBoostInfo {
@@ -139,7 +139,7 @@ export async function getUserBoosts(userId: string): Promise<{
       include: { boosts: true },
       orderBy: { createdAt: 'desc' },
     }),
-    getActiveInstanceCount(),
+    getMaxBoostsPerGuild(),
   ]);
 
   if (subscriptions.length === 0) {
@@ -245,7 +245,7 @@ export async function setGuildBoostCount(userId: string, guildId: string, count:
     if (delta === 0) return;
 
     if (delta > 0) {
-      const maxBoostsPerGuild = await getActiveInstanceCount();
+      const maxBoostsPerGuild = await getMaxBoostsPerGuild();
       const totalGuildBoosts = await tx.boost.count({
         where: { guildId, subscription: { status: 'ACTIVE' } },
       });
@@ -326,7 +326,7 @@ export async function assignBoost(
   boostId: string,
   guildId: string,
 ): Promise<void> {
-  const maxBoostsPerGuild = await getActiveInstanceCount();
+  const maxBoostsPerGuild = await getMaxBoostsPerGuild();
 
   await runSerializableBoostTransaction(async (tx) => {
     const boost = await tx.boost.findUnique({
@@ -449,12 +449,12 @@ export async function unassignBoost(userId: string, boostId: string): Promise<vo
 }
 
 /**
- * ブースト整合処理: アクティブインスタンス数を超えるギルドブーストを自動解除する
+ * ブースト整合処理: 追加Botを解禁できる上限を超えるギルドブーストを自動解除する
  * アクティブインスタンス減少時にクールダウンなしで超過分を解除する
  */
 export async function reconcileBoosts(): Promise<void> {
   const prisma = getPrisma();
-  const maxBoosts = await getActiveInstanceCount();
+  const maxBoosts = await getMaxBoostsPerGuild();
 
   if (maxBoosts <= 0) {
     logger.info('Boost reconciliation skipped: no active bot instances');

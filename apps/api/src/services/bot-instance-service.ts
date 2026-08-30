@@ -37,6 +37,16 @@ export async function getActiveInstanceCount(): Promise<number> {
 }
 
 /**
+ * ギルドに割り当てられる最大ブースト数を取得する
+ *
+ * 1号機はFREEで利用できるため、最大Bot台数より1つ少ない値が上限になる。
+ */
+export async function getMaxBoostsPerGuild(): Promise<number> {
+  const activeInstanceCount = await getActiveInstanceCount();
+  return Math.max(0, Math.min(activeInstanceCount, LIMITS.MAX_BOT_INSTANCES) - 1);
+}
+
+/**
  * 全アクティブな Bot インスタンスを取得
  */
 export async function getActiveBotInstances(): Promise<BotInstance[]> {
