@@ -53,6 +53,7 @@
 | PUT | /api/user/boosts/:boostId/unassign | ブースト解除 |
 | POST | /api/user/billing-portal | Stripe Billing Portal セッション作成 |
 | GET | /api/user/subscription | サブスク状況 |
+| POST | /api/user/subscription/sync | Stripe の最新サブスクリプション情報を手動同期 |
 | POST | /api/user/subscription/cancel | サブスク解約 |
 
 ## Stripe Webhook (Stripe 署名検証)

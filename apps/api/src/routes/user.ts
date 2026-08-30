@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 import { validate } from '../middleware/validate.js';
 import { getUserBoosts, assignBoost, unassignBoost, setGuildBoostCount, getGuildBoostInfo } from '../services/boost-service.js';
 import { createCheckoutSession, cancelSubscription, createBillingPortalSession } from '../services/stripe-service.js';
-import { syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
+import { syncUserSubscriptions, syncUserSubscriptionsIfStale } from '../services/stripe-sync-service.js';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
 import { config } from '../infrastructure/config.js';
@@ -22,6 +22,7 @@ import { discordSnowflakeSchema } from '../schemas/common.js';
 
 const checkoutRateLimit = rateLimit({ max: 5, windowSeconds: 60, keyPrefix: 'checkout' });
 const boostAssignRateLimit = rateLimit({ max: 20, windowSeconds: 60, keyPrefix: 'boost-assign' });
+const subscriptionSyncRateLimit = rateLimit({ max: 3, windowSeconds: 60, keyPrefix: 'subscription-sync' });
 
 const boostIdParamsSchema = z.object({ boostId: z.string().cuid() });
 const checkoutBodySchema = z
@@ -109,6 +110,17 @@ async function getActiveBotGuildIds(userId: string, accessToken: string): Promis
   }
 }
 
+async function getUserBoostData(userId: string, accessToken: string) {
+  const botGuildIds = await getActiveBotGuildIds(userId, accessToken);
+  const [result, maxBoostsPerGuild, guildBoostInfo] = await Promise.all([
+    getUserBoosts(userId),
+    getActiveInstanceCount(),
+    getGuildBoostInfo(userId, botGuildIds),
+  ]);
+
+  return { ...result, maxBoostsPerGuild, guildBoostInfo };
+}
+
 export const userRouter = new Hono();
 
 userRouter.use('*', requireAuth);
@@ -159,13 +171,8 @@ userRouter.get('/guilds', async (c) => {
 userRouter.get('/boosts', async (c) => {
   const session = c.get('session')!;
   await syncUserSubscriptionsIfStale(session.userId);
-  const botGuildIds = await getActiveBotGuildIds(session.userId, session.accessToken);
-  const [result, maxBoostsPerGuild, guildBoostInfo] = await Promise.all([
-    getUserBoosts(session.userId),
-    getActiveInstanceCount(),
-    getGuildBoostInfo(session.userId, botGuildIds),
-  ]);
-  return c.json({ success: true, data: { ...result, maxBoostsPerGuild, guildBoostInfo } });
+  const result = await getUserBoostData(session.userId, session.accessToken);
+  return c.json({ success: true, data: result });
 });
 
 /**
@@ -212,6 +219,24 @@ userRouter.post('/boosts/assign', boostAssignRateLimit, async (c) => {
     getGuildBoostInfo(session.userId, botGuildIds),
   ]);
   return c.json({ success: true, data: { ...result, maxBoostsPerGuild, guildBoostInfo } });
+});
+
+/**
+ * POST /api/user/subscription/sync
+ * Stripe のサブスクリプション情報をユーザー単位で強制同期する
+ */
+userRouter.post('/subscription/sync', subscriptionSyncRateLimit, async (c) => {
+  if (!stripe) {
+    return c.json(
+      { success: false, error: { code: 'INTERNAL_ERROR', message: 'Stripe is not configured' } },
+      503,
+    );
+  }
+
+  const session = c.get('session')!;
+  await syncUserSubscriptions(session.userId);
+  const result = await getUserBoostData(session.userId, session.accessToken);
+  return c.json({ success: true, data: result });
 });
 
 /**

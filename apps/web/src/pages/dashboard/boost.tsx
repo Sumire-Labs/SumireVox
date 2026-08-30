@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useToast, Toast } from '../../components/toast';
 
@@ -73,6 +74,7 @@ export function BoostPage() {
   const [showPurchase, setShowPurchase] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
   const [guildBots, setGuildBots] = useState<Map<string, BotInstanceInfo[]>>(new Map());
   const [inviteLoading, setInviteLoading] = useState<Set<string>>(new Set());
   const { toastState, showSaving, showSuccess, showError } = useToast();
@@ -215,6 +217,26 @@ export function BoostPage() {
     }
   };
 
+  const handleSync = async () => {
+    if (syncLoading) return;
+    setSyncLoading(true);
+    showSaving('更新中...');
+
+    try {
+      const result = await api.post<BoostData>('/api/user/subscription/sync');
+      setData(result);
+      showSuccess('最新のサブスクリプション情報を取得しました');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        showError(err.message);
+      } else {
+        showError('サブスクリプション情報の更新に失敗しました');
+      }
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center mt-20">
@@ -266,6 +288,14 @@ export function BoostPage() {
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleSync}
+              disabled={syncLoading}
+              className="inline-flex items-center gap-2 text-sm border border-white/10 text-gray-400 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${syncLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {syncLoading ? '更新中...' : '最新情報に更新'}
+            </button>
             {data?.subscription && (
               <button
                 onClick={handlePortal}
