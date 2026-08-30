@@ -39,6 +39,7 @@ export async function getUserVoiceSetting(userId: string): Promise<UserVoiceSett
     speedScale: LIMITS.DEFAULT_SPEED_SCALE,
     pitchScale: LIMITS.DEFAULT_PITCH_SCALE,
   };
+  await setCachedUserVoiceSetting(userId, defaults);
   return defaults;
 }
 
