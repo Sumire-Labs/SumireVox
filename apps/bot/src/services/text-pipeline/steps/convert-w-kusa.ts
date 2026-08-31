@@ -8,6 +8,9 @@ import { PipelineStep } from '../types.js';
 const W_END_OF_LINE = /(?<=[^\x21-\x7e]|^)[wｗ]+$/gm;
 // 文中の w/ｗ（前後が非ASCII印字可能文字）
 const W_INLINE = /(?<=[^\x21-\x7e])[wｗ]+(?=[^\x21-\x7e]|$)/g;
+// 英数字の末尾に付いた笑い表現（2文字以上）だけを対象にする。
+// ASCIIの句読点を区切りに含めないことで、URL・ドメイン中の連続した w を保護する。
+const W_AFTER_ASCII_ALNUM = /(?<=[A-Za-z0-9])(?<![wｗ])[wｗ]{2,}(?=$|[^\x21-\x7e])/g;
 
 // 「草」→「くさ」（日本語文字の直後のみ）
 const KUSA_PATTERN = /(?<=[ぁ-んァ-ヶー一-龥、。！？])(草+)/g;
@@ -21,8 +24,10 @@ function replaceKusa(match: string): string {
 }
 
 export const convertWKusa: PipelineStep = (text) => {
-  // 行末の w を先に処理
-  let result = text.replace(W_END_OF_LINE, replaceW);
+  // 英数字直後の連続した w/ｗ を先に処理（全角ｗの列が既存パターンで分割されるのを防ぐ）
+  let result = text.replace(W_AFTER_ASCII_ALNUM, replaceW);
+  // 行末の w を処理
+  result = result.replace(W_END_OF_LINE, replaceW);
   // 文中の w を処理
   result = result.replace(W_INLINE, replaceW);
   // 草の変換（日本語文字の直後のみ）

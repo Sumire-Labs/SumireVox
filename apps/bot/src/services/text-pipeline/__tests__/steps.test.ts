@@ -85,9 +85,20 @@ describe('convertWKusa', () => {
     expect(convertWKusa('面白いwww', ctx)).toBe('面白いわらわら');
   });
 
+  it('英数字直後の連続した w を笑い表現として変換する', () => {
+    expect(convertWKusa('DickerFileww', ctx)).toBe('DickerFileわらわら');
+    expect(convertWKusa('DickerFilewwwwwwww', ctx)).toBe('DickerFileわらわら');
+    expect(convertWKusa('abcwww', ctx)).toBe('abcわらわら');
+    expect(convertWKusa('123ww', ctx)).toBe('123わらわら');
+    expect(
+      convertWKusa('DickerFilewwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww', ctx),
+    ).toBe('DickerFileわらわら');
+  });
+
   it('全角ｗも変換する', () => {
     expect(convertWKusa('ｗ', ctx)).toBe('わら');
     expect(convertWKusa('ｗｗ', ctx)).toBe('わらわら');
+    expect(convertWKusa('abcｗｗ', ctx)).toBe('abcわらわら');
   });
 
   it('大文字 W は英単語で頻出するため変換しない', () => {
@@ -111,8 +122,17 @@ describe('convertWKusa', () => {
   it('英単語中の w は変換しない', () => {
     expect(convertWKusa('window', ctx)).toBe('window');
     expect(convertWKusa('www.google.com', ctx)).toBe('www.google.com');
+    expect(convertWKusa('www.example.jp', ctx)).toBe('www.example.jp');
+    expect(convertWKusa('https://www.example.com', ctx)).toBe('https://www.example.com');
     expect(convertWKusa('wow', ctx)).toBe('wow');
+    expect(convertWKusa('new', ctx)).toBe('new');
     expect(convertWKusa('Hello World', ctx)).toBe('Hello World');
+  });
+
+  it('英数字直後の連続した w を区切り位置でも変換する', () => {
+    expect(convertWKusa('abcwww。', ctx)).toBe('abcわらわら。');
+    expect(convertWKusa('abcwww 次の文章', ctx)).toBe('abcわらわら 次の文章');
+    expect(convertWKusa('abcwww笑った', ctx)).toBe('abcわらわら笑った');
   });
 
   it('笑ったw次の話w のように文中の w を変換する', () => {
