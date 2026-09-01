@@ -1,11 +1,12 @@
-import { VoiceState, PermissionFlagsBits } from 'discord.js';
-import { getVcSession, createVcSession } from '../services/vc-session-manager.js';
-import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
-import { enqueue, enqueuePreSynthesized } from '../services/speech-queue.js';
-import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
+import { VoiceState } from 'discord.js';
+import { getVcSession } from '../services/vc-session-manager.js';
+import { getGuildSettings } from '../services/guild-settings-service.js';
+import { enqueue } from '../services/speech-queue.js';
 import { getDictionaryTrie, trieReplace } from '../services/text-pipeline/index.js';
-import { startDisconnectTimer, cancelDisconnectTimer } from '../services/auto-disconnect-timer.js';
-import { canInstanceConnect } from '../services/premium-service.js';
+import {
+  checkAutoDisconnect,
+  handleAutoJoinVoiceState,
+} from '../services/auto-connection-service.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
@@ -33,7 +34,7 @@ export async function handleVoiceStateUpdate(
   // 自動接続の処理
   // ==============================
   if (!session) {
-    await handleAutoJoin(oldState, newState, guildId);
+    await handleAutoJoinVoiceState(oldState, newState);
     return;
   }
 
@@ -61,94 +62,7 @@ export async function handleVoiceStateUpdate(
   );
 
   // ---- 自動退出タイマー ----
-  await handleAutoDisconnect(guildId, botVoiceChannelId, guild);
-}
-
-/**
- * 自動接続の処理
- */
-async function handleAutoJoin(
-  oldState: VoiceState,
-  newState: VoiceState,
-  guildId: string,
-): Promise<void> {
-  // ユーザーが VC に参加した場合のみ（退出は無視）
-  if (!newState.channelId) return;
-
-  // チャンネル変更なし（ミュート等）は無視
-  if (oldState.channelId === newState.channelId) return;
-
-  try {
-    const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
-
-    // このインスタンスの自動接続が OFF
-    if (!instanceSettings.autoJoin) return;
-
-    // テキストチャンネルが未設定
-    if (!instanceSettings.textChannelId) return;
-
-    // 指定 VC チャンネルがある場合、そのチャンネルへの参加のみ対象
-    if (instanceSettings.voiceChannelId && newState.channelId !== instanceSettings.voiceChannelId) return;
-
-    // インスタンス接続制限チェック (2号機以降はブースト数が必要)
-    if (config.botInstanceId > 1) {
-      const allowed = await canInstanceConnect(guildId, config.botInstanceId);
-      if (!allowed) {
-        logger.info(
-          { guildId, instanceId: config.botInstanceId },
-          'Auto-join skipped: insufficient boosts for this instance',
-        );
-        return;
-      }
-    }
-
-    const guild = newState.guild;
-    const voiceChannel = newState.channel;
-    if (!voiceChannel) return;
-
-    // Bot の権限チェック
-    const me = guild.members.me;
-    if (!me) return;
-
-    const permissions = voiceChannel.permissionsFor(me);
-    if (!permissions) return;
-
-    if (
-      !permissions.has(PermissionFlagsBits.Connect) ||
-      !permissions.has(PermissionFlagsBits.Speak)
-    ) {
-      logger.warn(
-        { guildId, channelId: voiceChannel.id },
-        'Auto-join skipped: missing Connect or Speak permission',
-      );
-      return;
-    }
-
-    // VC に接続
-    await createVcSession(
-      guildId,
-      voiceChannel.id,
-      instanceSettings.textChannelId,
-      guild.voiceAdapterCreator,
-    );
-
-    logger.info(
-      { guildId, voiceChannelId: voiceChannel.id, textChannelId: instanceSettings.textChannelId },
-      'Auto-joined VC',
-    );
-
-    // 挨拶の読み上げ
-    if (settings.greetingOnJoin) {
-      const speakerId = settings.defaultSpeakerId ?? config.defaultSpeakerId;
-      const audio = await getPredefinedAudio('接続しました', speakerId, 1.0, 0.0);
-      if (audio) {
-        enqueuePreSynthesized(guildId, audio);
-      }
-    }
-  } catch (error) {
-    logger.error({ err: error, guildId }, 'Auto-join failed');
-  }
+  await checkAutoDisconnect(guildId, guild, botVoiceChannelId);
 }
 
 /**
@@ -182,31 +96,5 @@ async function handleJoinLeaveNotification(
     logger.debug({ guildId, displayName, event }, 'Join/leave notification enqueued');
   } catch (error) {
     logger.error({ err: error, guildId }, 'Failed to enqueue join/leave notification');
-  }
-}
-
-/**
- * 自動退出タイマーの管理
- * Bot のいる VC に Bot 以外誰もいなくなったらタイマー開始、
- * 誰かが戻ってきたらタイマーキャンセル
- */
-async function handleAutoDisconnect(
-  guildId: string,
-  botVoiceChannelId: string,
-  guild: VoiceState['guild'],
-): Promise<void> {
-  try {
-    const voiceChannel = guild.channels.cache.get(botVoiceChannelId);
-    if (!voiceChannel || !voiceChannel.isVoiceBased()) return;
-
-    const humanMembers = voiceChannel.members.filter((member) => !member.user.bot);
-
-    if (humanMembers.size === 0) {
-      startDisconnectTimer(guildId);
-    } else {
-      cancelDisconnectTimer(guildId);
-    }
-  } catch (error) {
-    logger.error({ err: error, guildId }, 'Error in auto-disconnect check');
   }
 }

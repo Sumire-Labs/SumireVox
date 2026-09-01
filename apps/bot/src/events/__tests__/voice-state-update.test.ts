@@ -31,6 +31,11 @@ vi.mock('../../services/auto-disconnect-timer.js', () => ({
   cancelDisconnectTimer: vi.fn(),
 }));
 
+vi.mock('../../services/auto-connection-service.js', () => ({
+  handleAutoJoinVoiceState: vi.fn(),
+  checkAutoDisconnect: vi.fn(),
+}));
+
 vi.mock('../../services/premium-service.js', () => ({
   canInstanceConnect: vi.fn(),
 }));
@@ -61,6 +66,10 @@ import { getGuildSettings } from '../../services/guild-settings-service.js';
 import { enqueue } from '../../services/speech-queue.js';
 import { getVcSession } from '../../services/vc-session-manager.js';
 import { getDictionaryTrie, trieReplace } from '../../services/text-pipeline/index.js';
+import {
+  checkAutoDisconnect,
+  handleAutoJoinVoiceState,
+} from '../../services/auto-connection-service.js';
 
 const mockGetClient = vi.mocked(getClient);
 const mockGetGuildSettings = vi.mocked(getGuildSettings);
@@ -68,6 +77,8 @@ const mockEnqueue = vi.mocked(enqueue);
 const mockGetVcSession = vi.mocked(getVcSession);
 const mockGetDictionaryTrie = vi.mocked(getDictionaryTrie);
 const mockTrieReplace = vi.mocked(trieReplace);
+const mockHandleAutoJoinVoiceState = vi.mocked(handleAutoJoinVoiceState);
+const mockCheckAutoDisconnect = vi.mocked(checkAutoDisconnect);
 
 function makeSettings(overrides: Partial<GuildSettings> = {}): GuildSettings {
   return {
@@ -183,6 +194,30 @@ describe('handleVoiceStateUpdate join/leave notification dictionary', () => {
       10,
       1.0,
       0.0,
+    );
+  });
+
+  it('セッションがない場合は自動接続サービスへ委譲する', async () => {
+    mockGetVcSession.mockReturnValue(undefined);
+    const oldState = makeVoiceState(null, 'Azure太郎');
+    const newState = makeVoiceState('voice-1', 'Azure太郎');
+
+    await handleVoiceStateUpdate(oldState, newState);
+
+    expect(mockHandleAutoJoinVoiceState).toHaveBeenCalledWith(oldState, newState);
+    expect(mockCheckAutoDisconnect).not.toHaveBeenCalled();
+  });
+
+  it('接続中は入退室後の自動退出確認へ委譲する', async () => {
+    const oldState = makeVoiceState('voice-1', 'Azure太郎');
+    const newState = makeVoiceState(null, 'Azure太郎');
+
+    await handleVoiceStateUpdate(oldState, newState);
+
+    expect(mockCheckAutoDisconnect).toHaveBeenCalledWith(
+      'guild-1',
+      newState.guild,
+      'voice-1',
     );
   });
 });

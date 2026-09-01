@@ -27,15 +27,24 @@ import {
   buildCustomId,
   parseCustomId,
   LIMITS,
+  AutoJoinChannelPair,
+  BotInstance,
   BotInstanceSettings,
   DEFAULT_BOT_INSTANCE_SETTINGS,
+  normalizeBotInstanceSettings,
 } from '@sumirevox/shared';
 import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
-import { updateGuildSettings, updateBotInstanceSettings } from '../services/guild-settings-update-service.js';
+import {
+  copyBotInstanceSettings,
+  updateGuildSettings,
+  updateBotInstanceSettings,
+} from '../services/guild-settings-update-service.js';
+import { getCopyableBotInstances } from '../services/bot-instance-registry.js';
 import { getSpeakers, getSpeakerStyleName } from '../services/voicevox-speaker-cache.js';
 import { isGuildPremium } from '../services/premium-service.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { config } from '../infrastructure/config.js';
+import { AppError } from '../infrastructure/app-error.js';
 
 type ParsedId = NonNullable<ReturnType<typeof parseCustomId>>;
 
@@ -49,6 +58,16 @@ const CATEGORIES = [
 
 type Category = (typeof CATEGORIES)[number]['value'];
 
+interface PendingCopySelection {
+  guildId: string;
+  sourceInstanceId: number;
+  targetIds: number[];
+  targetNames: string[];
+  createdAt: number;
+}
+
+const pendingCopySelections = new Map<string, PendingCopySelection>();
+
 export function buildSettingsMessage(
   settings: GuildSettings,
   category: Category,
@@ -56,8 +75,20 @@ export function buildSettingsMessage(
   instanceSettings: BotInstanceSettings = DEFAULT_BOT_INSTANCE_SETTINGS,
   botName: string = 'SumireVox',
 ): { components: ContainerBuilder[] } {
-  const mainContainer = new ContainerBuilder().setAccentColor(0x7c3aed);
+  const mainContainer = buildSettingsNavigation(category, userId);
+  const categoryContainer = buildCategoryContainer(
+    settings,
+    category,
+    userId,
+    instanceSettings,
+    botName,
+  );
 
+  return { components: [mainContainer, categoryContainer] };
+}
+
+function buildSettingsNavigation(category: Category, userId: string): ContainerBuilder {
+  const mainContainer = new ContainerBuilder().setAccentColor(0x7c3aed);
   const categorySelect = new StringSelectMenuBuilder()
     .setCustomId(buildCustomId('settings', 'category', userId))
     .setPlaceholder('カテゴリを選択')
@@ -74,9 +105,7 @@ export function buildSettingsMessage(
   mainContainer
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('## ⚙️ サーバー設定'))
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        'カテゴリを選択して設定を変更してください。',
-      ),
+      new TextDisplayBuilder().setContent('カテゴリを選択して設定を変更してください。'),
     )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
@@ -85,9 +114,7 @@ export function buildSettingsMessage(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect),
     );
 
-  const categoryContainer = buildCategoryContainer(settings, category, userId, instanceSettings, botName);
-
-  return { components: [mainContainer, categoryContainer] };
+  return mainContainer;
 }
 
 function buildCategoryContainer(
@@ -105,7 +132,7 @@ function buildCategoryContainer(
     case 'filter':
       return buildFilterCategory(settings, userId);
     case 'connection':
-      return buildConnectionCategory(settings, userId, instanceSettings, botName);
+      return buildConnectionCategory(userId, instanceSettings, botName);
     case 'permission':
       return buildPermissionCategory(settings, userId);
   }
@@ -295,33 +322,22 @@ function buildFilterCategory(settings: GuildSettings, userId: string): Container
 }
 
 function buildConnectionCategory(
-  settings: GuildSettings,
   userId: string,
   instanceSettings: BotInstanceSettings,
   botName: string,
 ): ContainerBuilder {
-  const { autoJoin, voiceChannelId, textChannelId } = instanceSettings;
-
-  const voiceChannelSelect = new ChannelSelectMenuBuilder()
-    .setCustomId(buildCustomId('settings', 'connection_voice_channel', userId))
-    .setPlaceholder('VC チャンネルを選択')
-    .setChannelTypes(ChannelType.GuildVoice)
-    .setMinValues(0)
-    .setMaxValues(1);
-
-  const textChannelSelect = new ChannelSelectMenuBuilder()
-    .setCustomId(buildCustomId('settings', 'connection_text_channel', userId))
-    .setPlaceholder('読み上げチャンネルを選択（VCのテキストチャットも可）')
-    .setChannelTypes(
-      ChannelType.GuildText,
-      ChannelType.GuildAnnouncement,
-      ChannelType.GuildVoice,
-      ChannelType.GuildStageVoice,
-    )
-    .setMinValues(0)
-    .setMaxValues(1);
+  const resolvedSettings = normalizeBotInstanceSettings(instanceSettings);
+  const { autoJoin, channelPairs } = resolvedSettings;
 
   const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+  const pairText = channelPairs.length === 0
+    ? '未設定'
+    : channelPairs
+      .map(
+        (pair, index) =>
+          `**${index + 1}.** VC <#${pair.voiceChannelId}> → TC <#${pair.textChannelId}>`,
+      )
+      .join('\n');
 
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔗 接続設定'))
@@ -350,25 +366,185 @@ function buildConnectionCategory(
     )
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `**接続先 VC チャンネル**\n自動接続時に Bot が参加する VC を指定します。\n現在: ${voiceChannelId ? `<#${voiceChannelId}>` : '未設定'}`,
+        `**自動接続対象ペア (${channelPairs.length}/${LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS})**\n${pairText}`,
       ),
-    )
-    .addActionRowComponents(
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(voiceChannelSelect),
-    )
-    .addSeparatorComponents(
-      new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small),
-    )
-    .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(
-        `**読み上げチャンネル**\n自動接続時に読み上げるテキストチャンネル（VC内テキストチャット含む）を指定します。\n現在: ${textChannelId ? `<#${textChannelId}>` : '未設定'}`,
-      ),
-    )
-    .addActionRowComponents(
-      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(textChannelSelect),
     );
 
+  if (channelPairs.length > 0) {
+    const removeSelect = new StringSelectMenuBuilder()
+      .setCustomId(buildCustomId('settings', 'pair_remove', userId))
+      .setPlaceholder('削除するペアを選択')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        channelPairs.map((pair, index) =>
+          new StringSelectMenuOptionBuilder()
+            .setLabel(`ペア${index + 1}: VC ${pair.voiceChannelId}`)
+            .setDescription(`TC ${pair.textChannelId}`)
+            .setValue(pair.voiceChannelId),
+        ),
+      );
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(removeSelect),
+    );
+  }
+
+  container.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(buildCustomId('settings', 'pair_add', userId))
+        .setLabel('チャンネルペアを追加')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS),
+      new ButtonBuilder()
+        .setCustomId(buildCustomId('settings', 'copy_settings', userId))
+        .setLabel('他のBotへコピー')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  );
+
   return container;
+}
+
+function buildSettingsFlowMessage(
+  userId: string,
+  flowContainer: ContainerBuilder,
+): { components: ContainerBuilder[] } {
+  return {
+    components: [buildSettingsNavigation('connection', userId), flowContainer],
+  };
+}
+
+function buildPairAddContainer(
+  userId: string,
+  selectedVoiceChannelId?: string,
+): ContainerBuilder {
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### ➕ チャンネルペアを追加'))
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+
+  if (!selectedVoiceChannelId) {
+    const voiceSelect = new ChannelSelectMenuBuilder()
+      .setCustomId(buildCustomId('settings', 'pair_add_voice', userId))
+      .setPlaceholder('VC チャンネルを選択')
+      .setChannelTypes(ChannelType.GuildVoice)
+      .setMinValues(1)
+      .setMaxValues(1);
+    container
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent('自動接続の対象にするVCを選択してください。'),
+      )
+      .addActionRowComponents(
+        new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(voiceSelect),
+      );
+  } else {
+    const textSelect = new ChannelSelectMenuBuilder()
+      .setCustomId(buildCustomId('settings', `pair_add_text:${selectedVoiceChannelId}`, userId))
+      .setPlaceholder('読み上げチャンネルを選択（VC内テキストチャットも可）')
+      .setChannelTypes(
+        ChannelType.GuildText,
+        ChannelType.GuildAnnouncement,
+        ChannelType.GuildVoice,
+        ChannelType.GuildStageVoice,
+      )
+      .setMinValues(1)
+      .setMaxValues(1);
+    container
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent(
+          `VC <#${selectedVoiceChannelId}> を選択しました。読み上げ先のTCを選択してください。`,
+        ),
+      )
+      .addActionRowComponents(
+        new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(textSelect),
+      );
+  }
+
+  container.addActionRowComponents(
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(buildCustomId('settings', 'pair_add_cancel', userId))
+        .setLabel('キャンセル')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  );
+  return container;
+}
+
+function buildCopySelectionContainer(
+  userId: string,
+  candidates: readonly BotInstance[],
+): ContainerBuilder {
+  const container = new ContainerBuilder().setAccentColor(0x7c3aed);
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(buildCustomId('settings', 'copy_select', userId))
+    .setPlaceholder('コピー先のBotを選択（複数可）')
+    .setMinValues(1)
+    .setMaxValues(candidates.length)
+    .addOptions(
+      candidates.map((candidate) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(truncateLabel(`#${candidate.instanceId} ${candidate.name}`))
+          .setDescription(`Botインスタンス ${candidate.instanceId}`)
+          .setValue(String(candidate.instanceId)),
+      ),
+    );
+
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 📋 設定を他のBotへコピー'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        'コピー先を複数選択してください。選択後に上書き確認を行います。',
+      ),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(buildCustomId('settings', 'copy_cancel', userId))
+          .setLabel('キャンセル')
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    );
+  return container;
+}
+
+function buildCopyConfirmationContainer(
+  userId: string,
+  targetNames: readonly string[],
+  confirmationCustomId: string,
+): ContainerBuilder {
+  const container = new ContainerBuilder().setAccentColor(0xf59e0b);
+  const names = targetNames.map((name) => `・${name}`).join('\n');
+  container
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent('### ⚠️ 設定の上書き確認'))
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `以下のBotの自動接続設定を、現在のBotの設定で完全に上書きします。\n${names}`,
+      ),
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(confirmationCustomId)
+          .setLabel('上書きしてコピー')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(buildCustomId('settings', 'copy_cancel', userId))
+          .setLabel('キャンセル')
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    );
+  return container;
+}
+
+function truncateLabel(value: string): string {
+  return value.length <= 100 ? value : `${value.slice(0, 97)}...`;
 }
 
 function buildPermissionCategory(settings: GuildSettings, userId: string): ContainerBuilder {
@@ -445,6 +621,52 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
     return;
   }
 
+  if (action === 'pair_add' && interaction.isButton()) {
+    await showPairAddView(interaction, parsed.userId, guildId);
+    return;
+  }
+
+  if (action === 'pair_add_voice' && interaction.isChannelSelectMenu()) {
+    await handlePairAddVoice(interaction, parsed.userId, guildId);
+    return;
+  }
+
+  if (action.startsWith('pair_add_text:') && interaction.isChannelSelectMenu()) {
+    await handlePairAddText(interaction, parsed.userId, guildId, action);
+    return;
+  }
+
+  if (action === 'pair_add_cancel' && interaction.isButton()) {
+    await refreshInstanceView(interaction, guildId, parsed.userId);
+    return;
+  }
+
+  if (action === 'pair_remove' && interaction.isStringSelectMenu()) {
+    await handlePairRemove(interaction, parsed.userId, guildId, interaction.values[0]);
+    return;
+  }
+
+  if (action === 'copy_settings' && interaction.isButton()) {
+    await showCopySelectionView(interaction, parsed.userId, guildId);
+    return;
+  }
+
+  if (action === 'copy_select' && interaction.isStringSelectMenu()) {
+    await handleCopySelection(interaction, parsed.userId, guildId, interaction.values);
+    return;
+  }
+
+  if (action === 'copy_confirm' && interaction.isButton()) {
+    await handleCopyConfirmation(interaction, parsed.userId, guildId, interaction.customId);
+    return;
+  }
+
+  if (action === 'copy_cancel' && interaction.isButton()) {
+    clearPendingCopySelections(guildId, parsed.userId);
+    await refreshInstanceView(interaction, guildId, parsed.userId);
+    return;
+  }
+
   if (action === 'connection_voice_channel' && interaction.isChannelSelectMenu()) {
     const value = interaction.values[0] ?? null;
     await updateInstanceAndRefresh(interaction, guildId, parsed.userId, { voiceChannelId: value });
@@ -512,6 +734,312 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
       dictionaryPermission: interaction.values[0] as GuildSettings['dictionaryPermission'],
     }, 'permission');
     return;
+  }
+}
+
+type SettingsComponentInteraction =
+  | ButtonInteraction
+  | StringSelectMenuInteraction
+  | ChannelSelectMenuInteraction;
+
+async function showPairAddView(
+  interaction: ButtonInteraction,
+  userId: string,
+  guildId: string,
+): Promise<void> {
+  try {
+    const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    if (instanceSettings.channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS) {
+      await replySettingsError(
+        interaction,
+        new AppError(
+          'VALIDATION_ERROR',
+          `自動接続ペアは${LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS}件までです。`,
+        ),
+      );
+      return;
+    }
+
+    await interaction.update(
+      buildSettingsFlowMessage(userId, buildPairAddContainer(userId)),
+    );
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function handlePairAddVoice(
+  interaction: ChannelSelectMenuInteraction,
+  userId: string,
+  guildId: string,
+): Promise<void> {
+  const voiceChannelId = interaction.values[0];
+  const voiceChannel = interaction.guild?.channels.cache.get(voiceChannelId);
+  if (!voiceChannel?.isVoiceBased()) {
+    await replySettingsError(
+      interaction,
+      new AppError('VALIDATION_ERROR', '有効なVCを選択してください。'),
+    );
+    return;
+  }
+
+  try {
+    const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    if (instanceSettings.channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `自動接続ペアは${LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS}件までです。`,
+      );
+    }
+    if (instanceSettings.channelPairs.some((pair) => pair.voiceChannelId === voiceChannelId)) {
+      throw new AppError('VALIDATION_ERROR', '同じVCを複数のペアに登録できません。');
+    }
+
+    await interaction.update(
+      buildSettingsFlowMessage(userId, buildPairAddContainer(userId, voiceChannelId)),
+    );
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function handlePairAddText(
+  interaction: ChannelSelectMenuInteraction,
+  userId: string,
+  guildId: string,
+  action: string,
+): Promise<void> {
+  const voiceChannelId = action.slice('pair_add_text:'.length);
+  const textChannelId = interaction.values[0];
+  const voiceChannel = interaction.guild?.channels.cache.get(voiceChannelId);
+  const textChannel = interaction.guild?.channels.cache.get(textChannelId);
+  if (!voiceChannel?.isVoiceBased() || !textChannel?.isTextBased() || !voiceChannelId) {
+    await replySettingsError(
+      interaction,
+      new AppError('VALIDATION_ERROR', '有効なTCを選択してください。'),
+    );
+    return;
+  }
+
+  try {
+    const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    if (instanceSettings.channelPairs.some((pair) => pair.voiceChannelId === voiceChannelId)) {
+      throw new AppError('VALIDATION_ERROR', '同じVCを複数のペアに登録できません。');
+    }
+
+    const pair: AutoJoinChannelPair = { voiceChannelId, textChannelId };
+    await updateBotInstanceSettings(guildId, config.botInstanceId, {
+      channelPairs: [...instanceSettings.channelPairs, pair],
+    });
+    await refreshInstanceView(interaction, guildId, userId);
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function handlePairRemove(
+  interaction: StringSelectMenuInteraction,
+  userId: string,
+  guildId: string,
+  voiceChannelId: string | undefined,
+): Promise<void> {
+  if (!voiceChannelId) {
+    await replySettingsError(
+      interaction,
+      new AppError('VALIDATION_ERROR', '削除するペアを選択してください。'),
+    );
+    return;
+  }
+
+  try {
+    const settings = await getGuildSettings(guildId);
+    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const channelPairs = instanceSettings.channelPairs.filter(
+      (pair) => pair.voiceChannelId !== voiceChannelId,
+    );
+    if (channelPairs.length === instanceSettings.channelPairs.length) {
+      throw new AppError('VALIDATION_ERROR', '選択したペアはすでに削除されています。');
+    }
+
+    await updateBotInstanceSettings(guildId, config.botInstanceId, { channelPairs });
+    await refreshInstanceView(interaction, guildId, userId);
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function showCopySelectionView(
+  interaction: ButtonInteraction,
+  userId: string,
+  guildId: string,
+): Promise<void> {
+  try {
+    clearPendingCopySelections(guildId, userId);
+    const candidates = await getCopyableBotInstances(guildId, config.botInstanceId);
+    if (candidates.length === 0) {
+      await replySettingsError(
+        interaction,
+        new AppError('VALIDATION_ERROR', 'コピー可能なBotインスタンスがありません。'),
+      );
+      return;
+    }
+
+    await interaction.update({
+      components: [
+        buildSettingsNavigation('connection', userId),
+        buildCopySelectionContainer(userId, candidates),
+      ],
+    });
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function handleCopySelection(
+  interaction: StringSelectMenuInteraction,
+  userId: string,
+  guildId: string,
+  values: readonly string[],
+): Promise<void> {
+  const targetIds = values.map((value) => Number(value));
+  if (
+    targetIds.length === 0 ||
+    targetIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+    new Set(targetIds).size !== targetIds.length
+  ) {
+    await replySettingsError(
+      interaction,
+      new AppError('VALIDATION_ERROR', 'コピー先のBotを正しく選択してください。'),
+    );
+    return;
+  }
+
+  try {
+    const candidates = await getCopyableBotInstances(guildId, config.botInstanceId);
+    const candidateById = new Map(candidates.map((candidate) => [candidate.instanceId, candidate]));
+    const selectedCandidates = targetIds.map((targetId) => candidateById.get(targetId));
+    if (selectedCandidates.some((candidate) => !candidate)) {
+      throw new AppError('VALIDATION_ERROR', 'コピー先のBotが利用できません。選択し直してください。');
+    }
+
+    const resolvedCandidates = selectedCandidates.filter(
+      (candidate): candidate is BotInstance => candidate !== undefined,
+    );
+    clearPendingCopySelections(guildId, userId);
+    const confirmationCustomId = buildCustomId('settings', 'copy_confirm', userId);
+    pendingCopySelections.set(confirmationCustomId, {
+      guildId,
+      sourceInstanceId: config.botInstanceId,
+      targetIds,
+      targetNames: resolvedCandidates.map(
+        (candidate) => `#${candidate.instanceId} ${candidate.name}`,
+      ),
+      createdAt: Date.now(),
+    });
+
+    await interaction.update({
+      components: [
+        buildSettingsNavigation('connection', userId),
+        buildCopyConfirmationContainer(
+          userId,
+          resolvedCandidates.map((candidate) => `#${candidate.instanceId} ${candidate.name}`),
+          confirmationCustomId,
+        ),
+      ],
+    });
+  } catch (error) {
+    await replySettingsError(interaction, error);
+  }
+}
+
+async function handleCopyConfirmation(
+  interaction: ButtonInteraction,
+  userId: string,
+  guildId: string,
+  customId: string,
+): Promise<void> {
+  const pending = pendingCopySelections.get(customId);
+  pendingCopySelections.delete(customId);
+
+  if (
+    !pending ||
+    pending.guildId !== guildId ||
+    pending.sourceInstanceId !== config.botInstanceId ||
+    Date.now() - pending.createdAt > LIMITS.VIEW_EXPIRY_MINUTES * 60 * 1000
+  ) {
+    await replySettingsError(
+      interaction,
+      new AppError('VALIDATION_ERROR', 'コピー操作の期限が切れています。設定画面を開き直してください。'),
+    );
+    return;
+  }
+
+  await interaction.deferUpdate();
+  try {
+    await copyBotInstanceSettings(guildId, config.botInstanceId, pending.targetIds);
+    const components = await getInstanceViewComponents(guildId, userId);
+    await interaction.editReply({ components });
+    await interaction.followUp({
+      content: `自動接続設定を ${pending.targetNames.join('、')} にコピーしました。`,
+      ephemeral: true,
+    });
+  } catch (error) {
+    await interaction.followUp({
+      content: getSettingsErrorMessage(error),
+      ephemeral: true,
+    });
+  }
+}
+
+async function refreshInstanceView(
+  interaction: SettingsComponentInteraction,
+  guildId: string,
+  userId: string,
+): Promise<void> {
+  await interaction.update({ components: await getInstanceViewComponents(guildId, userId) });
+}
+
+async function getInstanceViewComponents(
+  guildId: string,
+  userId: string,
+): Promise<ContainerBuilder[]> {
+  const settings = await getGuildSettings(guildId);
+  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const botName = getClient().user?.username ?? 'SumireVox';
+  return buildSettingsMessage(
+    settings,
+    'connection',
+    userId,
+    instanceSettings,
+    botName,
+  ).components;
+}
+
+function getSettingsErrorMessage(error: unknown): string {
+  if (error instanceof AppError) return error.message;
+  return '設定の更新に失敗しました。時間をおいて再試行してください。';
+}
+
+async function replySettingsError(
+  interaction: SettingsComponentInteraction,
+  error: unknown,
+): Promise<void> {
+  const payload = { content: getSettingsErrorMessage(error), ephemeral: true };
+  if (interaction.replied || interaction.deferred) {
+    await interaction.followUp(payload).catch(() => {});
+  } else {
+    await interaction.reply(payload).catch(() => {});
+  }
+}
+
+function clearPendingCopySelections(guildId: string, userId: string): void {
+  for (const [customId, pending] of pendingCopySelections) {
+    if (pending.guildId === guildId && customId.includes(`:${userId}:`)) {
+      pendingCopySelections.delete(customId);
+    }
   }
 }
 

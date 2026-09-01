@@ -1,9 +1,10 @@
 import {
   GuildSettings,
   GUILD_SETTINGS_DEFAULTS,
-  BotInstanceSettings,
   GuildBotInstanceSettingsMap,
   DEFAULT_BOT_INSTANCE_SETTINGS,
+  ResolvedBotInstanceSettings,
+  normalizeBotInstanceSettings,
 } from '@sumirevox/shared';
 import { GuildSettings as PrismaGuildSettings } from '@prisma/client';
 import { getCachedGuildSettings, setCachedGuildSettings } from '../infrastructure/settings-cache.js';
@@ -63,7 +64,10 @@ export function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
 /**
  * サーバー設定から特定の Bot インスタンスの設定を取得する
  */
-export function getInstanceSettings(guildSettings: GuildSettings, instanceId: number): BotInstanceSettings {
+export function getInstanceSettings(
+  guildSettings: GuildSettings,
+  instanceId: number,
+): ResolvedBotInstanceSettings {
   const map = (guildSettings.botInstanceSettings ?? {}) as GuildBotInstanceSettingsMap;
-  return map[String(instanceId)] ?? { ...DEFAULT_BOT_INSTANCE_SETTINGS };
+  return normalizeBotInstanceSettings(map[String(instanceId)] ?? { ...DEFAULT_BOT_INSTANCE_SETTINGS });
 }

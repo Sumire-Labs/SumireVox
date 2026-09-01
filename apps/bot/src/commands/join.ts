@@ -73,7 +73,24 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   try {
     await interaction.deferReply();
 
-    await createVcSession(guildId, voiceChannel.id, textChannelId, guild.voiceAdapterCreator);
+    const session = await createVcSession(
+      guildId,
+      voiceChannel.id,
+      textChannelId,
+      guild.voiceAdapterCreator,
+      'manual',
+    );
+
+    // 自動接続と同時に実行された場合は、先に成立したセッションを手動扱いにする。
+    if (session.voiceChannelId !== voiceChannel.id) {
+      await interaction.editReply({
+        content: `現在 <#${session.voiceChannelId}> で使用中です。切り替えるには \`/leave\` で退出してから再度 \`/join\` してください。`,
+      });
+      return;
+    }
+    if (session.connectionMode === 'auto') {
+      await updateTextChannel(guildId, textChannelId, 'manual');
+    }
 
     await interaction.editReply({
       content: `<#${voiceChannel.id}> に接続しました。<#${textChannelId}> のメッセージを読み上げます。`,
@@ -81,7 +98,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
     // 挨拶の読み上げ
     const settings = await getGuildSettings(guildId);
-    if (settings.greetingOnJoin) {
+    if (session.connectionMode !== 'auto' && settings.greetingOnJoin) {
       const speakerId = settings.defaultSpeakerId ?? config.defaultSpeakerId;
       const audio = await getPredefinedAudio('接続しました', speakerId, 1.0, 0.0);
       if (audio) {

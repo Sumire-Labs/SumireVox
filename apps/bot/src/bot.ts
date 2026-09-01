@@ -25,6 +25,7 @@ import { startHealthChecker, stopHealthChecker } from './services/voicevox-healt
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
 import { preloadPredefinedAudio } from './services/predefined-audio-cache.js';
 import { clearAllDisconnectTimers } from './services/auto-disconnect-timer.js';
+import { scheduleDisconnectTimersForRestoredSessions } from './services/auto-connection-service.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -117,6 +118,7 @@ async function bootstrap(): Promise<void> {
 
       // VC セッション復旧
       await restoreVcSessions();
+      await scheduleDisconnectTimersForRestoredSessions();
 
       memoryInterval = setInterval(() => {
         const mem = process.memoryUsage();

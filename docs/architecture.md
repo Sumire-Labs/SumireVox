@@ -37,7 +37,11 @@ Redis 停止時はサービス停止を許容。フォールバックなし。`r
 
 ## VC セッション管理
 
-- メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, ... })
+- 自動接続セッションは接続中 VC が無人になった場合、退出猶予タイマー満了後に対象 VC を再走査し、最も人間ユーザーが多い VC へ設定順で切り替える
+- 手動 `/join` セッションは自動切り替えせず、従来どおり退出猶予後に退出する
+- `GuildSettings.botInstanceSettings` は Bot インスタンスごとに最大25件の VC/TC ペアを保持し、旧 `voiceChannelId` / `textChannelId` 形式は1ペアへフォールバックする。設定コピーは自動接続設定だけを対象にする
+
+- メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, connectionMode, ... })
 - Redis にも接続情報を記録
 - シャード再起動時に Redis から前回の接続情報を読み取り、自動で VC 再参加
 
