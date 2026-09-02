@@ -9,8 +9,7 @@ import { Client, GatewayIntentBits, Events, Guild } from 'discord.js';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
 import { getPrisma, disconnectPrisma } from './infrastructure/database.js';
-import { disconnectRedis, getRedisClient } from './infrastructure/redis.js';
-import { REDIS_KEYS } from '@sumirevox/shared';
+import { disconnectRedis } from './infrastructure/redis.js';
 import { setupPubSub, cleanupPubSub } from './infrastructure/pubsub.js';
 import { createBotPubSubHandlers } from './services/pubsub-handlers.js';
 import { setClient } from './infrastructure/discord-client.js';
@@ -19,7 +18,12 @@ import { handleMessageCreate } from './events/message-create.js';
 import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
-import { registerBotInstance, deactivateBotInstance } from './services/bot-instance-registry.js';
+import {
+  addGuildsToBotInstanceRegistry,
+  deactivateBotInstance,
+  registerBotInstance,
+  removeGuildFromBotInstanceRegistry,
+} from './services/bot-instance-registry.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
 import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
@@ -66,7 +70,7 @@ async function bootstrap(): Promise<void> {
   // ギルド参加・退出時に Redis Set を更新
   client.on(Events.GuildCreate, async (guild: Guild) => {
     try {
-      await getRedisClient().sadd(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guild.id);
+      await addGuildsToBotInstanceRegistry([guild.id]);
     } catch (err) {
       childLogger.error({ err, guildId: guild.id }, 'Failed to update BOT_GUILDS on GuildCreate');
     }
@@ -74,7 +78,7 @@ async function bootstrap(): Promise<void> {
 
   client.on(Events.GuildDelete, async (guild: Guild) => {
     try {
-      await getRedisClient().srem(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guild.id);
+      await removeGuildFromBotInstanceRegistry(guild.id);
     } catch (err) {
       childLogger.error({ err, guildId: guild.id }, 'Failed to update BOT_GUILDS on GuildDelete');
     }
@@ -92,13 +96,8 @@ async function bootstrap(): Promise<void> {
 
       // 参加サーバー一覧を Redis Set に保存
       const guildIds = readyClient.guilds.cache.map((g) => g.id);
-      const redis = getRedisClient();
-      const botGuildsKey = REDIS_KEYS.BOT_GUILDS(config.botInstanceId);
-      await redis.del(botGuildsKey);
-      if (guildIds.length > 0) {
-        await redis.sadd(botGuildsKey, ...guildIds);
-      }
-      childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set initialized');
+      await addGuildsToBotInstanceRegistry(guildIds);
+      childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set updated');
 
       // VOICEVOX 話者一覧キャッシュ
       await loadSpeakers();

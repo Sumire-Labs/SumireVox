@@ -44,6 +44,26 @@ export async function deactivateBotInstance(): Promise<void> {
 }
 
 /**
+ * このシャードが把握しているギルドを、Bot インスタンス全体の集合へ追加する。
+ * シャードは同一の集合を共有するため、ここで既存の集合を削除してはならない。
+ */
+export async function addGuildsToBotInstanceRegistry(
+  guildIds: readonly string[],
+): Promise<void> {
+  if (guildIds.length === 0) return;
+
+  await getRedisClient().sadd(
+    REDIS_KEYS.BOT_GUILDS(config.botInstanceId),
+    ...guildIds,
+  );
+}
+
+/** このシャードで検知したギルド退出を、Bot インスタンス全体の集合へ反映する。 */
+export async function removeGuildFromBotInstanceRegistry(guildId: string): Promise<void> {
+  await getRedisClient().srem(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guildId);
+}
+
+/**
  * 設定コピーの対象として扱える Bot インスタンスを取得する。
  * Boost/Premium による接続可否は設定コピーとは別のため、ここでは判定しない。
  */

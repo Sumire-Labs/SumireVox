@@ -26,7 +26,11 @@ vi.mock('../../infrastructure/redis.js', () => ({
 
 import { getPrisma } from '../../infrastructure/database.js';
 import { getRedisClient } from '../../infrastructure/redis.js';
-import { getCopyableBotInstances } from '../bot-instance-registry.js';
+import {
+  addGuildsToBotInstanceRegistry,
+  getCopyableBotInstances,
+  removeGuildFromBotInstanceRegistry,
+} from '../bot-instance-registry.js';
 
 const mockGetPrisma = vi.mocked(getPrisma);
 const mockGetRedisClient = vi.mocked(getRedisClient);
@@ -79,5 +83,34 @@ describe('getCopyableBotInstances', () => {
     const candidates = await getCopyableBotInstances('guild-1', 1);
 
     expect(candidates.map((candidate) => candidate.instanceId)).toEqual([2]);
+  });
+});
+
+describe('Bot instance guild registry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('シャードごとのギルドを既存集合を消さずに追加する', async () => {
+    const sadd = vi.fn().mockResolvedValue(2);
+    const srem = vi.fn().mockResolvedValue(1);
+    mockGetRedisClient.mockReturnValue({ sadd, srem } as unknown as ReturnType<typeof getRedisClient>);
+
+    await addGuildsToBotInstanceRegistry(['guild-1', 'guild-2']);
+    await addGuildsToBotInstanceRegistry(['guild-3']);
+    await removeGuildFromBotInstanceRegistry('guild-2');
+
+    expect(sadd).toHaveBeenNthCalledWith(1, 'bot:1:guilds', 'guild-1', 'guild-2');
+    expect(sadd).toHaveBeenNthCalledWith(2, 'bot:1:guilds', 'guild-3');
+    expect(srem).toHaveBeenCalledWith('bot:1:guilds', 'guild-2');
+  });
+
+  it('空のギルド一覧では Redis を更新しない', async () => {
+    const sadd = vi.fn();
+    mockGetRedisClient.mockReturnValue({ sadd } as unknown as ReturnType<typeof getRedisClient>);
+
+    await addGuildsToBotInstanceRegistry([]);
+
+    expect(sadd).not.toHaveBeenCalled();
   });
 });
