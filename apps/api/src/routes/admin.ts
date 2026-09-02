@@ -48,6 +48,7 @@ import {
 } from '../services/announcement-service.js';
 
 const adminDictRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'admin-dict' });
+const adminBotSettingsRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'admin-bot-settings' });
 
 const dictionaryRequestsQuerySchema = paginationQuerySchema.extend({
   status: z.string().optional(),
@@ -346,7 +347,7 @@ adminRouter.get('/servers/:guildId/bots', async (c) => {
  * PUT /api/admin/servers/:guildId/bots/:instanceId/settings
  * 特定インスタンスの設定更新（管理者用）
  */
-adminRouter.put('/servers/:guildId/bots/:instanceId/settings', async (c) => {
+adminRouter.put('/servers/:guildId/bots/:instanceId/settings', adminBotSettingsRateLimit, async (c) => {
   const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
   const body = await validate.body(c, guildBotInstanceSettingsBodySchema);
 

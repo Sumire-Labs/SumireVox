@@ -39,6 +39,7 @@
 | /dashboard/boost | 全ログインユーザー | ブースト購入・管理 |
 | /dashboard/servers | サーバー管理者 | 管理サーバー一覧 |
 | /dashboard/servers/:guildId | サーバー管理者 | サーバー設定 |
+| /dashboard/servers/:guildId/bots | サーバー管理者 | Botごとの自動接続、複数VC/読み上げ対象チャンネルペア設定、設定コピー |
 | /dashboard/servers/:guildId/dictionary | サーバー管理者 | サーバー辞書管理 |
 
 ## 管理者ダッシュボード (admin.sumirevox.com)
@@ -66,3 +67,11 @@ Bot 管理者 (BOT_ADMIN_USER_IDS) のみ。
 - HeroUI のテーマ設定 (カラーパレット等) と Tailwind 基本設定のみ共有
 - 共通 UI パッケージは設けない (将来必要なら packages/ui/ を切り出し)
 - 認証: Discord OAuth2 → Cookie セッション
+
+## Bot管理画面
+
+`/dashboard/servers/:guildId/bots` では、各Botカードから自動接続のON/OFFと、順序付きのVC・読み上げ対象チャンネルのペアを管理する。ペアは追加ModalでVCとチャンネルを両方選択し、カード上で編集・削除できる。登録済みVCは追加候補から除外し、ペアが0件の場合は状態を表示する。自動接続がONのまま0件の場合は警告を表示する。
+
+チャンネル候補はAPIの `voiceChannels` と `readableChannels` を使用し、カテゴリ名とチャンネル種別を表示する。保存中は対象カードの操作を無効化し、API成功後にだけ画面状態を更新する。Boostによる利用不可表示やBot未参加時の招待導線は既存の表示を維持する。
+
+利用可能でギルド参加中のBotからは「設定をコピー」を開ける。コピー先はアクティブかつギルド参加中のBotを複数選択でき、Boost枠外のBotも設定保存対象として表示する。選択画面と上書き確認画面を分け、確認前にはAPIを呼ばない。成功時はBot一覧を再取得してカードを同期し、失敗時はローカル状態を変更せずModalを閉じない。

@@ -25,12 +25,14 @@ import {
   generateBotInviteUrl,
   getGuildsWithBotStatus,
   getGuildBotList,
+  copyBotInstanceSettings,
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { rateLimit } from '../middleware/rate-limit.js';
 
 const dictAddRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'dict-add' });
+const botSettingsRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'bot-settings' });
 import { validate } from '../middleware/validate.js';
 import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
 import { getGuildRolesSorted } from '../services/guild-role-service.js';
@@ -40,6 +42,7 @@ import {
   guildSettingsUpdateSchema,
   instanceParamsSchema,
   guildBotInstanceSettingsBodySchema,
+  botInstanceSettingsCopyBodySchema,
 } from '../schemas/common.js';
 
 const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
@@ -253,7 +256,7 @@ guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
  * PUT /api/guilds/:guildId/bots/:instanceId/settings
  * 特定インスタンスの設定更新
  */
-guildsRouter.put('/:guildId/bots/:instanceId/settings', requireGuildAdmin, async (c) => {
+guildsRouter.put('/:guildId/bots/:instanceId/settings', requireGuildAdmin, botSettingsRateLimit, async (c) => {
   const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
   const body = await validate.body(c, guildBotInstanceSettingsBodySchema);
 
@@ -262,6 +265,25 @@ guildsRouter.put('/:guildId/bots/:instanceId/settings', requireGuildAdmin, async
 
   return c.json({ success: true, data: null });
 });
+
+/**
+ * POST /api/guilds/:guildId/bots/:instanceId/settings/copy
+ * 自動接続設定を複数の Bot インスタンスへコピー
+ */
+guildsRouter.post(
+  '/:guildId/bots/:instanceId/settings/copy',
+  requireGuildAdmin,
+  botSettingsRateLimit,
+  async (c) => {
+    const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
+    const { targetInstanceIds } = await validate.body(c, botInstanceSettingsCopyBodySchema);
+
+    await copyBotInstanceSettings(guildId, instanceId, targetInstanceIds);
+    await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
+
+    return c.json({ success: true, data: null });
+  },
+);
 
 /**
  * GET /api/guilds/:guildId/bots/:instanceId/invite

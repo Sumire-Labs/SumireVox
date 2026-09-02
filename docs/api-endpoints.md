@@ -88,6 +88,7 @@
 | GET | /api/guilds/:guildId/roles | ロール一覧 |
 | GET | /api/guilds/:guildId/bots | Bot インスタンス一覧 |
 | PUT | /api/guilds/:guildId/bots/:instanceId/settings | Bot インスタンス設定変更 |
+| POST | /api/guilds/:guildId/bots/:instanceId/settings/copy | Bot インスタンス設定を複数Botへコピー |
 | GET | /api/guilds/:guildId/bots/:instanceId/invite | Bot 招待 URL 取得 |
 | GET | /api/guilds/:guildId/dictionary | サーバー辞書一覧 |
 | POST | /api/guilds/:guildId/dictionary | サーバー辞書追加 |
@@ -105,6 +106,34 @@
 | readableChannels | `type: text | announcement | voice | stage` の全チャンネル一覧（Bot の読み上げ対象） |
 
 ボイスチャンネルまたはステージチャンネルのテキストチャットを選択する場合は、そのチャンネル自身の `channelId` を指定する。Bot インスタンス設定の `textChannelId` はこのチャンネル ID を使用する。
+
+### Bot インスタンス自動接続設定
+
+`PUT /api/guilds/:guildId/bots/:instanceId/settings` は、旧形式の `voiceChannelId` / `textChannelId` を引き続き受け付ける。複数の接続先を指定する場合は、次の `channelPairs` を送信する。
+
+```json
+{
+  "autoJoin": true,
+  "channelPairs": [
+    { "voiceChannelId": "123456789012345678", "textChannelId": "223456789012345678" },
+    { "voiceChannelId": "323456789012345678", "textChannelId": "423456789012345678" }
+  ]
+}
+```
+
+`channelPairs` は送信された配列全体で置き換えられ、空配列で全ペアを解除できる。順序はそのまま保存され、最大25件、同じVCの重複は不可。`channelPairs` を指定しない部分更新（`{ "autoJoin": false }` など）は、既存のペアを保持する。新形式で保存すると、互換性のため旧フィールドには先頭ペアが保存される。成功時の `data` は `null`。
+
+`GET /api/guilds/:guildId/bots` の利用可能Botの `settings` は、常に `autoJoin`、旧フィールド、`channelPairs` を含む正規化済み形式で返る。
+
+### POST /api/guilds/:guildId/bots/:instanceId/settings/copy
+
+コピー元の自動接続設定を、指定した複数のBotへ完全上書きする。
+
+```json
+{ "targetInstanceIds": [2, 3] }
+```
+
+コピー元自身、空配列、重複ID、存在しないBot、非アクティブなBot、または対象ギルドに参加していないBotは拒否される。対象はアクティブかつギルド参加中であれば、Boost枠外（`isAvailable: false`）でも設定保存の対象になる。コピーは1回のJSON upsertで行われ、ペアの順序を保持したディープコピーとして保存される。成功時の `data` は `null`。このエンドポイントも認証 + `ManageGuild` と既存の設定変更レート制限が必要。
 
 ## 認証済みユーザー向け Bot インスタンス情報
 

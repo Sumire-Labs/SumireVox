@@ -196,6 +196,9 @@ importers:
       '@internationalized/date':
         specifier: ^3.12.0
         version: 3.12.0
+      '@sumirevox/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       framer-motion:
         specifier: ^12.38.0
         version: 12.38.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)

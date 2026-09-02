@@ -1,14 +1,22 @@
 import {
+  DEFAULT_BOT_INSTANCE_SETTINGS,
+  LIMITS,
+  REDIS_KEYS,
+  cloneBotInstanceSettings,
+  normalizeBotInstanceSettings,
+} from '@sumirevox/shared';
+import type {
+  AutoJoinChannelPair,
   BotInstance,
   BotInstanceSettings,
   GuildBotInstanceSettingsMap,
-  DEFAULT_BOT_INSTANCE_SETTINGS,
-  LIMITS,
+  ResolvedBotInstanceSettings,
 } from '@sumirevox/shared';
 import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
-import { REDIS_KEYS } from '@sumirevox/shared';
+import { invalidateGuildSettingsCache } from '../infrastructure/settings-cache.js';
 import { AppError } from '../infrastructure/app-error.js';
+import { logger } from '../infrastructure/logger.js';
 
 const ACTIVE_INSTANCE_COUNT_CACHE_KEY = 'bot:instances:active:count';
 const ACTIVE_INSTANCE_COUNT_CACHE_TTL = 300;
@@ -176,7 +184,7 @@ export interface GuildBotListItem {
   isActive: boolean;
   isInGuild: boolean;
   isAvailable: boolean;
-  settings: BotInstanceSettings | null;
+  settings: ResolvedBotInstanceSettings | null;
 }
 
 export interface GuildBotListResult {
@@ -198,9 +206,9 @@ export async function getGuildBotList(guildId: string): Promise<GuildBotListResu
       const isInGuild = await isBotInGuild(instance.instanceId, guildId);
       const isAvailable = instance.instanceId <= availableCount;
       const settings = isAvailable
-        ? (instanceSettingsMap[String(instance.instanceId)] ?? {
-            ...DEFAULT_BOT_INSTANCE_SETTINGS,
-          })
+        ? normalizeBotInstanceSettings(
+            instanceSettingsMap[String(instance.instanceId)] ?? DEFAULT_BOT_INSTANCE_SETTINGS,
+          )
         : null;
 
       return {
@@ -223,33 +231,230 @@ export async function getGuildBotList(guildId: string): Promise<GuildBotListResu
 }
 
 /**
+ * 設定コピーの対象として扱える Bot インスタンスを取得する。
+ * Boost/Premium による接続可否は設定保存とは別のため、ここでは判定しない。
+ */
+export async function getCopyableBotInstances(
+  guildId: string,
+  sourceInstanceId: number,
+): Promise<BotInstance[]> {
+  const candidates = (await getActiveBotInstances()).filter(
+    (instance) => instance.instanceId !== sourceInstanceId,
+  );
+
+  const copyableInstances = await Promise.all(
+    candidates.map(async (instance) => {
+      return (await isBotInGuild(instance.instanceId, guildId)) ? instance : null;
+    }),
+  );
+
+  return copyableInstances.filter(
+    (instance): instance is BotInstance => instance !== null,
+  );
+}
+
+/**
  * サーバーの特定インスタンスの設定を更新
  */
 export async function updateGuildBotInstanceSettings(
   guildId: string,
   instanceId: number,
   settings: Partial<BotInstanceSettings>,
-): Promise<void> {
-  const prisma = getPrisma();
-
+): Promise<ResolvedBotInstanceSettings> {
   const current = await getGuildBotInstanceSettings(guildId);
+  const map = getSettingsMap(current);
   const instanceKey = String(instanceId);
-  const existing: BotInstanceSettings = current[instanceKey] ?? { ...DEFAULT_BOT_INSTANCE_SETTINGS };
-
-  const updated: GuildBotInstanceSettingsMap = {
-    ...current,
-    [instanceKey]: {
-      autoJoin: settings.autoJoin ?? existing.autoJoin,
-      textChannelId: settings.textChannelId !== undefined ? settings.textChannelId : existing.textChannelId,
-      voiceChannelId: settings.voiceChannelId !== undefined ? settings.voiceChannelId : existing.voiceChannelId,
-    },
+  const rawExisting = map[instanceKey] ?? DEFAULT_BOT_INSTANCE_SETTINGS;
+  const existing = normalizeBotInstanceSettings(rawExisting);
+  const updated = mergeBotInstanceSettings(rawExisting, existing, settings);
+  const updatedMap: GuildBotInstanceSettingsMap = {
+    ...map,
+    [instanceKey]: toPersistedBotInstanceSettings(updated),
   };
 
+  const prisma = getPrisma();
   await prisma.guildSettings.upsert({
     where: { guildId },
-    create: { guildId, botInstanceSettings: updated as object },
-    update: { botInstanceSettings: updated as object },
+    create: { guildId, botInstanceSettings: updatedMap as object },
+    update: { botInstanceSettings: updatedMap as object },
   });
+
+  await invalidateGuildSettingsCache(guildId);
+  logger.info({ guildId, instanceId, settings }, 'Bot instance settings updated');
+  return updated;
+}
+
+/**
+ * 指定した複数インスタンスへ、自動接続設定だけを完全コピーする。
+ * コピー先の既存設定はマージせず、1回の upsert で上書きする。
+ */
+export async function copyBotInstanceSettings(
+  guildId: string,
+  sourceInstanceId: number,
+  targetInstanceIds: readonly number[],
+): Promise<BotInstanceSettings> {
+  if (targetInstanceIds.length === 0) {
+    throw new AppError('VALIDATION_ERROR', 'コピー先のBotを1つ以上選択してください。', 400);
+  }
+
+  if (new Set(targetInstanceIds).size !== targetInstanceIds.length) {
+    throw new AppError('VALIDATION_ERROR', 'コピー先のBotを重複して指定できません。', 400);
+  }
+
+  if (targetInstanceIds.includes(sourceInstanceId)) {
+    throw new AppError('VALIDATION_ERROR', 'コピー元自身には設定をコピーできません。', 400);
+  }
+
+  const candidates = await getCopyableBotInstances(guildId, sourceInstanceId);
+  const candidateIds = new Set(candidates.map((instance) => instance.instanceId));
+  if (targetInstanceIds.some((instanceId) => !candidateIds.has(instanceId))) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      'コピー先のBotが利用できません。設定画面を開き直してください。',
+      400,
+    );
+  }
+
+  const current = await getGuildBotInstanceSettings(guildId);
+  const map = getSettingsMap(current);
+  const source = cloneBotInstanceSettings(
+    getInstanceSettingsForMap(map, sourceInstanceId),
+  );
+  const persistedSource = toPersistedBotInstanceSettings(source);
+  const updatedMap: GuildBotInstanceSettingsMap = { ...map };
+
+  for (const targetInstanceId of targetInstanceIds) {
+    updatedMap[String(targetInstanceId)] = toPersistedBotInstanceSettings(
+      cloneBotInstanceSettings(source),
+    );
+  }
+
+  const prisma = getPrisma();
+  await prisma.guildSettings.upsert({
+    where: { guildId },
+    create: { guildId, botInstanceSettings: updatedMap as object },
+    update: { botInstanceSettings: updatedMap as object },
+  });
+
+  await invalidateGuildSettingsCache(guildId);
+  logger.info(
+    { guildId, sourceInstanceId, targetInstanceIds },
+    'Bot instance auto-join settings copied',
+  );
+  return persistedSource;
+}
+
+function getSettingsMap(value: GuildBotInstanceSettingsMap | undefined): GuildBotInstanceSettingsMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value;
+}
+
+function getInstanceSettingsForMap(
+  map: GuildBotInstanceSettingsMap,
+  instanceId: number,
+): ResolvedBotInstanceSettings {
+  return normalizeBotInstanceSettings(map[String(instanceId)] ?? DEFAULT_BOT_INSTANCE_SETTINGS);
+}
+
+function mergeBotInstanceSettings(
+  rawExisting: BotInstanceSettings,
+  existing: ResolvedBotInstanceSettings,
+  updates: Partial<BotInstanceSettings>,
+): ResolvedBotInstanceSettings {
+  const autoJoin = updates.autoJoin ?? existing.autoJoin;
+
+  if (updates.channelPairs !== undefined) {
+    const channelPairs = validateChannelPairs(updates.channelPairs);
+    return {
+      autoJoin,
+      voiceChannelId: channelPairs[0]?.voiceChannelId ?? null,
+      textChannelId: channelPairs[0]?.textChannelId ?? null,
+      channelPairs,
+    };
+  }
+
+  const hasLegacyChannelUpdate =
+    updates.voiceChannelId !== undefined || updates.textChannelId !== undefined;
+
+  if (Array.isArray(rawExisting.channelPairs) && !hasLegacyChannelUpdate) {
+    return { ...existing, autoJoin };
+  }
+
+  const voiceChannelId = updates.voiceChannelId !== undefined
+    ? updates.voiceChannelId
+    : existing.voiceChannelId;
+  const textChannelId = updates.textChannelId !== undefined
+    ? updates.textChannelId
+    : existing.textChannelId;
+  const channelPairs = voiceChannelId && textChannelId
+    ? Array.isArray(rawExisting.channelPairs)
+      ? existing.channelPairs.length > 0
+        ? existing.channelPairs.map((pair, index) => (
+            index === 0
+              ? { voiceChannelId, textChannelId }
+              : { ...pair }
+          ))
+        : [{ voiceChannelId, textChannelId }]
+      : [{ voiceChannelId, textChannelId }]
+    : [];
+
+  return {
+    autoJoin,
+    voiceChannelId,
+    textChannelId,
+    channelPairs,
+  };
+}
+
+function validateChannelPairs(value: unknown): AutoJoinChannelPair[] {
+  if (!Array.isArray(value)) {
+    throw new AppError('VALIDATION_ERROR', '自動接続ペアの形式が不正です。', 400);
+  }
+  if (value.length > LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      `自動接続ペアは${LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS}件以内で設定してください。`,
+      400,
+    );
+  }
+
+  const seenVoiceChannelIds = new Set<string>();
+  return value.map((pair: unknown, index) => {
+    if (!isValidChannelPair(pair)) {
+      throw new AppError('VALIDATION_ERROR', `自動接続ペア${index + 1}のVC/TCを確認してください。`, 400);
+    }
+    if (seenVoiceChannelIds.has(pair.voiceChannelId)) {
+      throw new AppError('VALIDATION_ERROR', '同じVCを複数の自動接続ペアに登録できません。', 400);
+    }
+    seenVoiceChannelIds.add(pair.voiceChannelId);
+    return {
+      voiceChannelId: pair.voiceChannelId,
+      textChannelId: pair.textChannelId,
+    };
+  });
+}
+
+function isValidChannelPair(value: unknown): value is AutoJoinChannelPair {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.voiceChannelId === 'string' &&
+    record.voiceChannelId.trim().length > 0 &&
+    typeof record.textChannelId === 'string' &&
+    record.textChannelId.trim().length > 0
+  );
+}
+
+function toPersistedBotInstanceSettings(
+  settings: ResolvedBotInstanceSettings,
+): BotInstanceSettings {
+  const firstPair = settings.channelPairs[0];
+  return {
+    autoJoin: settings.autoJoin,
+    voiceChannelId: firstPair?.voiceChannelId ?? settings.voiceChannelId,
+    textChannelId: firstPair?.textChannelId ?? settings.textChannelId,
+    channelPairs: settings.channelPairs.map((pair) => ({ ...pair })),
+  };
 }
 
 /**

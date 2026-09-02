@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroui/react": "^3.0.1",
     "@heroui/styles": "^3.0.1",
+    "@sumirevox/shared": "workspace:*",
     "@internationalized/date": "^3.12.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.577.0",

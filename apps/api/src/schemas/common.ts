@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITS } from '@sumirevox/shared';
 
 export const discordSnowflakeSchema = z.string().regex(/^\d+$/, '数字文字列の Discord Snowflake を指定してください。');
 
@@ -43,8 +44,61 @@ export const instanceParamsSchema = z.object({
 export const guildBotInstanceSettingsBodySchema = z
   .object({
     autoJoin: z.boolean().optional(),
+    channelPairs: z
+      .array(
+        z
+          .object({
+            voiceChannelId: discordSnowflakeSchema,
+            textChannelId: discordSnowflakeSchema,
+          })
+          .strict(),
+      )
+      .max(
+        LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS,
+        `自動接続ペアは${LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS}件以内で設定してください。`,
+      )
+      .superRefine((pairs, context) => {
+        const voiceChannelIds = new Set<string>();
+        pairs.forEach((pair, index) => {
+          if (voiceChannelIds.has(pair.voiceChannelId)) {
+            context.addIssue({
+              code: 'custom',
+              path: [index, 'voiceChannelId'],
+              message: '同じVCを複数の自動接続ペアに登録できません。',
+            });
+          }
+          voiceChannelIds.add(pair.voiceChannelId);
+        });
+      })
+      .optional(),
     textChannelId: z.string().nullable().optional(),
     voiceChannelId: z.string().nullable().optional(),
+  })
+  .strict();
+
+export const botInstanceSettingsCopyBodySchema = z
+  .object({
+    targetInstanceIds: z
+      .array(
+        z
+          .number()
+          .int('整数で指定してください。')
+          .positive('1以上で指定してください。'),
+      )
+      .min(1, 'コピー先のBotを1つ以上指定してください。')
+      .superRefine((instanceIds, context) => {
+        const seen = new Set<number>();
+        instanceIds.forEach((instanceId, index) => {
+          if (seen.has(instanceId)) {
+            context.addIssue({
+              code: 'custom',
+              path: [index],
+              message: 'コピー先のBotを重複して指定できません。',
+            });
+          }
+          seen.add(instanceId);
+        });
+      }),
   })
   .strict();
 

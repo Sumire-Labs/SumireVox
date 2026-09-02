@@ -15,8 +15,18 @@ vi.mock('../../infrastructure/database.js', () => ({
   getPrisma: vi.fn(() => prismaMock),
 }));
 
+vi.mock('../../infrastructure/config.js', () => ({
+  config: { settingsCacheTtlSeconds: 300 },
+}));
+
 vi.mock('../../infrastructure/redis.js', () => ({
   getRedisClient: vi.fn(() => redisMock),
+}));
+
+vi.mock('../../infrastructure/logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+  },
 }));
 
 import { setBotInstanceActive } from '../bot-instance-service.js';
