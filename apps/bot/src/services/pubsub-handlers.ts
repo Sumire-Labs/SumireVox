@@ -3,6 +3,8 @@ import { invalidateGuildSettingsCache, invalidateUserVoiceSettingCache } from '.
 import { invalidatePremiumCache } from './premium-service.js';
 import { invalidateGuildTrie, invalidateAllTries } from './text-pipeline/index.js';
 import { logger } from '../infrastructure/logger.js';
+import { config } from '../infrastructure/config.js';
+import { handleDelegatedBotCommand } from './bot-command-delegation-service.js';
 
 /**
  * Bot 用の Pub/Sub ハンドラを返す
@@ -58,5 +60,6 @@ export function createBotPubSubHandlers(): Record<string, (message: string) => v
       invalidateAllTries();
       logger.debug('All dictionary tries invalidated via Pub/Sub');
     },
+    [REDIS_CHANNELS.BOT_INSTANCE_COMMAND(config.botInstanceId)]: handleDelegatedBotCommand,
   };
 }

@@ -6,6 +6,8 @@ import {
   GuildBotInstanceSettingsMap,
   DEFAULT_BOT_INSTANCE_SETTINGS,
   ResolvedBotInstanceSettings,
+  AutoJoinSettings,
+  ResolvedAutoJoinSettings,
   LIMITS,
   cloneBotInstanceSettings,
   normalizeBotInstanceSettings,
@@ -93,9 +95,11 @@ export async function updateBotInstanceSettings(
     create: {
       guildId,
       botInstanceSettings: jsonMap,
+      ...(instanceId === 1 ? { autoJoinSettings: toSharedAutoJoinSettings(updated) as unknown as object } : {}),
     },
     update: {
       botInstanceSettings: jsonMap,
+      ...(instanceId === 1 ? { autoJoinSettings: toSharedAutoJoinSettings(updated) as unknown as object } : {}),
     },
   });
 
@@ -103,6 +107,35 @@ export async function updateBotInstanceSettings(
   await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
 
   logger.info({ guildId, instanceId, updates }, 'Bot instance settings updated');
+  return updated;
+}
+
+function toSharedAutoJoinSettings(settings: ResolvedBotInstanceSettings): ResolvedAutoJoinSettings {
+  return { autoJoin: settings.autoJoin, channelPairs: settings.channelPairs.map((pair) => ({ ...pair })) };
+}
+
+/** Bot 1の設定UIが使う、全Bot共通の自動接続設定更新。 */
+export async function updateAutoJoinSettings(
+  guildId: string,
+  updates: Partial<AutoJoinSettings>,
+): Promise<ResolvedAutoJoinSettings> {
+  const current = await getGuildSettings(guildId);
+  const existing = normalizeBotInstanceSettings(current.autoJoinSettings ?? current.botInstanceSettings?.['1']);
+  const channelPairs = updates.channelPairs === undefined
+    ? existing.channelPairs
+    : validateChannelPairs(updates.channelPairs);
+  const updated: ResolvedAutoJoinSettings = {
+    autoJoin: updates.autoJoin ?? existing.autoJoin,
+    channelPairs,
+  };
+  const prisma = getPrisma();
+  await prisma.guildSettings.upsert({
+    where: { guildId },
+    create: { guildId, autoJoinSettings: updated as unknown as object },
+    update: { autoJoinSettings: updated as unknown as object },
+  });
+  await invalidateGuildSettingsCache(guildId);
+  await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
   return updated;
 }
 

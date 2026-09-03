@@ -1,4 +1,4 @@
-import type { GuildBotInstanceSettingsMap } from './bot-instance.js';
+import type { AutoJoinSettings, GuildBotInstanceSettingsMap } from './bot-instance.js';
 
 export type CustomEmojiHandling = 'read_name' | 'remove';
 export type ReadTargetType = 'text_only' | 'text_and_sticker' | 'text_sticker_and_attachment';
@@ -26,6 +26,9 @@ export interface GuildSettings {
   dictionaryPermission: DictionaryPermission;
   // PREMIUM
   manualPremium: boolean;
+  // 全Bot共通の自動接続設定と接続優先順
+  autoJoinSettings?: AutoJoinSettings;
+  botInstancePriority?: number[];
   // マルチインスタンス設定
   botInstanceSettings?: GuildBotInstanceSettingsMap;
 }

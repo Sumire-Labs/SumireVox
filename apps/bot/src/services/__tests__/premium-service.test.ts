@@ -8,6 +8,10 @@ vi.mock('../guild-settings-service.js', () => ({
   getGuildSettings: vi.fn(),
 }));
 
+vi.mock('../../infrastructure/redis.js', () => ({
+  getRedisClient: vi.fn(),
+}));
+
 import { getPrisma } from '../../infrastructure/database.js';
 import { getGuildSettings } from '../guild-settings-service.js';
 import { canInstanceConnect, getGuildActiveBoostCount } from '../premium-service.js';

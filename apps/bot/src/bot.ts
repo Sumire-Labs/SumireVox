@@ -17,12 +17,13 @@ import { handleInteractionCreate } from './events/interaction-create.js';
 import { handleMessageCreate } from './events/message-create.js';
 import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
-import { restoreVcSessions, destroyAllVcSessions } from './services/vc-session-manager.js';
+import { restoreVcSessions, destroyAllVcSessions, startVcOwnershipRenewal, stopVcOwnershipRenewal } from './services/vc-session-manager.js';
 import {
   addGuildsToBotInstanceRegistry,
   deactivateBotInstance,
   registerBotInstance,
   removeGuildFromBotInstanceRegistry,
+  refreshBotInstanceGuildPresence,
 } from './services/bot-instance-registry.js';
 import { loadSpeakers } from './services/voicevox-speaker-cache.js';
 import { startHealthChecker, stopHealthChecker } from './services/voicevox-health-checker.js';
@@ -58,12 +59,15 @@ async function bootstrap(): Promise<void> {
   childLogger.info('Pub/Sub initialized');
 
   let memoryInterval: ReturnType<typeof setInterval> | null = null;
+  let guildPresenceInterval: ReturnType<typeof setInterval> | null = null;
 
-  // View ハンドラ登録
-  registerAllViewHandlers();
+  // コマンドと永続Viewは主Botだけが提供する。
+  if (config.botInstanceId === 1) {
+    registerAllViewHandlers();
+    client.on(Events.InteractionCreate, handleInteractionCreate);
+  }
 
   // イベントハンドラ登録
-  client.on(Events.InteractionCreate, handleInteractionCreate);
   client.on(Events.MessageCreate, handleMessageCreate);
   client.on(Events.VoiceStateUpdate, handleVoiceStateUpdate);
 
@@ -97,6 +101,9 @@ async function bootstrap(): Promise<void> {
       // 参加サーバー一覧を Redis Set に保存
       const guildIds = readyClient.guilds.cache.map((g) => g.id);
       await addGuildsToBotInstanceRegistry(guildIds);
+      guildPresenceInterval = setInterval(() => {
+        void refreshBotInstanceGuildPresence(readyClient.guilds.cache.map((guild) => guild.id));
+      }, 20_000);
       childLogger.info({ count: guildIds.length }, 'BOT_GUILDS Redis Set updated');
 
       // VOICEVOX 話者一覧キャッシュ
@@ -117,6 +124,7 @@ async function bootstrap(): Promise<void> {
 
       // VC セッション復旧
       await restoreVcSessions();
+      startVcOwnershipRenewal();
       await scheduleDisconnectTimersForRestoredSessions();
 
       memoryInterval = setInterval(() => {
@@ -158,6 +166,10 @@ async function bootstrap(): Promise<void> {
       clearInterval(memoryInterval);
       memoryInterval = null;
     }
+    if (guildPresenceInterval !== null) {
+      clearInterval(guildPresenceInterval);
+      guildPresenceInterval = null;
+    }
 
     // 読み上げキュー全クリア
     clearAllQueues();
@@ -169,6 +181,7 @@ async function bootstrap(): Promise<void> {
     await deactivateBotInstance();
 
     // 全 VC セッション破棄
+    stopVcOwnershipRenewal();
     await destroyAllVcSessions();
 
     client.destroy();

@@ -34,6 +34,8 @@ interface BotListResponse {
   bots: BotInstanceInfo[];
   boostCount: number;
   maxBots: number;
+  autoJoinSettings: ResolvedBotInstanceSettings;
+  botInstancePriority: number[];
 }
 
 interface Channel {
@@ -275,13 +277,13 @@ export function ServerBotsPage() {
       setSavingId(instanceNumber);
       showSaving();
       try {
-        await api.put(`/api/guilds/${guildId}/bots/${instanceNumber}/settings`, patch);
+        await api.put(`/api/guilds/${guildId}/auto-join-settings`, patch);
         setData((previous) => {
           if (!previous) return previous;
           return {
             ...previous,
+            autoJoinSettings: applyBotSettingsPatch(previous.autoJoinSettings, patch),
             bots: previous.bots.map((bot) => {
-              if (bot.instanceNumber !== instanceNumber) return bot;
               const currentSettings = bot.settings ?? createEmptyBotInstanceSettings();
               return {
                 ...bot,
@@ -318,6 +320,26 @@ export function ServerBotsPage() {
     },
     [guildId, showError],
   );
+
+  const updatePriority = useCallback(async (instanceIds: number[]) => {
+    if (!guildId) return;
+    try {
+      await api.put(`/api/guilds/${guildId}/bot-priority`, { instanceIds });
+      setData((previous) => previous ? { ...previous, botInstancePriority: instanceIds } : previous);
+      showSuccess('Bot接続優先順位を更新しました');
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : '優先順位の保存に失敗しました');
+    }
+  }, [guildId, showError, showSuccess]);
+
+  const movePriority = (index: number, direction: -1 | 1) => {
+    if (!data) return;
+    const target = index + direction;
+    if (target < 0 || target >= data.botInstancePriority.length) return;
+    const instanceIds = [...data.botInstancePriority];
+    [instanceIds[index], instanceIds[target]] = [instanceIds[target]!, instanceIds[index]!];
+    void updatePriority(instanceIds);
+  };
 
   const openPairModal = (bot: BotInstanceInfo) => {
     setPairDraft({ instanceNumber: bot.instanceNumber, voiceChannelId: '', textChannelId: '' });
@@ -454,8 +476,28 @@ export function ServerBotsPage() {
         </div>
       )}
 
+      <div className="bg-[#12121a] border border-white/5 rounded-2xl p-6 flex flex-col gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-white">Bot接続優先順位</h2>
+          <p className="text-xs text-gray-500 mt-1">上から順に空いているBotを割り当てます。現在のBoost枠内のBotを強調表示します。</p>
+        </div>
+        {data.botInstancePriority.map((instanceId, index) => {
+          const bot = data.bots.find((item) => item.instanceNumber === instanceId);
+          if (!bot) return null;
+          return (
+            <div key={instanceId} className="flex items-center gap-3 rounded-xl bg-white/[0.03] px-3 py-2">
+              <span className="text-sm text-purple-300 w-6">{index + 1}</span>
+              <span className="text-sm text-white flex-1">{bot.name}</span>
+              <StatusBadge label={bot.isAvailable ? '利用可能' : 'Boost枠外'} variant={bot.isAvailable ? 'active' : 'unavailable'} />
+              <Button size="sm" variant="secondary" isDisabled={index === 0} onPress={() => movePriority(index, -1)}>↑</Button>
+              <Button size="sm" variant="secondary" isDisabled={index === data.botInstancePriority.length - 1} onPress={() => movePriority(index, 1)}>↓</Button>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col gap-4">
-        {data.bots.map((bot) => {
+        {data.bots.filter((bot) => bot.instanceNumber === data.botInstancePriority[0]).map((bot) => {
           const isSaving = savingId === bot.instanceNumber;
 
           if (!bot.isAvailable) {
@@ -475,7 +517,7 @@ export function ServerBotsPage() {
 
           const settings = bot.settings ?? createEmptyBotInstanceSettings();
           const usedVoiceChannelIds = getAvailableVoiceChannelIds(settings.channelPairs);
-          const canCopy = bot.isActive && bot.isInGuild;
+          const canCopy = false;
 
           return (
             <div

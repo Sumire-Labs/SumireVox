@@ -22,7 +22,9 @@
 | dictPermission       | Enum | ALL_USERS / ADMIN_ONLY。デフォルト ADMIN_ONLY |
 | createdAt            | DateTime | |
 | updatedAt            | DateTime | |
-| botInstanceSettings  | JsonB | インスタンスごとの自動接続設定。`{"1": {"autoJoin": true, "channelPairs": [{"voiceChannelId": "...", "textChannelId": "..."}]}}` 形式。旧 `voiceChannelId` / `textChannelId` のみの設定は1ペアとして読み替え、保存時は先頭ペアを旧フィールドにも保持する |
+| autoJoinSettings     | JsonB | サーバー共通の自動接続設定。`{"autoJoin":true,"channelPairs":[{"voiceChannelId":"...","textChannelId":"..."}]}`。VC重複なし、最大25件 |
+| botInstancePriority  | JsonB | BotインスタンスIDの優先順。未設定・欠損IDは参加済み有効Botを番号順で補完する |
+| botInstanceSettings  | JsonB | 廃止予定の旧インスタンス別設定。migrationでキー`"1"`を共通設定へ引き継ぎ、以後は互換読み取り専用 |
 
 ## UserVoiceSetting
 

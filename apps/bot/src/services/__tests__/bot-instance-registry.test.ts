@@ -94,7 +94,9 @@ describe('Bot instance guild registry', () => {
   it('シャードごとのギルドを既存集合を消さずに追加する', async () => {
     const sadd = vi.fn().mockResolvedValue(2);
     const srem = vi.fn().mockResolvedValue(1);
-    mockGetRedisClient.mockReturnValue({ sadd, srem } as unknown as ReturnType<typeof getRedisClient>);
+    const set = vi.fn().mockResolvedValue('OK');
+    const del = vi.fn().mockResolvedValue(1);
+    mockGetRedisClient.mockReturnValue({ sadd, srem, set, del } as unknown as ReturnType<typeof getRedisClient>);
 
     await addGuildsToBotInstanceRegistry(['guild-1', 'guild-2']);
     await addGuildsToBotInstanceRegistry(['guild-3']);

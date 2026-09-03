@@ -1,13 +1,19 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags, ChannelType } from 'discord.js';
 import { CommandDefinition } from './types.js';
-import { destroyVcSession, getVcSession } from '../services/vc-session-manager.js';
+import { getVcSession } from '../services/vc-session-manager.js';
 import { hasAdminPermission } from '../services/permission-service.js';
 import { logger } from '../infrastructure/logger.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
+import { delegateBotCommand } from '../services/bot-command-delegation-service.js';
 
 const data = new SlashCommandBuilder()
   .setName('leave')
   .setDescription('ボイスチャンネルから退出します')
-  .setDMPermission(false);
+  .addChannelOption((option) => option
+    .setName('voice-channel')
+    .setDescription('退出させるVC（管理者がVC外の場合は必須）')
+    .addChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice));
 
 async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.inGuild()) {
@@ -21,21 +27,17 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
 
-  // Bot が VC に接続しているか確認
-  const session = getVcSession(guildId);
-  if (!session) {
+  const requestedChannel = interaction.options.getChannel('voice-channel');
+  const targetVoiceChannelId = requestedChannel?.id ?? member.voice.channelId;
+  const isAdmin = await hasAdminPermission(member, guildId);
+  if (!targetVoiceChannelId) {
     await interaction.reply({
-      content: 'ボイスチャンネルに接続していません。',
+      content: 'VC外の管理者は `voice-channel` で退出対象を指定してください。',
       ephemeral: true,
     });
     return;
   }
-
-  // 権限チェック: VC に参加中か、ManageGuild 権限 or 管理ロールを持つか
-  const isInSameVc = member.voice.channelId === session.voiceChannelId;
-  const isAdmin = await hasAdminPermission(member, guildId);
-
-  if (!isInSameVc && !isAdmin) {
+  if (member.voice.channelId !== targetVoiceChannelId && !isAdmin) {
     await interaction.reply({
       content: 'Bot と同じボイスチャンネルに参加しているか、サーバーの管理権限が必要です。',
       ephemeral: true,
@@ -44,7 +46,18 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
 
   try {
-    await destroyVcSession(guildId);
+    const instanceId = await findOwningInstance(guildId, targetVoiceChannelId);
+    if (!instanceId) {
+      await interaction.reply({ content: '指定したVCにSumireVoxは接続していません。', ephemeral: true });
+      return;
+    }
+    const result = await delegateBotCommand(instanceId, {
+      action: 'leave', guildId, voiceChannelId: targetVoiceChannelId,
+    });
+    if (!result.success) {
+      await interaction.reply({ content: result.message ?? '退出中にエラーが発生しました。', ephemeral: true });
+      return;
+    }
     await interaction.reply({
       content: 'ボイスチャンネルから退出しました。',
     });
@@ -55,6 +68,15 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       ephemeral: true,
     });
   }
+}
+
+async function findOwningInstance(guildId: string, voiceChannelId: string): Promise<number | undefined> {
+  const value = await getRedisClient().get(REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId));
+  const instanceId = value ? Number(value.split(':', 1)[0]) : Number.NaN;
+  if (Number.isInteger(instanceId)) return instanceId;
+  const localSession = getVcSession(guildId);
+  if (localSession?.voiceChannelId === voiceChannelId) return localSession.botInstanceId;
+  return undefined;
 }
 
 export const leaveCommand: CommandDefinition = { data, execute };

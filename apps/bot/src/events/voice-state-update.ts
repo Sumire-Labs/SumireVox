@@ -28,15 +28,10 @@ export async function handleVoiceStateUpdate(
   // 他 Bot も無視（auto-join の誤発動、Bot同士の join 誘発を防止）
   if (member?.user.bot) return;
 
+  // 全Botが共有設定に基づき割当を試みる。Redis所有権が重複接続を防ぐ。
+  await handleAutoJoinVoiceState(oldState, newState);
   const session = getVcSession(guildId);
-
-  // ==============================
-  // 自動接続の処理
-  // ==============================
-  if (!session) {
-    await handleAutoJoinVoiceState(oldState, newState);
-    return;
-  }
+  if (!session) return;
 
   // ==============================
   // 以下、Bot が VC に接続中の場合の処理

@@ -76,6 +76,22 @@ export const guildBotInstanceSettingsBodySchema = z
   })
   .strict();
 
+export const autoJoinSettingsBodySchema = z
+  .object({
+    autoJoin: z.boolean().optional(),
+    channelPairs: z.array(z.object({
+      voiceChannelId: discordSnowflakeSchema,
+      textChannelId: discordSnowflakeSchema,
+    })).max(LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS).optional(),
+  })
+  .strict();
+
+export const botInstancePriorityBodySchema = z
+  .object({
+    instanceIds: z.array(z.number().int().positive()).max(LIMITS.MAX_BOT_INSTANCES),
+  })
+  .strict();
+
 export const botInstanceSettingsCopyBodySchema = z
   .object({
     targetInstanceIds: z

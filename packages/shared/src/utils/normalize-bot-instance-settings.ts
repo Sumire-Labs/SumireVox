@@ -2,6 +2,8 @@ import type {
   AutoJoinChannelPair,
   BotInstanceSettings,
   ResolvedBotInstanceSettings,
+  AutoJoinSettings,
+  ResolvedAutoJoinSettings,
 } from '../types/bot-instance.js';
 import { LIMITS } from '../constants/limits.js';
 
@@ -70,6 +72,24 @@ export function cloneBotInstanceSettings(
   settings: ResolvedBotInstanceSettings | BotInstanceSettings,
 ): ResolvedBotInstanceSettings {
   return normalizeBotInstanceSettings({
+    ...settings,
+    channelPairs: settings.channelPairs?.map((pair) => ({ ...pair })),
+  });
+}
+
+/** 共有自動接続設定を正規化する。旧インスタンス設定と同じ入力許容規則を使う。 */
+export function normalizeAutoJoinSettings(value: unknown): ResolvedAutoJoinSettings {
+  const normalized = normalizeBotInstanceSettings(value);
+  return {
+    autoJoin: normalized.autoJoin,
+    channelPairs: normalized.channelPairs.map((pair) => ({ ...pair })),
+  };
+}
+
+export function cloneAutoJoinSettings(
+  settings: ResolvedAutoJoinSettings | AutoJoinSettings,
+): ResolvedAutoJoinSettings {
+  return normalizeAutoJoinSettings({
     ...settings,
     channelPairs: settings.channelPairs?.map((pair) => ({ ...pair })),
   });

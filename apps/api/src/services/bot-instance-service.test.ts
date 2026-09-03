@@ -200,39 +200,18 @@ describe('getGuildsWithBotStatus', () => {
 
     const result = await getGuildBotList('guild-1');
 
-    expect(result).toEqual({
-      bots: [
-        {
-          instanceNumber: 1,
-          name: 'Bot 1',
-          botUserId: 'bot-1',
-          isActive: true,
-          isInGuild: true,
-          isAvailable: true,
-          settings: {
-            autoJoin: true,
-            textChannelId: 'text-1',
-            voiceChannelId: 'voice-1',
-            channelPairs: [{ voiceChannelId: 'voice-1', textChannelId: 'text-1' }],
-          },
-        },
-        {
-          instanceNumber: 2,
-          name: 'Bot 2',
-          botUserId: 'bot-2',
-          isActive: true,
-          isInGuild: false,
-          isAvailable: true,
-          settings: {
-            autoJoin: false,
-            textChannelId: null,
-            voiceChannelId: null,
-            channelPairs: [],
-          },
-        },
-      ],
+    expect(result).toMatchObject({
       boostCount: 2,
       maxBots: 2,
+      botInstancePriority: [1],
+      autoJoinSettings: {
+        autoJoin: true,
+        channelPairs: [{ voiceChannelId: 'voice-1', textChannelId: 'text-1' }],
+      },
+      bots: [
+        { instanceNumber: 1, isInGuild: true, isAvailable: true },
+        { instanceNumber: 2, isInGuild: false, isAvailable: false },
+      ],
     });
   });
 

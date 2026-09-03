@@ -26,6 +26,8 @@ import {
   getGuildsWithBotStatus,
   getGuildBotList,
   copyBotInstanceSettings,
+  updateGuildAutoJoinSettings,
+  updateGuildBotInstancePriority,
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
@@ -44,6 +46,8 @@ import {
   instanceParamsSchema,
   guildBotInstanceSettingsBodySchema,
   botInstanceSettingsCopyBodySchema,
+  autoJoinSettingsBodySchema,
+  botInstancePriorityBodySchema,
 } from '../schemas/common.js';
 
 const guildParamsSchema = z.object({ guildId: discordSnowflakeSchema });
@@ -261,6 +265,22 @@ guildsRouter.get('/:guildId/bots', requireGuildAdmin, async (c) => {
     success: true,
     data: result,
   });
+});
+
+guildsRouter.put('/:guildId/auto-join-settings', requireGuildAdmin, botSettingsRateLimit, async (c) => {
+  const { guildId } = await validate.params(c, guildParamsSchema);
+  const body = await validate.body(c, autoJoinSettingsBodySchema);
+  await updateGuildAutoJoinSettings(guildId, body);
+  await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
+  return c.json({ success: true, data: null });
+});
+
+guildsRouter.put('/:guildId/bot-priority', requireGuildAdmin, botSettingsRateLimit, async (c) => {
+  const { guildId } = await validate.params(c, guildParamsSchema);
+  const { instanceIds } = await validate.body(c, botInstancePriorityBodySchema);
+  await updateGuildBotInstancePriority(guildId, instanceIds);
+  await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
+  return c.json({ success: true, data: null });
 });
 
 /**

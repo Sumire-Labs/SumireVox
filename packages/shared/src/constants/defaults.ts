@@ -23,3 +23,8 @@ export const DEFAULT_BOT_INSTANCE_SETTINGS: BotInstanceSettings = {
   textChannelId: null,
   voiceChannelId: null,
 };
+
+export const DEFAULT_AUTO_JOIN_SETTINGS = {
+  autoJoin: false,
+  channelPairs: [],
+} as const;

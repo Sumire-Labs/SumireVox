@@ -1,12 +1,11 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags } from 'discord.js';
 import { CommandDefinition } from './types.js';
-import { createVcSession, getVcSession, updateTextChannel } from '../services/vc-session-manager.js';
-import { getGuildSettings } from '../services/guild-settings-service.js';
-import { enqueuePreSynthesized } from '../services/speech-queue.js';
-import { getPredefinedAudio } from '../services/predefined-audio-cache.js';
-import { canInstanceConnect, getGuildActiveBoostCount } from '../services/premium-service.js';
-import { config } from '../infrastructure/config.js';
+import { getVcSession, updateTextChannel } from '../services/vc-session-manager.js';
+import { getAvailableBotInstanceIds } from '../services/premium-service.js';
 import { logger } from '../infrastructure/logger.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
+import { delegateBotCommand } from '../services/bot-command-delegation-service.js';
 
 const data = new SlashCommandBuilder()
   .setName('join')
@@ -24,7 +23,6 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
   const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
-  const guild = interaction.guild!;
   const textChannelId = interaction.channelId;
 
   // ユーザーが VC に参加しているか確認
@@ -37,31 +35,16 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  // インスタンス接続制限チェック (2号機以降はブースト数が必要)
-  if (config.botInstanceId > 1) {
-    const allowed = await canInstanceConnect(guildId, config.botInstanceId);
-    if (!allowed) {
-      const boostCount = await getGuildActiveBoostCount(guildId);
-      await interaction.reply({
-        content: `このBotを利用するにはブーストが${config.botInstanceId}つ以上必要です。現在のブースト数: ${boostCount}`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-  }
-
-  // 既存のセッションを確認
   const existingSession = getVcSession(guildId);
-  if (existingSession) {
-    if (existingSession.voiceChannelId === voiceChannel.id) {
+  if (existingSession && existingSession.voiceChannelId === voiceChannel.id) {
       // 同じ VC に接続中 → 読み上げチャンネルを変更
       await updateTextChannel(guildId, textChannelId);
       await interaction.reply({
         content: `読み上げチャンネルを <#${textChannelId}> に変更しました。`,
       });
       return;
-    }
-    // 別の VC に接続中 → エラー
+  }
+  if (existingSession) {
     await interaction.reply({
       content: `現在 <#${existingSession.voiceChannelId}> で使用中です。切り替えるには \`/leave\` で退出してから再度 \`/join\` してください。`,
       ephemeral: true,
@@ -69,48 +52,39 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  // VC に接続
   try {
     await interaction.deferReply();
-
-    const session = await createVcSession(
-      guildId,
-      voiceChannel.id,
-      textChannelId,
-      guild.voiceAdapterCreator,
-      'manual',
-    );
-
-    // 自動接続と同時に実行された場合は、先に成立したセッションを手動扱いにする。
-    if (session.voiceChannelId !== voiceChannel.id) {
-      await interaction.editReply({
-        content: `現在 <#${session.voiceChannelId}> で使用中です。切り替えるには \`/leave\` で退出してから再度 \`/join\` してください。`,
-      });
+    const candidates = await getAvailableBotInstanceIds(guildId);
+    const targetInstanceId = await findFreeInstance(guildId, candidates);
+    if (!targetInstanceId) {
+      await interaction.editReply({ content: '利用可能なBotがすべて別のVCで使用中です。' });
       return;
     }
-    if (session.connectionMode === 'auto') {
-      await updateTextChannel(guildId, textChannelId, 'manual');
+    const result = await delegateBotCommand(targetInstanceId, {
+      action: 'join', guildId, voiceChannelId: voiceChannel.id, textChannelId,
+    });
+    if (!result.success) {
+      await interaction.editReply({ content: result.message ?? 'ボイスチャンネルへの接続に失敗しました。' });
+      return;
     }
 
     await interaction.editReply({
       content: `<#${voiceChannel.id}> に接続しました。<#${textChannelId}> のメッセージを読み上げます。`,
     });
 
-    // 挨拶の読み上げ
-    const settings = await getGuildSettings(guildId);
-    if (session.connectionMode !== 'auto' && settings.greetingOnJoin) {
-      const speakerId = settings.defaultSpeakerId ?? config.defaultSpeakerId;
-      const audio = await getPredefinedAudio('接続しました', speakerId, 1.0, 0.0);
-      if (audio) {
-        enqueuePreSynthesized(guildId, audio);
-      }
-    }
   } catch (error) {
     logger.error({ err: error, guildId, voiceChannelId: voiceChannel.id }, 'Failed to join VC');
     await interaction.editReply({
       content: 'ボイスチャンネルへの接続に失敗しました。Bot の権限を確認してください。',
     });
   }
+}
+
+async function findFreeInstance(guildId: string, candidates: readonly number[]): Promise<number | undefined> {
+  for (const instanceId of candidates) {
+    if (!(await getRedisClient().get(REDIS_KEYS.BOT_VC_CLAIM(guildId, instanceId)))) return instanceId;
+  }
+  return undefined;
 }
 
 export const joinCommand: CommandDefinition = { data, execute };

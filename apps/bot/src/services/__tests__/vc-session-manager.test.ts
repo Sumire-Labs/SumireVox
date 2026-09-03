@@ -51,6 +51,14 @@ vi.mock('../auto-disconnect-timer.js', () => ({
   cancelDisconnectTimer: vi.fn(),
 }));
 
+vi.mock('../vc-ownership-service.js', () => ({
+  claimVcOwnership: vi.fn(async (_guildId: string, _voiceChannelId: string, instanceId: number) => ({ instanceId, claimId: 'claim-1' })),
+  moveVcOwnership: vi.fn(async (_guildId: string, _from: string, _to: string, ownership: { instanceId: number }) => ({ ...ownership, claimId: 'claim-2' })),
+  renewVcOwnership: vi.fn(async () => true),
+  releaseVcOwnership: vi.fn(async () => {}),
+  rollbackVcOwnershipMove: vi.fn(async () => {}),
+}));
+
 import {
   entersState,
   getVoiceConnection,

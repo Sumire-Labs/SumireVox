@@ -31,6 +31,9 @@ model GuildSettings {
   manualPremium         Boolean  @default(false) @map("manual_premium")
   // マルチインスタンス設定 (キー: botInstanceId文字列 "1","2",...)
   botInstanceSettings   Json     @default("{}") @map("bot_instance_settings") @db.JsonB
+  // 全Bot共通の自動接続設定と接続優先順位
+  autoJoinSettings      Json     @default("{}") @map("auto_join_settings") @db.JsonB
+  botInstancePriority   Json     @default("[]") @map("bot_instance_priority") @db.JsonB
   // タイムスタンプ
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")

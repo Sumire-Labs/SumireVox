@@ -1,5 +1,7 @@
 import { getPrisma } from '../infrastructure/database.js';
 import { getGuildSettings } from './guild-settings-service.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
 
 const PREMIUM_CACHE_TTL_MS = 60_000;
 
@@ -75,4 +77,25 @@ export async function canInstanceConnect(guildId: string, instanceId: number): P
 
   const boostCount = await getGuildActiveBoostCount(guildId);
   return boostCount >= instanceId;
+}
+
+/** 優先順位とBoost枠を反映した、このギルドで自動接続可能なBot一覧。 */
+export async function getAvailableBotInstanceIds(guildId: string): Promise<number[]> {
+  const [settings, records] = await Promise.all([
+    getGuildSettings(guildId),
+    getPrisma().botInstance.findMany({ where: { isActive: true }, orderBy: { instanceId: 'asc' } }),
+  ]);
+  const present = await Promise.all(records.map(async (record) => ({
+    id: record.instanceId,
+    present: (await getRedisClient().exists(REDIS_KEYS.BOT_GUILD_PRESENCE(record.instanceId, guildId))) === 1,
+  })));
+  const joinedIds = present.filter((item) => item.present).map((item) => item.id);
+  const stored = Array.isArray(settings.botInstancePriority)
+    ? settings.botInstancePriority.filter((id): id is number => typeof id === 'number' && joinedIds.includes(id))
+    : [];
+  const priority = [...new Set([...stored, ...joinedIds.filter((id) => !stored.includes(id)).sort((a, b) => a - b)])];
+  const max = settings.manualPremium
+    ? priority.length
+    : Math.min(priority.length, Math.max(1, await getGuildActiveBoostCount(guildId)));
+  return priority.slice(0, max);
 }

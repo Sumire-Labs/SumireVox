@@ -32,6 +32,7 @@ discord.js の `ShardingManager` 方式。bot サービスのエントリポイ�
 1. **Pub/Sub**: Bot ↔ API、シャード間のリアルタイム通知。辞書更新時はトライ木の無効化フラグのみ立て、再構築は次回アクセス時に遅延実行
 2. **セッションストア**: Web の Discord OAuth2 セッション。TTL 7日
 3. **設定キャッシュ**: GuildSettings / UserVoiceSetting を Redis キャッシュ。TTL は `SETTINGS_CACHE_TTL_SECONDS`
+4. **VC 所有権**: guild/VC と guild/Bot のTTL付きleaseをLuaで同時にclaimする。leaseを更新できない接続は切断し、異常停止後はTTLで回収する。
 
 Redis 停止時はサービス停止を許容。フォールバックなし。`restart: unless-stopped` で自動復旧。
 
@@ -39,7 +40,8 @@ Redis 停止時はサービス停止を許容。フォールバックなし。`r
 
 - 自動接続セッションは接続中 VC が無人になった場合、退出猶予タイマー満了後に対象 VC を再走査し、最も人間ユーザーが多い VC へ設定順で切り替える
 - 手動 `/join` セッションは自動切り替えせず、従来どおり退出猶予後に退出する
-- `GuildSettings.botInstanceSettings` は Bot インスタンスごとに最大25件の VC/TC ペアを保持し、旧 `voiceChannelId` / `textChannelId` 形式は1ペアへフォールバックする。設定コピーは自動接続設定だけを対象にする
+- `GuildSettings.autoJoinSettings` は全Bot共通の最大25件のVC/TCペアを保持する。`botInstancePriority` に従い、Boost枠内の参加済みBotへ空きVCを割り当てる。旧 `botInstanceSettings["1"]` は移行時のみ読み取る。
+- Bot 1だけがDiscordコマンドを提供する。サブBotへの接続・退出はRedis Pub/Subの内部指示で委譲する。
 
 - メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, connectionMode, ... })
 - Redis にも接続情報を記録

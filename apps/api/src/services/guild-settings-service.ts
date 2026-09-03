@@ -20,6 +20,8 @@ type DbGuildSettings = {
   adminRoleId: string | null;
   dictionaryPermission: string;
   manualPremium: boolean;
+  autoJoinSettings: unknown;
+  botInstancePriority: unknown;
 };
 
 export function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
@@ -39,6 +41,10 @@ export function mapDbToGuildSettings(db: DbGuildSettings): GuildSettings {
     adminRoleId: db.adminRoleId,
     dictionaryPermission: db.dictionaryPermission as GuildSettings['dictionaryPermission'],
     manualPremium: db.manualPremium,
+    autoJoinSettings: db.autoJoinSettings as GuildSettings['autoJoinSettings'],
+    botInstancePriority: Array.isArray(db.botInstancePriority)
+      ? db.botInstancePriority.filter((value): value is number => typeof value === 'number')
+      : [],
   };
 }
 

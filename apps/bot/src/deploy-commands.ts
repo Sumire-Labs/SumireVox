@@ -5,22 +5,23 @@ import { commands } from './commands/index.js';
 
 async function deployCommands(): Promise<void> {
   const rest = new REST({ version: '10' }).setToken(config.discordToken);
-  const commandData = commands.map((cmd) => cmd.data.toJSON());
+  const commandData = config.botInstanceId === 1 ? commands.map((cmd) => cmd.data.toJSON()) : [];
+  const action = config.botInstanceId === 1 ? 'Deploying' : 'Removing';
 
   if (config.deployGuildId) {
     logger.info(
       { guildId: config.deployGuildId, commandCount: commandData.length },
-      'Deploying guild commands...',
+      `${action} guild commands...`,
     );
     await rest.put(
       Routes.applicationGuildCommands(config.discordClientId, config.deployGuildId),
       { body: commandData },
     );
-    logger.info('Guild commands deployed successfully');
+    logger.info({ commandCount: commandData.length }, 'Guild commands synchronized successfully');
   } else {
-    logger.info({ commandCount: commandData.length }, 'Deploying global commands...');
+    logger.info({ commandCount: commandData.length }, `${action} global commands...`);
     await rest.put(Routes.applicationCommands(config.discordClientId), { body: commandData });
-    logger.info('Global commands deployed successfully');
+    logger.info({ commandCount: commandData.length }, 'Global commands synchronized successfully');
   }
 }
 

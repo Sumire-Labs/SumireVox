@@ -56,11 +56,32 @@ export async function addGuildsToBotInstanceRegistry(
     REDIS_KEYS.BOT_GUILDS(config.botInstanceId),
     ...guildIds,
   );
+  await Promise.all(guildIds.map((guildId) => getRedisClient().set(
+    REDIS_KEYS.BOT_GUILD_PRESENCE(config.botInstanceId, guildId),
+    '1',
+    'EX',
+    60,
+  )));
 }
 
 /** このシャードで検知したギルド退出を、Bot インスタンス全体の集合へ反映する。 */
 export async function removeGuildFromBotInstanceRegistry(guildId: string): Promise<void> {
-  await getRedisClient().srem(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guildId);
+  await Promise.all([
+    getRedisClient().srem(REDIS_KEYS.BOT_GUILDS(config.botInstanceId), guildId),
+    getRedisClient().del(REDIS_KEYS.BOT_GUILD_PRESENCE(config.botInstanceId, guildId)),
+  ]);
+}
+
+export async function refreshBotInstanceGuildPresence(guildIds: readonly string[]): Promise<void> {
+  if (guildIds.length === 0) return;
+  await Promise.all(guildIds.map((guildId) => getRedisClient().expire(
+    REDIS_KEYS.BOT_GUILD_PRESENCE(config.botInstanceId, guildId),
+    60,
+  )));
+}
+
+export async function isBotInstancePresentInGuild(instanceId: number, guildId: string): Promise<boolean> {
+  return (await getRedisClient().exists(REDIS_KEYS.BOT_GUILD_PRESENCE(instanceId, guildId))) === 1;
 }
 
 /**

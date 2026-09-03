@@ -88,8 +88,8 @@
 | POST | /api/guilds/:guildId/channels/refresh | Discordからチャンネル一覧を強制再取得 |
 | GET | /api/guilds/:guildId/roles | ロール一覧 |
 | GET | /api/guilds/:guildId/bots | Bot インスタンス一覧 |
-| PUT | /api/guilds/:guildId/bots/:instanceId/settings | Bot インスタンス設定変更 |
-| POST | /api/guilds/:guildId/bots/:instanceId/settings/copy | Bot インスタンス設定を複数Botへコピー |
+| PUT | /api/guilds/:guildId/auto-join-settings | 共通自動接続設定変更 |
+| PUT | /api/guilds/:guildId/bot-priority | Bot接続優先順位変更 |
 | GET | /api/guilds/:guildId/bots/:instanceId/invite | Bot 招待 URL 取得 |
 | GET | /api/guilds/:guildId/dictionary | サーバー辞書一覧 |
 | POST | /api/guilds/:guildId/dictionary | サーバー辞書追加 |

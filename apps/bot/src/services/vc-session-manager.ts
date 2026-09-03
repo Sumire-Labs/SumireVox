@@ -18,10 +18,12 @@ import { config } from '../infrastructure/config.js';
 import { deleteGuildQueue } from './speech-queue.js';
 import { initTrieSlot, destroyTrieSlot } from './text-pipeline/index.js';
 import { cancelDisconnectTimer } from './auto-disconnect-timer.js';
+import { claimVcOwnership, moveVcOwnership, releaseVcOwnership, renewVcOwnership, rollbackVcOwnershipMove } from './vc-ownership-service.js';
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
 const pendingCreates = new Map<string, Promise<VcSession>>();
+let ownershipRenewalTimer: ReturnType<typeof setInterval> | null = null;
 
 export async function createVcSession(
   guildId: string,
@@ -64,12 +66,16 @@ async function createVcSessionInternal(
   const client = getClient();
   const shardId = client.shard?.ids[0] ?? 0;
 
+  const ownership = await claimVcOwnership(guildId, voiceChannelId, config.botInstanceId);
+  if (!ownership) throw new Error('Voice channel or bot instance is already owned');
+
   const session: VcSession = {
     guildId,
     voiceChannelId,
     textChannelId,
     shardId,
     botInstanceId: config.botInstanceId,
+    claimId: ownership.claimId,
     connectionMode,
   };
 
@@ -87,6 +93,7 @@ async function createVcSessionInternal(
     await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
   } catch (error) {
     connection.destroy();
+    await releaseVcOwnership(guildId, voiceChannelId, ownership);
     throw error;
   }
 
@@ -103,6 +110,7 @@ export async function destroyVcSession(guildId: string): Promise<void> {
   cancelDisconnectTimer(guildId);
   deleteGuildQueue(guildId);
 
+  const session = sessions.get(guildId);
   const connection = connections.get(guildId) ?? getVoiceConnection(guildId);
   if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
     connection.destroy();
@@ -112,6 +120,12 @@ export async function destroyVcSession(guildId: string): Promise<void> {
   sessions.delete(guildId);
   connections.delete(guildId);
   await removeVcSessionFromRedis(guildId, config.botInstanceId);
+  if (session?.claimId) {
+    await releaseVcOwnership(guildId, session.voiceChannelId, {
+      instanceId: session.botInstanceId,
+      claimId: session.claimId,
+    });
+  }
 
   logger.info({ guildId }, 'VC session destroyed');
 }
@@ -162,6 +176,12 @@ export async function moveVcSession(
 
   cancelDisconnectTimer(guildId);
 
+  if (!session.claimId) throw new Error('VC session has no ownership lease');
+  const ownership = await moveVcOwnership(guildId, session.voiceChannelId, voiceChannelId, {
+    instanceId: session.botInstanceId,
+    claimId: session.claimId,
+  });
+  if (!ownership) throw new Error('Target voice channel or bot instance is already owned');
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
     guildId,
@@ -181,6 +201,10 @@ export async function moveVcSession(
       { err: error, guildId, voiceChannelId },
       'Failed to move VC session',
     );
+    await rollbackVcOwnershipMove(guildId, session.voiceChannelId, voiceChannelId, {
+      instanceId: session.botInstanceId,
+      claimId: session.claimId,
+    }, ownership);
     throw error;
   }
 
@@ -192,6 +216,7 @@ export async function moveVcSession(
     ) {
       connection.destroy();
     }
+    await releaseVcOwnership(guildId, voiceChannelId, ownership);
     throw new Error('VC session changed while moving');
   }
 
@@ -200,12 +225,17 @@ export async function moveVcSession(
     voiceChannelId,
     textChannelId,
     connectionMode,
+    claimId: ownership.claimId,
   };
   // 切替前のTCで待機していた音声を、切替先VCで再生しない。
   deleteGuildQueue(guildId);
   sessions.set(guildId, updated);
   connections.set(guildId, connection);
   await saveVcSessionToRedis(updated);
+  await releaseVcOwnership(guildId, session.voiceChannelId, {
+    instanceId: session.botInstanceId,
+    claimId: session.claimId,
+  });
 
   logger.info({ guildId, voiceChannelId, textChannelId }, 'VC session moved');
   return updated;
@@ -277,6 +307,38 @@ export async function restoreVcSessions(): Promise<void> {
   }
 }
 
+export function startVcOwnershipRenewal(): void {
+  if (ownershipRenewalTimer) return;
+  ownershipRenewalTimer = setInterval(() => {
+    void renewAllVcOwnership();
+  }, 20_000);
+}
+
+export function stopVcOwnershipRenewal(): void {
+  if (!ownershipRenewalTimer) return;
+  clearInterval(ownershipRenewalTimer);
+  ownershipRenewalTimer = null;
+}
+
+async function renewAllVcOwnership(): Promise<void> {
+  for (const session of sessions.values()) {
+    if (!session.claimId) continue;
+    try {
+      const renewed = await renewVcOwnership(session.guildId, session.voiceChannelId, {
+        instanceId: session.botInstanceId,
+        claimId: session.claimId,
+      });
+      if (!renewed) {
+        logger.warn({ guildId: session.guildId }, 'VC ownership lease lost; disconnecting safely');
+        await destroyVcSession(session.guildId);
+      }
+    } catch (error) {
+      logger.error({ err: error, guildId: session.guildId }, 'Failed to renew VC ownership; disconnecting safely');
+      await destroyVcSession(session.guildId);
+    }
+  }
+}
+
 function setupConnectionListeners(connection: VoiceConnection, guildId: string): void {
   connection.on(VoiceConnectionStatus.Disconnected, async () => {
     try {
@@ -294,8 +356,15 @@ function setupConnectionListeners(connection: VoiceConnection, guildId: string):
     if (connections.get(guildId) !== connection) return;
 
     logger.info({ guildId }, 'Voice connection destroyed');
+    const session = sessions.get(guildId);
     sessions.delete(guildId);
     connections.delete(guildId);
     removeVcSessionFromRedis(guildId, config.botInstanceId).catch(() => {});
+    if (session?.claimId) {
+      releaseVcOwnership(guildId, session.voiceChannelId, {
+        instanceId: session.botInstanceId,
+        claimId: session.claimId,
+      }).catch(() => {});
+    }
   });
 }

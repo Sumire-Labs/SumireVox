@@ -1,0 +1,44 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const redis = vi.hoisted(() => ({ eval: vi.fn() }));
+
+vi.mock('../../infrastructure/redis.js', () => ({
+  getRedisClient: () => redis,
+}));
+
+import {
+  claimVcOwnership,
+  moveVcOwnership,
+  renewVcOwnership,
+} from '../vc-ownership-service.js';
+
+describe('VC ownership lease', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('atomically reserves both a VC and a Bot instance', async () => {
+    redis.eval.mockResolvedValue(1);
+    const ownership = await claimVcOwnership('guild-1', 'voice-1', 2, 'claim-a');
+
+    expect(ownership).toEqual({ instanceId: 2, claimId: 'claim-a' });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining("SET', KEYS[1]"),
+      2,
+      'vc-claim:guild-1:channel:voice-1',
+      'vc-claim:guild-1:bot:2',
+      '2:claim-a',
+      '60000',
+    );
+  });
+
+  it('rejects an already claimed VC or Bot', async () => {
+    redis.eval.mockResolvedValue(0);
+    await expect(claimVcOwnership('guild-1', 'voice-1', 2, 'claim-a')).resolves.toBeNull();
+  });
+
+  it('renews only the matching ownership token and moves atomically', async () => {
+    redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    const ownership = { instanceId: 2, claimId: 'claim-a' };
+    await expect(renewVcOwnership('guild-1', 'voice-1', ownership)).resolves.toBe(true);
+    await expect(moveVcOwnership('guild-1', 'voice-1', 'voice-2', ownership)).resolves.toMatchObject({ instanceId: 2 });
+  });
+});

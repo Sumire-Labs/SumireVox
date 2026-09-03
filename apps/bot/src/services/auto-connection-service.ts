@@ -4,13 +4,13 @@ import {
   VoiceState,
 } from 'discord.js';
 import type {
-  ResolvedBotInstanceSettings,
+  ResolvedAutoJoinSettings,
   VcSession,
 } from '@sumirevox/shared';
 import { getClient } from '../infrastructure/discord-client.js';
 import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
-import { getGuildSettings, getInstanceSettings } from './guild-settings-service.js';
+import { getAutoJoinSettings, getGuildSettings } from './guild-settings-service.js';
 import {
   createVcSession,
   destroyVcSession,
@@ -18,7 +18,9 @@ import {
   getVcSession,
   moveVcSession,
 } from './vc-session-manager.js';
-import { canInstanceConnect } from './premium-service.js';
+import { getAvailableBotInstanceIds } from './premium-service.js';
+import { getRedisClient } from '../infrastructure/redis.js';
+import { REDIS_KEYS } from '@sumirevox/shared';
 import {
   cancelDisconnectTimer,
   startDisconnectTimer,
@@ -71,16 +73,11 @@ export async function handleAutoJoinVoiceState(
   const guildId = newState.guild.id;
   try {
     await withGuildAutoConnectionLock(guildId, async () => {
-      if (getVcSession(guildId)) {
-        logger.debug({ guildId }, 'Auto-join skipped: VC session was created concurrently');
-        return;
-      }
-
       const settings = await getGuildSettings(guildId);
-      const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
-      if (!instanceSettings.autoJoin) return;
+      const autoJoinSettings = getAutoJoinSettings(settings);
+      if (!autoJoinSettings.autoJoin) return;
 
-      const pair = instanceSettings.channelPairs.find(
+      const pair = autoJoinSettings.channelPairs.find(
         (candidate) => candidate.voiceChannelId === newState.channelId,
       );
       if (!pair) return;
@@ -102,13 +99,25 @@ export async function handleAutoJoinVoiceState(
         return;
       }
 
-      if (!(await canInstanceConnect(guildId, config.botInstanceId))) {
+      const candidates = await getAvailableBotInstanceIds(guildId);
+      const priorityIndex = candidates.indexOf(config.botInstanceId);
+      if (priorityIndex < 0) {
         logger.info(
           { guildId, instanceId: config.botInstanceId },
-          'Auto-join skipped: insufficient boosts for this instance',
+          'Auto-join skipped: Bot instance is outside the current boost allocation',
         );
         return;
       }
+      // 優先Botに先行claimの機会を与える。待機後に同じVCまたは自Botがclaim済みなら退出する。
+      if (priorityIndex > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, priorityIndex * 100));
+      }
+      const [channelClaim, botClaim] = await Promise.all([
+        getRedisClient().get(REDIS_KEYS.VC_CLAIM(guildId, pair.voiceChannelId)),
+        getRedisClient().get(REDIS_KEYS.BOT_VC_CLAIM(guildId, config.botInstanceId)),
+      ]);
+      if (channelClaim || botClaim) return;
+      if (getVcSession(guildId)) return;
 
       if (!hasVoicePermissions(newState.guild, voiceChannel)) {
         logger.warn(
@@ -240,7 +249,7 @@ export async function handleAutoDisconnectTimerExpired(guildId: string): Promise
       }
 
       const settings = await getGuildSettings(guildId);
-      const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+      const instanceSettings = getAutoJoinSettings(settings);
       const currentSession = getVcSession(guildId);
       if (currentSession !== session || currentSession.connectionMode !== 'auto') return;
       if (!instanceSettings.autoJoin) {
@@ -248,7 +257,7 @@ export async function handleAutoDisconnectTimerExpired(guildId: string): Promise
         return;
       }
 
-      if (!(await canInstanceConnect(guildId, config.botInstanceId))) {
+      if (!(await getAvailableBotInstanceIds(guildId)).includes(config.botInstanceId)) {
         logger.info(
           { guildId, instanceId: config.botInstanceId },
           'Auto-switch skipped: insufficient boosts for this instance',
@@ -348,7 +357,7 @@ export async function scheduleDisconnectTimersForRestoredSessions(): Promise<voi
 
 function collectAutoJoinCandidates(
   guild: Guild,
-  instanceSettings: ResolvedBotInstanceSettings,
+  instanceSettings: ResolvedAutoJoinSettings,
   currentVoiceChannelId: string,
 ): RuntimeAutoJoinCandidate[] {
   const candidates: RuntimeAutoJoinCandidate[] = [];

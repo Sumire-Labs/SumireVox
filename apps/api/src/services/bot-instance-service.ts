@@ -4,6 +4,7 @@ import {
   REDIS_KEYS,
   cloneBotInstanceSettings,
   normalizeBotInstanceSettings,
+  normalizeAutoJoinSettings,
 } from '@sumirevox/shared';
 import type {
   AutoJoinChannelPair,
@@ -11,6 +12,8 @@ import type {
   BotInstanceSettings,
   GuildBotInstanceSettingsMap,
   ResolvedBotInstanceSettings,
+  AutoJoinSettings,
+  ResolvedAutoJoinSettings,
 } from '@sumirevox/shared';
 import { getPrisma } from '../infrastructure/database.js';
 import { getRedisClient } from '../infrastructure/redis.js';
@@ -184,6 +187,7 @@ export interface GuildBotListItem {
   isActive: boolean;
   isInGuild: boolean;
   isAvailable: boolean;
+  /** 旧クライアント互換。新規UIはautoJoinSettingsを使用する。 */
   settings: ResolvedBotInstanceSettings | null;
 }
 
@@ -191,43 +195,121 @@ export interface GuildBotListResult {
   bots: GuildBotListItem[];
   boostCount: number;
   maxBots: number;
+  autoJoinSettings: ResolvedBotInstanceSettings;
+  botInstancePriority: number[];
 }
 
 export async function getGuildBotList(guildId: string): Promise<GuildBotListResult> {
-  const [instances, availableCount, boostCount, instanceSettingsMap] = await Promise.all([
+  const [instances, availableCount, boostCount, settings] = await Promise.all([
     getActiveBotInstances(),
     getAvailableBotCount(guildId),
     getGuildBoostCount(guildId),
-    getGuildBotInstanceSettings(guildId),
+    getPrisma().guildSettings.findUnique({ where: { guildId } }),
   ]);
 
-  const bots = await Promise.all(
+  const membership = await Promise.all(
     instances.map(async (instance) => {
       const isInGuild = await isBotInGuild(instance.instanceId, guildId);
-      const isAvailable = instance.instanceId <= availableCount;
-      const settings = isAvailable
-        ? normalizeBotInstanceSettings(
-            instanceSettingsMap[String(instance.instanceId)] ?? DEFAULT_BOT_INSTANCE_SETTINGS,
-          )
-        : null;
-
       return {
-        instanceNumber: instance.instanceId,
-        name: instance.name,
-        botUserId: instance.botUserId,
-        isActive: instance.isActive,
+        instance,
         isInGuild,
-        isAvailable,
-        settings,
       };
     }),
   );
+  const joinedIds = membership.filter((item) => item.isInGuild).map((item) => item.instance.instanceId);
+  const priority = normalizePriority(settings?.botInstancePriority, joinedIds);
+  const availableIds = new Set(priority.slice(0, availableCount));
+  const autoJoinSettings = resolveSharedAutoJoinSettings(settings?.autoJoinSettings, settings?.botInstanceSettings);
+  const compatibilitySettings: ResolvedBotInstanceSettings = {
+    autoJoin: autoJoinSettings.autoJoin,
+    voiceChannelId: autoJoinSettings.channelPairs[0]?.voiceChannelId ?? null,
+    textChannelId: autoJoinSettings.channelPairs[0]?.textChannelId ?? null,
+    channelPairs: autoJoinSettings.channelPairs,
+  };
+  const bots = membership.map(({ instance, isInGuild }) => ({
+    instanceNumber: instance.instanceId,
+    name: instance.name,
+    botUserId: instance.botUserId,
+    isActive: instance.isActive,
+    isInGuild,
+    isAvailable: availableIds.has(instance.instanceId),
+    settings: compatibilitySettings,
+  }));
 
   return {
     bots,
     boostCount,
     maxBots: availableCount,
+    autoJoinSettings: compatibilitySettings,
+    botInstancePriority: priority,
   };
+}
+
+export async function updateGuildAutoJoinSettings(
+  guildId: string,
+  updates: Partial<AutoJoinSettings>,
+): Promise<ResolvedAutoJoinSettings> {
+  const prisma = getPrisma();
+  const current = await prisma.guildSettings.findUnique({ where: { guildId } });
+  const existing = resolveSharedAutoJoinSettings(current?.autoJoinSettings, current?.botInstanceSettings);
+  const channelPairs = updates.channelPairs === undefined
+    ? existing.channelPairs
+    : validateChannelPairs(updates.channelPairs);
+  const updated = normalizeAutoJoinSettings({
+    autoJoin: updates.autoJoin ?? existing.autoJoin,
+    channelPairs,
+  });
+  await prisma.guildSettings.upsert({
+    where: { guildId },
+    create: { guildId, autoJoinSettings: updated as unknown as object },
+    update: { autoJoinSettings: updated as unknown as object },
+  });
+  await invalidateGuildSettingsCache(guildId);
+  logger.info({ guildId, updates }, 'Shared auto-join settings updated');
+  return updated;
+}
+
+export async function updateGuildBotInstancePriority(
+  guildId: string,
+  instanceIds: readonly number[],
+): Promise<number[]> {
+  const instances = await getActiveBotInstances();
+  const joined = await Promise.all(instances.map(async (instance) => ({
+    id: instance.instanceId,
+    joined: await isBotInGuild(instance.instanceId, guildId),
+  })));
+  const eligibleIds = joined.filter((item) => item.joined).map((item) => item.id);
+  const normalized = normalizePriority(instanceIds, eligibleIds);
+  if (instanceIds.length !== normalized.length || new Set(instanceIds).size !== instanceIds.length) {
+    throw new AppError('VALIDATION_ERROR', '参加済みで有効なBotを重複なく指定してください。', 400);
+  }
+  await getPrisma().guildSettings.upsert({
+    where: { guildId },
+    create: { guildId, botInstancePriority: normalized },
+    update: { botInstancePriority: normalized },
+  });
+  await invalidateGuildSettingsCache(guildId);
+  logger.info({ guildId, instanceIds: normalized }, 'Bot instance priority updated');
+  return normalized;
+}
+
+function resolveSharedAutoJoinSettings(value: unknown, legacyMap: unknown): ResolvedAutoJoinSettings {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return normalizeAutoJoinSettings(value);
+  }
+  const legacy = legacyMap && typeof legacyMap === 'object' && !Array.isArray(legacyMap)
+    ? (legacyMap as Record<string, unknown>)['1']
+    : undefined;
+  return normalizeAutoJoinSettings(legacy);
+}
+
+function normalizePriority(value: unknown, eligibleIds: readonly number[]): number[] {
+  const available = new Set(eligibleIds);
+  const stored = Array.isArray(value)
+    ? value.filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && available.has(id))
+    : [];
+  const unique = [...new Set(stored)];
+  return [...unique, ...[...eligibleIds].sort((left, right) => left - right).filter((id) => !unique.includes(id))];
 }
 
 /**

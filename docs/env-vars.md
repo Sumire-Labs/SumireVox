@@ -19,7 +19,7 @@
 | SETTINGS_CACHE_TTL_SECONDS | 設定キャッシュ TTL | 300 |
 | BOT_ADMIN_USER_IDS | Bot 管理者 (カンマ区切り) | (必須) |
 | GLOBAL_DICT_NOTIFICATION_CHANNEL_ID | 辞書申請通知チャンネルID | (必須) |
-| DEPLOY_GUILD_ID | コマンド登録先ギルドID (未設定→グローバル) | (なし) |
+| DEPLOY_GUILD_ID | コマンド登録先ギルドID (未設定→グローバル)。Bot 1は全コマンドを登録、Bot 2以降は空配列をPUTして既存コマンドを削除 | (なし) |
 | API_PORT | API ポート | 3000 |
 | SESSION_SECRET | セッション署名シークレット | (必須) |
 | CORS_ORIGIN | CORS 許可オリジン (カンマ区切り) | (必須) |

@@ -25,6 +25,7 @@ vi.mock('../../infrastructure/logger.js', () => ({
 vi.mock('../guild-settings-service.js', () => ({
   getGuildSettings: vi.fn(),
   getInstanceSettings: vi.fn(),
+  getAutoJoinSettings: vi.fn(),
 }));
 
 vi.mock('../vc-session-manager.js', () => ({
@@ -37,6 +38,11 @@ vi.mock('../vc-session-manager.js', () => ({
 
 vi.mock('../premium-service.js', () => ({
   canInstanceConnect: vi.fn(),
+  getAvailableBotInstanceIds: vi.fn(),
+}));
+
+vi.mock('../../infrastructure/redis.js', () => ({
+  getRedisClient: vi.fn(() => ({ get: vi.fn().mockResolvedValue(null) })),
 }));
 
 vi.mock('../auto-disconnect-timer.js', () => ({
@@ -53,7 +59,7 @@ vi.mock('../predefined-audio-cache.js', () => ({
 }));
 
 import { getClient } from '../../infrastructure/discord-client.js';
-import { getGuildSettings, getInstanceSettings } from '../guild-settings-service.js';
+import { getGuildSettings, getInstanceSettings, getAutoJoinSettings } from '../guild-settings-service.js';
 import {
   createVcSession,
   destroyVcSession,
@@ -61,7 +67,7 @@ import {
   getVcSession,
   moveVcSession,
 } from '../vc-session-manager.js';
-import { canInstanceConnect } from '../premium-service.js';
+import { canInstanceConnect, getAvailableBotInstanceIds } from '../premium-service.js';
 import { cancelDisconnectTimer, startDisconnectTimer } from '../auto-disconnect-timer.js';
 import { enqueuePreSynthesized } from '../speech-queue.js';
 import { getPredefinedAudio } from '../predefined-audio-cache.js';
@@ -75,12 +81,14 @@ import {
 const mockGetClient = vi.mocked(getClient);
 const mockGetGuildSettings = vi.mocked(getGuildSettings);
 const mockGetInstanceSettings = vi.mocked(getInstanceSettings);
+const mockGetAutoJoinSettings = vi.mocked(getAutoJoinSettings);
 const mockCreateVcSession = vi.mocked(createVcSession);
 const mockDestroyVcSession = vi.mocked(destroyVcSession);
 const mockGetAllVcSessions = vi.mocked(getAllVcSessions);
 const mockGetVcSession = vi.mocked(getVcSession);
 const mockMoveVcSession = vi.mocked(moveVcSession);
 const mockCanInstanceConnect = vi.mocked(canInstanceConnect);
+const mockGetAvailableBotInstanceIds = vi.mocked(getAvailableBotInstanceIds);
 const mockCancelDisconnectTimer = vi.mocked(cancelDisconnectTimer);
 const mockStartDisconnectTimer = vi.mocked(startDisconnectTimer);
 const mockGetPredefinedAudio = vi.mocked(getPredefinedAudio);
@@ -180,9 +188,11 @@ describe('auto-connection-service', () => {
     vi.clearAllMocks();
     mockGetGuildSettings.mockResolvedValue(makeSettings());
     mockGetInstanceSettings.mockReturnValue(makeInstanceSettings());
+    mockGetAutoJoinSettings.mockReturnValue(makeInstanceSettings());
     mockGetVcSession.mockReturnValue(undefined);
     mockGetAllVcSessions.mockReturnValue(new Map());
     mockCanInstanceConnect.mockResolvedValue(true);
+    mockGetAvailableBotInstanceIds.mockResolvedValue([2]);
     mockGetPredefinedAudio.mockResolvedValue(null);
     mockGetClient.mockReturnValue({ guilds: { cache: { get: vi.fn() } } } as unknown as ReturnType<typeof getClient>);
   });
@@ -205,7 +215,7 @@ describe('auto-connection-service', () => {
       guild.voiceAdapterCreator,
       'auto',
     );
-    expect(mockCanInstanceConnect).toHaveBeenCalledWith('guild-1', 2);
+    expect(mockGetAvailableBotInstanceIds).toHaveBeenCalledWith('guild-1');
   });
 
   it('対象外VC、権限不足、Premium不足では接続しない', async () => {
@@ -220,7 +230,7 @@ describe('auto-connection-service', () => {
     await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
     expect(mockCreateVcSession).not.toHaveBeenCalled();
 
-    mockCanInstanceConnect.mockResolvedValue(false);
+    mockGetAvailableBotInstanceIds.mockResolvedValue([]);
     const allowedGuild = makeGuild({
       'voice-1': makeVoiceChannel('voice-1', 1),
       'text-1': makeTextChannel('text-1'),
@@ -281,7 +291,7 @@ describe('auto-connection-service', () => {
       'text-3': makeTextChannel('text-3'),
     });
     mockGetVcSession.mockReturnValue(makeSession());
-    mockGetInstanceSettings.mockReturnValue(
+    mockGetAutoJoinSettings.mockReturnValue(
       makeInstanceSettings({
         channelPairs: [
           { voiceChannelId: 'voice-1', textChannelId: 'text-1' },
@@ -317,7 +327,7 @@ describe('auto-connection-service', () => {
       'voice-4': makeVoiceChannel('voice-4', 4),
     });
     mockGetVcSession.mockReturnValue(makeSession());
-    mockGetInstanceSettings.mockReturnValue(
+    mockGetAutoJoinSettings.mockReturnValue(
       makeInstanceSettings({
         channelPairs: [
           { voiceChannelId: 'voice-1', textChannelId: 'text-1' },
@@ -348,7 +358,7 @@ describe('auto-connection-service', () => {
       'text-3': makeTextChannel('text-3'),
     });
     mockGetVcSession.mockReturnValue(makeSession());
-    mockGetInstanceSettings.mockReturnValue(
+    mockGetAutoJoinSettings.mockReturnValue(
       makeInstanceSettings({
         channelPairs: [
           { voiceChannelId: 'voice-1', textChannelId: 'text-1' },

@@ -4,7 +4,9 @@ import {
   GuildBotInstanceSettingsMap,
   DEFAULT_BOT_INSTANCE_SETTINGS,
   ResolvedBotInstanceSettings,
+  ResolvedAutoJoinSettings,
   normalizeBotInstanceSettings,
+  normalizeAutoJoinSettings,
 } from '@sumirevox/shared';
 import { GuildSettings as PrismaGuildSettings } from '@prisma/client';
 import { getCachedGuildSettings, setCachedGuildSettings } from '../infrastructure/settings-cache.js';
@@ -57,8 +59,17 @@ export function mapDbToGuildSettings(db: PrismaGuildSettings): GuildSettings {
     adminRoleId: db.adminRoleId,
     dictionaryPermission: db.dictionaryPermission as GuildSettings['dictionaryPermission'],
     manualPremium: db.manualPremium,
+    autoJoinSettings: db.autoJoinSettings as unknown as GuildSettings['autoJoinSettings'],
+    botInstancePriority: db.botInstancePriority as number[],
     botInstanceSettings: ((db.botInstanceSettings ?? {}) as unknown) as GuildBotInstanceSettingsMap,
   };
+}
+
+export function getAutoJoinSettings(guildSettings: GuildSettings): ResolvedAutoJoinSettings {
+  if (guildSettings.autoJoinSettings && typeof guildSettings.autoJoinSettings === 'object') {
+    return normalizeAutoJoinSettings(guildSettings.autoJoinSettings);
+  }
+  return normalizeAutoJoinSettings((guildSettings.botInstanceSettings ?? {})['1']);
 }
 
 /**
@@ -68,6 +79,15 @@ export function getInstanceSettings(
   guildSettings: GuildSettings,
   instanceId: number,
 ): ResolvedBotInstanceSettings {
+  if (instanceId === 1) {
+    const shared = getAutoJoinSettings(guildSettings);
+    return {
+      autoJoin: shared.autoJoin,
+      voiceChannelId: shared.channelPairs[0]?.voiceChannelId ?? null,
+      textChannelId: shared.channelPairs[0]?.textChannelId ?? null,
+      channelPairs: shared.channelPairs,
+    };
+  }
   const map = (guildSettings.botInstanceSettings ?? {}) as GuildBotInstanceSettingsMap;
   return normalizeBotInstanceSettings(map[String(instanceId)] ?? { ...DEFAULT_BOT_INSTANCE_SETTINGS });
 }

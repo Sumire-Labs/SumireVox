@@ -6,6 +6,7 @@
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "deploy-commands": "dotenv -e ../../.env -- tsx src/deploy-commands.ts",
+    "sync-commands": "dotenv -e ../../.env -- tsx src/sync-commands.ts",
     "test": "vitest run",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate",
     "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",

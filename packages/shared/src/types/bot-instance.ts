@@ -26,6 +26,16 @@ export interface ResolvedBotInstanceSettings extends BotInstanceSettings {
   channelPairs: AutoJoinChannelPair[];
 }
 
+/** 全Botで共有する自動接続設定。保存時は旧VC/TCフィールドを持たない。 */
+export interface AutoJoinSettings {
+  autoJoin: boolean;
+  channelPairs?: AutoJoinChannelPair[];
+}
+
+export interface ResolvedAutoJoinSettings extends AutoJoinSettings {
+  channelPairs: AutoJoinChannelPair[];
+}
+
 // guildSettings.botInstanceSettings の型
 // キーは BOT_INSTANCE_ID の文字列 ("1", "2", ...)
 export type GuildBotInstanceSettingsMap = Record<string, BotInstanceSettings>;
