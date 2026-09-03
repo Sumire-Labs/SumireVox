@@ -19,7 +19,7 @@ vi.mock('@discordjs/voice', () => ({
 vi.mock('../../infrastructure/vc-session-store.js', () => ({
   saveVcSessionToRedis: vi.fn(),
   removeVcSessionFromRedis: vi.fn(),
-  getAllVcSessionsForShard: vi.fn(),
+  getAllVcSessionsForBotInstance: vi.fn(),
 }));
 
 vi.mock('../../infrastructure/discord-client.js', () => ({
@@ -53,6 +53,7 @@ vi.mock('../auto-disconnect-timer.js', () => ({
 
 vi.mock('../vc-ownership-service.js', () => ({
   claimVcOwnership: vi.fn(async (_guildId: string, _voiceChannelId: string, instanceId: number) => ({ instanceId, claimId: 'claim-1' })),
+  getVcOwnershipRecoveryDelayMs: vi.fn(async () => 0),
   moveVcOwnership: vi.fn(async (_guildId: string, _from: string, _to: string, ownership: { instanceId: number }) => ({ ...ownership, claimId: 'claim-2' })),
   renewVcOwnership: vi.fn(async () => true),
   releaseVcOwnership: vi.fn(async () => {}),
@@ -67,12 +68,14 @@ import {
 import { getClient } from '../../infrastructure/discord-client.js';
 import { deleteGuildQueue } from '../speech-queue.js';
 import {
-  getAllVcSessionsForShard,
+  getAllVcSessionsForBotInstance,
   removeVcSessionFromRedis,
   saveVcSessionToRedis,
 } from '../../infrastructure/vc-session-store.js';
+import { claimVcOwnership, getVcOwnershipRecoveryDelayMs } from '../vc-ownership-service.js';
 import {
   createVcSession,
+  cancelAllVcSessionRecovery,
   getAllVcSessions,
   getVcSession,
   moveVcSession,
@@ -86,7 +89,9 @@ const mockGetVoiceConnection = vi.mocked(getVoiceConnection);
 const mockGetClient = vi.mocked(getClient);
 const mockSaveVcSessionToRedis = vi.mocked(saveVcSessionToRedis);
 const mockRemoveVcSessionFromRedis = vi.mocked(removeVcSessionFromRedis);
-const mockGetAllVcSessionsForShard = vi.mocked(getAllVcSessionsForShard);
+const mockGetAllVcSessionsForBotInstance = vi.mocked(getAllVcSessionsForBotInstance);
+const mockClaimVcOwnership = vi.mocked(claimVcOwnership);
+const mockGetVcOwnershipRecoveryDelayMs = vi.mocked(getVcOwnershipRecoveryDelayMs);
 const mockDeleteGuildQueue = vi.mocked(deleteGuildQueue);
 
 function makeConnection() {
@@ -112,6 +117,8 @@ function makeGuild() {
 describe('vc-session-manager connection mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
+    cancelAllVcSessionRecovery();
     getAllVcSessions().clear();
     mockGetVoiceConnection.mockReturnValue(undefined);
     mockEntersState.mockResolvedValue(undefined as never);
@@ -179,17 +186,17 @@ describe('vc-session-manager connection mode', () => {
     expect(mockDeleteGuildQueue).toHaveBeenCalledWith('guild-1');
   });
 
-  it('モードのない旧Redisセッションはmanualとして復旧する', async () => {
+  it('保存時と異なるシャードでも、現在の所有シャードで旧Redisセッションをmanualとして復旧する', async () => {
     const connection = makeConnection();
     mockJoinVoiceChannel.mockReturnValue(connection as never);
     const savedSession: VcSession = {
       guildId: 'guild-1',
       voiceChannelId: 'voice-1',
       textChannelId: 'text-1',
-      shardId: 0,
+      shardId: 7,
       botInstanceId: 1,
     };
-    mockGetAllVcSessionsForShard.mockResolvedValue([savedSession]);
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
     const guild = makeGuild();
     mockGetClient.mockReturnValue({
       shard: { ids: [0] },
@@ -204,5 +211,123 @@ describe('vc-session-manager connection mode', () => {
       textChannelId: 'text-1',
     });
     expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+  });
+
+  it('異常終了後のlease競合では記録を保持し、失効後に再試行する', async () => {
+    vi.useFakeTimers();
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    mockClaimVcOwnership.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      instanceId: 1,
+      claimId: 'claim-2',
+    });
+    mockGetVcOwnershipRecoveryDelayMs.mockResolvedValue(100);
+    const savedSession: VcSession = {
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      textChannelId: 'text-1',
+      shardId: 0,
+      botInstanceId: 1,
+      claimId: 'expired-process-claim',
+      connectionMode: 'auto',
+    };
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
+    const guild = makeGuild();
+    mockGetClient.mockReturnValue({
+      shard: { ids: [0] },
+      guilds: { cache: { has: () => true, get: () => guild } },
+    } as unknown as ReturnType<typeof getClient>);
+
+    await restoreVcSessions();
+
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+    expect(getVcSession('guild-1')).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getVcSession('guild-1')).toMatchObject({
+      voiceChannelId: 'voice-1',
+      claimId: 'claim-2',
+    });
+  });
+
+  it('既にBotがVCへ接続済みなら復旧せず、古い記録を削除する', async () => {
+    const savedSession: VcSession = {
+      guildId: 'guild-1', voiceChannelId: 'voice-1', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
+    };
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
+    const guild = {
+      ...makeGuild(),
+      members: { me: { voice: { channelId: 'voice-1' } } },
+    };
+    mockGetClient.mockReturnValue({
+      shard: { ids: [0] },
+      guilds: { cache: { has: () => true, get: () => guild } },
+    } as unknown as ReturnType<typeof getClient>);
+
+    await restoreVcSessions();
+
+    expect(mockJoinVoiceChannel).not.toHaveBeenCalled();
+    expect(mockRemoveVcSessionFromRedis).toHaveBeenCalledWith('guild-1', 1);
+  });
+
+  it('削除済みVCの記録だけを恒久的な失敗として削除する', async () => {
+    const savedSession: VcSession = {
+      guildId: 'guild-1', voiceChannelId: 'deleted-voice', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
+    };
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
+    const guild = {
+      ...makeGuild(),
+      channels: { cache: { get: () => undefined } },
+    };
+    mockGetClient.mockReturnValue({
+      shard: { ids: [0] },
+      guilds: { cache: { get: () => guild } },
+    } as unknown as ReturnType<typeof getClient>);
+
+    await restoreVcSessions();
+
+    expect(mockRemoveVcSessionFromRedis).toHaveBeenCalledWith('guild-1', 1);
+  });
+
+  it('Discord接続の一時失敗では記録を削除せず、バックオフして再試行する', async () => {
+    vi.useFakeTimers();
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    mockEntersState.mockRejectedValueOnce(new Error('Discord unavailable')).mockResolvedValueOnce(undefined as never);
+    mockGetVcOwnershipRecoveryDelayMs.mockResolvedValue(0);
+    const savedSession: VcSession = {
+      guildId: 'guild-1', voiceChannelId: 'voice-1', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
+    };
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
+    const guild = makeGuild();
+    mockGetClient.mockReturnValue({
+      shard: { ids: [0] },
+      guilds: { cache: { get: () => guild } },
+    } as unknown as ReturnType<typeof getClient>);
+
+    await restoreVcSessions();
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(getVcSession('guild-1')).toMatchObject({ voiceChannelId: 'voice-1' });
+  });
+
+  it('停止時に保留中の復旧をキャンセルする', async () => {
+    vi.useFakeTimers();
+    mockClaimVcOwnership.mockResolvedValue(null);
+    mockGetVcOwnershipRecoveryDelayMs.mockResolvedValue(100);
+    const savedSession: VcSession = {
+      guildId: 'guild-1', voiceChannelId: 'voice-1', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
+    };
+    mockGetAllVcSessionsForBotInstance.mockResolvedValue([savedSession]);
+    const guild = makeGuild();
+    mockGetClient.mockReturnValue({
+      shard: { ids: [0] },
+      guilds: { cache: { has: () => true, get: () => guild } },
+    } as unknown as ReturnType<typeof getClient>);
+
+    await restoreVcSessions();
+    cancelAllVcSessionRecovery();
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(mockClaimVcOwnership).toHaveBeenCalledTimes(1);
   });
 });

@@ -17,7 +17,13 @@ import { handleInteractionCreate } from './events/interaction-create.js';
 import { handleMessageCreate } from './events/message-create.js';
 import { handleVoiceStateUpdate } from './events/voice-state-update.js';
 import { registerAllViewHandlers } from './commands/register-view-handlers.js';
-import { restoreVcSessions, destroyAllVcSessions, startVcOwnershipRenewal, stopVcOwnershipRenewal } from './services/vc-session-manager.js';
+import {
+  cancelAllVcSessionRecovery,
+  restoreVcSessions,
+  destroyAllVcSessions,
+  startVcOwnershipRenewal,
+  stopVcOwnershipRenewal,
+} from './services/vc-session-manager.js';
 import {
   addGuildsToBotInstanceRegistry,
   deactivateBotInstance,
@@ -181,6 +187,7 @@ async function bootstrap(): Promise<void> {
     await deactivateBotInstance();
 
     // 全 VC セッション破棄
+    cancelAllVcSessionRecovery();
     stopVcOwnershipRenewal();
     await destroyAllVcSessions();
 

@@ -32,7 +32,7 @@ discord.js の `ShardingManager` 方式。bot サービスのエントリポイ�
 1. **Pub/Sub**: Bot ↔ API、シャード間のリアルタイム通知。辞書更新時はトライ木の無効化フラグのみ立て、再構築は次回アクセス時に遅延実行
 2. **セッションストア**: Web の Discord OAuth2 セッション。TTL 7日
 3. **設定キャッシュ**: GuildSettings / UserVoiceSetting を Redis キャッシュ。TTL は `SETTINGS_CACHE_TTL_SECONDS`
-4. **VC 所有権**: guild/VC と guild/Bot のTTL付きleaseをLuaで同時にclaimする。leaseを更新できない接続は切断し、異常停止後はTTLで回収する。
+4. **VC 実行時セッションと所有権**: `vc-session:*` に再接続用の実行時セッションをTTLなしで保存し、`vc-claim:*` にguild/VCとguild/BotのTTL付きleaseをLuaで同時にclaimする。DBは接続設定だけを保持し、実行中の接続は保存しない。leaseを更新できない接続は切断し、異常停止後はTTLで回収する。
 
 Redis 停止時はサービス停止を許容。フォールバックなし。`restart: unless-stopped` で自動復旧。
 
@@ -44,8 +44,8 @@ Redis 停止時はサービス停止を許容。フォールバックなし。`r
 - Bot 1だけがDiscordコマンドを提供する。サブBotへの接続・退出はRedis Pub/Subの内部指示で委譲する。
 
 - メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, connectionMode, ... })
-- Redis にも接続情報を記録
-- シャード再起動時に Redis から前回の接続情報を読み取り、自動で VC 再参加
+- Redis に復旧用の実行時セッションを記録（正常退出時に削除）
+- シャード再起動時に Redis から前回の接続情報を読み取り、自動で VC 再参加。異常終了後に所有権leaseが残っている場合は、lease失効後に再試行する。保存時と異なるシャードに再割当された場合も、現在そのギルドを保持するシャードが復旧を担当する
 
 ## PostgreSQL 接続数管理
 

@@ -3,7 +3,8 @@ import { REDIS_KEYS } from '@sumirevox/shared';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
-const LEASE_TTL_MS = 60_000;
+export const VC_OWNERSHIP_LEASE_TTL_MS = 60_000;
+const RECOVERY_LEASE_BUFFER_MS = 250;
 
 export interface VcOwnership {
   instanceId: number;
@@ -60,7 +61,7 @@ export async function claimVcOwnership(
     REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId),
     REDIS_KEYS.BOT_VC_CLAIM(guildId, instanceId),
     value,
-    String(LEASE_TTL_MS),
+    String(VC_OWNERSHIP_LEASE_TTL_MS),
   );
   if (result !== 1) return null;
   return { instanceId, claimId };
@@ -77,7 +78,7 @@ export async function renewVcOwnership(
     REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId),
     REDIS_KEYS.BOT_VC_CLAIM(guildId, ownership.instanceId),
     claimValue(ownership.instanceId, ownership.claimId),
-    String(LEASE_TTL_MS),
+    String(VC_OWNERSHIP_LEASE_TTL_MS),
   );
   return result === 1;
 }
@@ -97,7 +98,7 @@ export async function moveVcOwnership(
     REDIS_KEYS.VC_CLAIM(guildId, toVoiceChannelId),
     claimValue(ownership.instanceId, ownership.claimId),
     claimValue(next.instanceId, next.claimId),
-    String(LEASE_TTL_MS),
+    String(VC_OWNERSHIP_LEASE_TTL_MS),
   );
   return result === 1 ? next : null;
 }
@@ -117,7 +118,7 @@ export async function rollbackVcOwnershipMove(
     REDIS_KEYS.BOT_VC_CLAIM(guildId, previous.instanceId),
     claimValue(previous.instanceId, previous.claimId),
     claimValue(current.instanceId, current.claimId),
-    String(LEASE_TTL_MS),
+    String(VC_OWNERSHIP_LEASE_TTL_MS),
   );
 }
 
@@ -137,4 +138,33 @@ export async function releaseVcOwnership(
   } catch (error) {
     logger.error({ err: error, guildId, voiceChannelId }, 'Failed to release VC ownership');
   }
+}
+
+/**
+ * 復旧時に既存leaseが切れるまでの安全な待機時間を返す。
+ * Redis障害時は短いバックオフを返し、呼び出し側で復旧記録を保持する。
+ */
+export async function getVcOwnershipRecoveryDelayMs(
+  guildId: string,
+  voiceChannelId: string,
+  instanceId: number,
+): Promise<number> {
+  try {
+    const redis = getRedisClient();
+    const [channelTtl, botTtl] = await Promise.all([
+      redis.pttl(REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId)),
+      redis.pttl(REDIS_KEYS.BOT_VC_CLAIM(guildId, instanceId)),
+    ]);
+    const ttl = Math.max(normalizeLeaseTtl(channelTtl), normalizeLeaseTtl(botTtl));
+    return ttl > 0 ? ttl + RECOVERY_LEASE_BUFFER_MS : 0;
+  } catch (error) {
+    logger.warn({ err: error, guildId, voiceChannelId }, 'Failed to read VC ownership lease TTL');
+    return 5_000;
+  }
+}
+
+function normalizeLeaseTtl(ttl: number): number {
+  if (ttl > 0) return ttl;
+  // 永続キーは想定外だが、即時奪取を避けるため通常leaseと同じ待機にする。
+  return ttl === -1 ? VC_OWNERSHIP_LEASE_TTL_MS : 0;
 }

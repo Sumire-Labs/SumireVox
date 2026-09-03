@@ -10,7 +10,7 @@ import type { DiscordGatewayAdapterCreator } from '@discordjs/voice';
 import {
   saveVcSessionToRedis,
   removeVcSessionFromRedis,
-  getAllVcSessionsForShard,
+  getAllVcSessionsForBotInstance,
 } from '../infrastructure/vc-session-store.js';
 import { getClient } from '../infrastructure/discord-client.js';
 import { logger } from '../infrastructure/logger.js';
@@ -18,12 +18,23 @@ import { config } from '../infrastructure/config.js';
 import { deleteGuildQueue } from './speech-queue.js';
 import { initTrieSlot, destroyTrieSlot } from './text-pipeline/index.js';
 import { cancelDisconnectTimer } from './auto-disconnect-timer.js';
-import { claimVcOwnership, moveVcOwnership, releaseVcOwnership, renewVcOwnership, rollbackVcOwnershipMove } from './vc-ownership-service.js';
+import {
+  claimVcOwnership,
+  getVcOwnershipRecoveryDelayMs,
+  moveVcOwnership,
+  releaseVcOwnership,
+  renewVcOwnership,
+  rollbackVcOwnershipMove,
+} from './vc-ownership-service.js';
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
 const pendingCreates = new Map<string, Promise<VcSession>>();
 let ownershipRenewalTimer: ReturnType<typeof setInterval> | null = null;
+const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const recoveryAttempts = new Map<string, number>();
+const RECOVERY_BACKOFF_BASE_MS = 5_000;
+const RECOVERY_BACKOFF_MAX_MS = 60_000;
 
 export async function createVcSession(
   guildId: string,
@@ -107,6 +118,8 @@ async function createVcSessionInternal(
 }
 
 export async function destroyVcSession(guildId: string): Promise<void> {
+  cancelVcSessionRecovery(guildId);
+  recoveryAttempts.delete(guildId);
   cancelDisconnectTimer(guildId);
   deleteGuildQueue(guildId);
 
@@ -256,7 +269,7 @@ export async function destroyAllVcSessions(): Promise<void> {
 export async function restoreVcSessions(): Promise<void> {
   const client = getClient();
   const shardId = client.shard?.ids[0] ?? 0;
-  const savedSessions = await getAllVcSessionsForShard(shardId);
+  const savedSessions = await getAllVcSessionsForBotInstance(config.botInstanceId);
 
   if (savedSessions.length === 0) {
     logger.info({ shardId }, 'No VC sessions to restore');
@@ -266,45 +279,96 @@ export async function restoreVcSessions(): Promise<void> {
   logger.info({ shardId, count: savedSessions.length }, 'Restoring VC sessions...');
 
   for (const session of savedSessions) {
-    try {
-      const guild = client.guilds.cache.get(session.guildId);
-      if (!guild) {
-        logger.warn(
-          { guildId: session.guildId },
-          'Guild not found during session restore, removing session',
-        );
-        await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
-        continue;
-      }
-
-      const voiceChannel = guild.channels.cache.get(session.voiceChannelId);
-      if (!voiceChannel || !voiceChannel.isVoiceBased()) {
-        logger.warn(
-          { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
-          'Voice channel not found during session restore, removing session',
-        );
-        await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
-        continue;
-      }
-
-      await createVcSession(
-        session.guildId,
-        session.voiceChannelId,
-        session.textChannelId,
-        guild.voiceAdapterCreator,
-        session.connectionMode === 'auto' ? 'auto' : 'manual',
-      );
-
-      logger.info(
-        { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
-        'VC session restored',
-      );
-
-    } catch (error) {
-      logger.error({ err: error, guildId: session.guildId }, 'Failed to restore VC session');
-      await removeVcSessionFromRedis(session.guildId, config.botInstanceId);
-    }
+    // 現在のシャードが所有するギルドだけが接続する。保存時のshardIdは再シャーディングで変わり得る。
+    if (!client.guilds.cache.get(session.guildId)) continue;
+    await restoreVcSession(session);
   }
+}
+
+async function restoreVcSession(session: VcSession): Promise<void> {
+  const client = getClient();
+  const guild = client.guilds.cache.get(session.guildId);
+  if (!guild) return;
+
+  const voiceChannel = guild.channels.cache.get(session.voiceChannelId);
+  if (!voiceChannel || !voiceChannel.isVoiceBased()) {
+    logger.warn(
+      { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
+      'Voice channel not found during session restore, removing session',
+    );
+    await abandonVcSessionRecovery(session.guildId);
+    return;
+  }
+
+  if (guild.members?.me?.voice.channelId) {
+    logger.warn(
+      { guildId: session.guildId, voiceChannelId: guild.members?.me?.voice.channelId },
+      'Bot is already connected during session restore, removing stale session',
+    );
+    await abandonVcSessionRecovery(session.guildId);
+    return;
+  }
+
+  try {
+    await createVcSession(
+      session.guildId,
+      session.voiceChannelId,
+      session.textChannelId,
+      guild.voiceAdapterCreator,
+      session.connectionMode === 'auto' ? 'auto' : 'manual',
+    );
+    recoveryAttempts.delete(session.guildId);
+    cancelVcSessionRecovery(session.guildId);
+    logger.info(
+      { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
+      'VC session restored',
+    );
+  } catch (error) {
+    const leaseDelay = await getVcOwnershipRecoveryDelayMs(
+      session.guildId,
+      session.voiceChannelId,
+      config.botInstanceId,
+    );
+    const delay = leaseDelay || nextRecoveryBackoffMs(session.guildId);
+    logger.warn(
+      { err: error, guildId: session.guildId, voiceChannelId: session.voiceChannelId, delay },
+      'VC session restore deferred',
+    );
+    scheduleVcSessionRecovery(session, delay);
+  }
+}
+
+function scheduleVcSessionRecovery(session: VcSession, delay: number): void {
+  if (recoveryTimers.has(session.guildId)) return;
+  const timer = setTimeout(() => {
+    recoveryTimers.delete(session.guildId);
+    void restoreVcSession(session);
+  }, delay);
+  recoveryTimers.set(session.guildId, timer);
+}
+
+function nextRecoveryBackoffMs(guildId: string): number {
+  const attempts = (recoveryAttempts.get(guildId) ?? 0) + 1;
+  recoveryAttempts.set(guildId, attempts);
+  return Math.min(RECOVERY_BACKOFF_BASE_MS * 2 ** (attempts - 1), RECOVERY_BACKOFF_MAX_MS);
+}
+
+export function cancelAllVcSessionRecovery(): void {
+  for (const timer of recoveryTimers.values()) clearTimeout(timer);
+  recoveryTimers.clear();
+  recoveryAttempts.clear();
+}
+
+function cancelVcSessionRecovery(guildId: string): void {
+  const timer = recoveryTimers.get(guildId);
+  if (timer) clearTimeout(timer);
+  recoveryTimers.delete(guildId);
+}
+
+async function abandonVcSessionRecovery(guildId: string): Promise<void> {
+  cancelVcSessionRecovery(guildId);
+  recoveryAttempts.delete(guildId);
+  await removeVcSessionFromRedis(guildId, config.botInstanceId);
 }
 
 export function startVcOwnershipRenewal(): void {

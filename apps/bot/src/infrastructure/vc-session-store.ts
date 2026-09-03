@@ -2,7 +2,6 @@ import { VcSession } from '@sumirevox/shared';
 import { REDIS_KEYS } from '@sumirevox/shared';
 import { logger } from './logger.js';
 import { getRedisClient } from './redis.js';
-import { config } from './config.js';
 
 export async function saveVcSessionToRedis(session: VcSession): Promise<void> {
   try {
@@ -40,7 +39,8 @@ export async function removeVcSessionFromRedis(
   }
 }
 
-export async function getAllVcSessionsForShard(shardId: number): Promise<VcSession[]> {
+/** 指定Botの保存済みセッションをすべて返す。シャード割当は復旧側で判定する。 */
+export async function getAllVcSessionsForBotInstance(botInstanceId: number): Promise<VcSession[]> {
   const client = getRedisClient();
   const sessions: VcSession[] = [];
 
@@ -56,13 +56,13 @@ export async function getAllVcSessionsForShard(shardId: number): Promise<VcSessi
       for (const value of values) {
         if (!value) continue;
         const session = JSON.parse(value) as VcSession;
-        if (session.shardId === shardId && session.botInstanceId === config.botInstanceId) {
+        if (session.botInstanceId === botInstanceId) {
           sessions.push(session);
         }
       }
     } while (cursor !== '0');
   } catch (err) {
-    logger.error({ err, shardId }, 'Failed to get VC sessions for shard from Redis');
+    logger.error({ err, botInstanceId }, 'Failed to get VC sessions for Bot instance from Redis');
   }
 
   return sessions;
