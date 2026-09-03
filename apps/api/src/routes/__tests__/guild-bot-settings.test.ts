@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { botServiceMock, discordApiMock, guildChannelServiceMock, redisMock, publishEventMock } = vi.hoisted(() => ({
+const {
+  botServiceMock,
+  discordApiMock,
+  guildChannelServiceMock,
+  rateLimitMock,
+  redisMock,
+  publishEventMock,
+} = vi.hoisted(() => ({
   botServiceMock: {
     copyBotInstanceSettings: vi.fn(),
     getActiveBotInstances: vi.fn(),
@@ -19,7 +26,11 @@ const { botServiceMock, discordApiMock, guildChannelServiceMock, redisMock, publ
   },
   guildChannelServiceMock: {
     getGuildChannelsSorted: vi.fn(),
+    refreshGuildChannels: vi.fn(),
   },
+  rateLimitMock: vi.fn(() => async (_context: unknown, next: () => Promise<void>) => {
+    await next();
+  }),
   redisMock: {
     get: vi.fn(),
     set: vi.fn(),
@@ -44,9 +55,7 @@ vi.mock('../../infrastructure/logger.js', () => ({
 }));
 
 vi.mock('../../middleware/rate-limit.js', () => ({
-  rateLimit: vi.fn(() => async (_context: unknown, next: () => Promise<void>) => {
-    await next();
-  }),
+  rateLimit: rateLimitMock,
 }));
 
 vi.mock('../../services/bot-instance-service.js', () => botServiceMock);
@@ -94,6 +103,7 @@ describe('GET /api/guilds/:guildId/channels', () => {
   beforeEach(() => {
     discordApiMock.hasManageGuildPermission.mockReset().mockResolvedValue(true);
     guildChannelServiceMock.getGuildChannelsSorted.mockReset();
+    guildChannelServiceMock.refreshGuildChannels.mockReset();
     redisMock.get.mockReset().mockResolvedValue(null);
     redisMock.set.mockReset().mockResolvedValue('OK');
   });
@@ -131,6 +141,57 @@ describe('GET /api/guilds/:guildId/channels', () => {
         code: 'SERVICE_UNAVAILABLE',
         message: 'チャンネル一覧を取得できる参加中の Bot が見つかりません。',
       },
+    });
+  });
+});
+
+describe('POST /api/guilds/:guildId/channels/refresh', () => {
+  beforeEach(() => {
+    discordApiMock.hasManageGuildPermission.mockReset().mockResolvedValue(true);
+    guildChannelServiceMock.refreshGuildChannels.mockReset();
+    redisMock.get.mockReset().mockResolvedValue(null);
+    redisMock.set.mockReset().mockResolvedValue('OK');
+  });
+
+  it('applies the dedicated per-user refresh rate limit', () => {
+    expect(rateLimitMock).toHaveBeenCalledWith({
+      max: 10,
+      windowSeconds: 60,
+      keyPrefix: 'guild-channels-refresh',
+    });
+  });
+
+  it('refreshes and returns the latest channels through the existing response envelope', async () => {
+    const channels = {
+      textChannels: [],
+      voiceChannels: [{ id: '223456789012345678', name: 'Latest VC', parentId: null, type: 'voice' }],
+      readableChannels: [{ id: '223456789012345678', name: 'Latest VC', parentId: null, type: 'voice' }],
+      categories: [],
+    };
+    guildChannelServiceMock.refreshGuildChannels.mockResolvedValue(channels);
+
+    const response = await buildApp(true).request('/api/guilds/123456789012345678/channels/refresh', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: channels });
+    expect(guildChannelServiceMock.refreshGuildChannels).toHaveBeenCalledWith('123456789012345678');
+  });
+
+  it('returns the refresh failure without changing the response contract', async () => {
+    guildChannelServiceMock.refreshGuildChannels.mockRejectedValue(
+      new AppError('DISCORD_API_ERROR', 'Failed to fetch guild channels', 500),
+    );
+
+    const response = await buildApp(true).request('/api/guilds/123456789012345678/channels/refresh', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: { code: 'DISCORD_API_ERROR', message: 'Failed to fetch guild channels' },
     });
   });
 });

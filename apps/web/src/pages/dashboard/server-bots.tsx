@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button, Checkbox, Modal, Switch, Select, ListBox } from '@heroui/react';
+import { RefreshCw } from 'lucide-react';
 import { useParams } from 'react-router';
 import type {
   AutoJoinChannelPair,
@@ -198,22 +199,27 @@ export function ServerBotsPage() {
     return result;
   }, [guildId]);
 
-  const fetchChannels = useCallback(async (signal?: AbortSignal): Promise<ChannelsData | null> => {
+  const fetchChannels = useCallback(async (
+    signal?: AbortSignal,
+    forceRefresh = false,
+  ): Promise<ChannelsData | null> => {
     if (!guildId) return null;
 
     setChannelsLoading(true);
     setChannelsError(null);
     try {
-      const result = await api.get<ChannelsData>(
-        `/api/guilds/${guildId}/channels`,
-        signal ? { signal } : undefined,
-      );
+      const result = forceRefresh
+        ? await api.post<ChannelsData>(`/api/guilds/${guildId}/channels/refresh`)
+        : await api.get<ChannelsData>(
+            `/api/guilds/${guildId}/channels`,
+            signal ? { signal } : undefined,
+          );
       if (!signal?.aborted) setChannels(result);
       return result;
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') throw err;
       if (!signal?.aborted) {
-        setChannels(null);
+        if (!forceRefresh) setChannels(null);
         setChannelsError(
           err instanceof ApiError ? err.message : 'チャンネル一覧の読み込みに失敗しました。',
         );
@@ -223,6 +229,11 @@ export function ServerBotsPage() {
       if (!signal?.aborted) setChannelsLoading(false);
     }
   }, [guildId]);
+
+  const refreshChannels = useCallback(async () => {
+    const result = await fetchChannels(undefined, true);
+    if (result) showSuccess('チャンネル一覧を更新しました');
+  }, [fetchChannels, showSuccess]);
 
   useEffect(() => {
     if (!guildId) {
@@ -407,10 +418,21 @@ export function ServerBotsPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Bot 管理</h1>
           <p className="text-gray-400">サーバーで利用可能な Bot の管理と設定ができます。</p>
         </div>
-        <div className="pt-1">
+        <div className="flex items-center gap-3 pt-1">
           <span className="text-sm bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-xl font-medium">
             利用可能な Bot 数: {effectiveMaxBots} / {totalInstances}
           </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onPress={() => void refreshChannels()}
+            isPending={channelsLoading}
+            isDisabled={channelsLoading}
+            className="border border-white/20 bg-white/5 text-white"
+          >
+            <RefreshCw className={`w-4 h-4 ${channelsLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {channelsLoading ? '更新中...' : 'チャンネルを更新'}
+          </Button>
         </div>
       </div>
 
@@ -423,7 +445,7 @@ export function ServerBotsPage() {
           <Button
             size="sm"
             variant="secondary"
-            onPress={() => void fetchChannels()}
+            onPress={() => void refreshChannels()}
             isDisabled={channelsLoading}
             className="border border-amber-400/40 bg-transparent text-amber-100 shrink-0"
           >

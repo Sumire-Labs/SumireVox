@@ -28,7 +28,7 @@ vi.mock('./bot-instance-service.js', () => botInstanceServiceMock);
 
 vi.mock('../infrastructure/config.js', () => ({ config: configMock }));
 
-import { getGuildChannelsSorted } from './guild-channel-service.js';
+import { getGuildChannelsSorted, refreshGuildChannels } from './guild-channel-service.js';
 
 describe('getGuildChannelsSorted', () => {
   beforeEach(() => {
@@ -122,6 +122,30 @@ describe('getGuildChannelsSorted', () => {
     await getGuildChannelsSorted('guild-1');
 
     expect(fetchGuildChannelsMock).toHaveBeenCalledWith('guild-1', 'bot-token-2');
+  });
+
+  it('bypasses cached channels and replaces them with Discord data when refreshed', async () => {
+    redisMock.get.mockResolvedValue(JSON.stringify({ voiceChannels: [] }));
+    botInstanceServiceMock.getActiveBotInstances.mockResolvedValue([{ instanceId: 2 }]);
+    botInstanceServiceMock.isBotInGuild.mockResolvedValue(true);
+    configMock.discordBotTokens.set(2, 'bot-token-2');
+    fetchGuildChannelsMock.mockResolvedValue([
+      { id: '20', name: 'Latest VC', type: 2, parent_id: null, position: 1 },
+    ]);
+
+    const result = await refreshGuildChannels('guild-1');
+
+    expect(redisMock.get).not.toHaveBeenCalled();
+    expect(fetchGuildChannelsMock).toHaveBeenCalledWith('guild-1', 'bot-token-2');
+    expect(result.voiceChannels).toEqual([
+      { id: '20', name: 'Latest VC', parentId: null, type: 'voice' },
+    ]);
+    expect(redisMock.set).toHaveBeenCalledWith(
+      'guild:guild-1:channels:v2',
+      JSON.stringify(result),
+      'EX',
+      120,
+    );
   });
 
   it('fails clearly when no joined Bot has an API token configured', async () => {

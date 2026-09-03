@@ -85,6 +85,7 @@
 | GET | /api/guilds/:guildId/settings | サーバー設定取得 |
 | PUT | /api/guilds/:guildId/settings | サーバー設定変更 |
 | GET | /api/guilds/:guildId/channels | チャンネル一覧 |
+| POST | /api/guilds/:guildId/channels/refresh | Discordからチャンネル一覧を強制再取得 |
 | GET | /api/guilds/:guildId/roles | ロール一覧 |
 | GET | /api/guilds/:guildId/bots | Bot インスタンス一覧 |
 | PUT | /api/guilds/:guildId/bots/:instanceId/settings | Bot インスタンス設定変更 |
@@ -108,6 +109,10 @@
 | readableChannels | `type: text | announcement | voice | stage` の全チャンネル一覧（Bot の読み上げ対象） |
 
 ボイスチャンネルまたはステージチャンネルのテキストチャットを選択する場合は、そのチャンネル自身の `channelId` を指定する。Bot インスタンス設定の `textChannelId` はこのチャンネル ID を使用する。
+
+### POST /api/guilds/:guildId/channels/refresh
+
+`GET /api/guilds/:guildId/channels` のキャッシュを使わず、参加中のアクティブな Bot からDiscordの最新チャンネル一覧を取得してキャッシュを更新する。応答形式はGETと同一。認証と `ManageGuild` 権限が必要で、ユーザーごとに毎分10回まで実行できる。
 
 ### Bot インスタンス自動接続設定
 

@@ -33,8 +33,9 @@ import { rateLimit } from '../middleware/rate-limit.js';
 
 const dictAddRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'dict-add' });
 const botSettingsRateLimit = rateLimit({ max: 30, windowSeconds: 60, keyPrefix: 'bot-settings' });
+const channelRefreshRateLimit = rateLimit({ max: 10, windowSeconds: 60, keyPrefix: 'guild-channels-refresh' });
 import { validate } from '../middleware/validate.js';
-import { getGuildChannelsSorted } from '../services/guild-channel-service.js';
+import { getGuildChannelsSorted, refreshGuildChannels } from '../services/guild-channel-service.js';
 import { getGuildRolesSorted } from '../services/guild-role-service.js';
 import {
   discordSnowflakeSchema,
@@ -221,6 +222,16 @@ guildsRouter.delete('/:guildId/dictionary/:word', requireGuildAdmin, async (c) =
 guildsRouter.get('/:guildId/channels', requireGuildAdmin, async (c) => {
   const { guildId } = await validate.params(c, guildParamsSchema);
   const result = await getGuildChannelsSorted(guildId);
+  return c.json({ success: true, data: result });
+});
+
+/**
+ * POST /api/guilds/:guildId/channels/refresh
+ * Discord からチャンネル一覧を強制再取得する
+ */
+guildsRouter.post('/:guildId/channels/refresh', requireGuildAdmin, channelRefreshRateLimit, async (c) => {
+  const { guildId } = await validate.params(c, guildParamsSchema);
+  const result = await refreshGuildChannels(guildId);
   return c.json({ success: true, data: result });
 });
 

@@ -49,12 +49,26 @@ function toGuildChannelItem(channel: DiscordChannel, type: GuildChannelSemanticT
 }
 
 export async function getGuildChannelsSorted(guildId: string): Promise<GuildChannelsSorted> {
+  return loadGuildChannels(guildId, true);
+}
+
+/** Discord からチャンネル一覧を強制再取得してキャッシュを更新する。 */
+export async function refreshGuildChannels(guildId: string): Promise<GuildChannelsSorted> {
+  return loadGuildChannels(guildId, false);
+}
+
+async function loadGuildChannels(
+  guildId: string,
+  useCache: boolean,
+): Promise<GuildChannelsSorted> {
   const redis = getRedisClient();
   const cacheKey = channelCacheKey(guildId);
 
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    return JSON.parse(cached) as GuildChannelsSorted;
+  if (useCache) {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as GuildChannelsSorted;
+    }
   }
 
   const botToken = await getGuildChannelAccessToken(guildId);
