@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ResolvedBotInstanceSettings } from '@sumirevox/shared';
+import type { ResolvedAutoJoinSettings } from '@sumirevox/shared';
 import {
   appendChannelPair,
-  applyBotSettingsPatch,
+  applyAutoJoinSettingsPatch,
   applyChannelPairs,
   canAddChannelPair,
-  createEmptyBotInstanceSettings,
+  createEmptyAutoJoinSettings,
   getAvailableVoiceChannelIds,
-  getCopyableBotInfos,
   removeChannelPair,
   updateChannelPair,
 } from './server-bots-helpers';
@@ -34,39 +33,28 @@ describe('server bot settings helpers', () => {
     expect(removeChannelPair(pairs, 99)).toEqual(pairs);
   });
 
-  it('keeps the first pair mirrored in legacy fields and supports clearing all pairs', () => {
-    const settings: ResolvedBotInstanceSettings = {
+  it('keeps shared settings normalized when pairs are replaced or cleared', () => {
+    const settings: ResolvedAutoJoinSettings = {
       autoJoin: true,
-      voiceChannelId: firstPair.voiceChannelId,
-      textChannelId: firstPair.textChannelId,
       channelPairs: [firstPair],
     };
     expect(applyChannelPairs(settings, [secondPair])).toEqual({
       autoJoin: true,
-      voiceChannelId: secondPair.voiceChannelId,
-      textChannelId: secondPair.textChannelId,
       channelPairs: [secondPair],
     });
     expect(applyChannelPairs(settings, [])).toEqual({
-      ...createEmptyBotInstanceSettings(),
+      ...createEmptyAutoJoinSettings(),
       autoJoin: true,
     });
-    expect(applyBotSettingsPatch(settings, { autoJoin: false })).toEqual({
+    expect(applyAutoJoinSettingsPatch(settings, { autoJoin: false })).toEqual({
       ...settings,
       autoJoin: false,
     });
   });
 
-  it('calculates used VCs and filters copy candidates by active guild membership', () => {
+  it('calculates used VC IDs', () => {
     expect(getAvailableVoiceChannelIds([firstPair, secondPair])).toEqual(
       new Set(['voice-1', 'voice-2']),
     );
-    const bots = [
-      { instanceNumber: 1, name: 'source', isActive: true, isInGuild: true, isAvailable: true },
-      { instanceNumber: 2, name: 'target', isActive: true, isInGuild: true, isAvailable: false },
-      { instanceNumber: 3, name: 'not joined', isActive: true, isInGuild: false, isAvailable: true },
-      { instanceNumber: 4, name: 'inactive', isActive: false, isInGuild: true, isAvailable: true },
-    ];
-    expect(getCopyableBotInfos(bots, 1)).toEqual([bots[1]]);
   });
 });

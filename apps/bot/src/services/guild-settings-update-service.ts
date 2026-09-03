@@ -11,6 +11,7 @@ import {
   LIMITS,
   cloneBotInstanceSettings,
   normalizeBotInstanceSettings,
+  normalizeAutoJoinSettings,
 } from '@sumirevox/shared';
 import { setCachedGuildSettings, invalidateGuildSettingsCache } from '../infrastructure/settings-cache.js';
 import { publishEvent } from '../infrastructure/pubsub.js';
@@ -120,7 +121,7 @@ export async function updateAutoJoinSettings(
   updates: Partial<AutoJoinSettings>,
 ): Promise<ResolvedAutoJoinSettings> {
   const current = await getGuildSettings(guildId);
-  const existing = normalizeBotInstanceSettings(current.autoJoinSettings ?? current.botInstanceSettings?.['1']);
+  const existing = normalizeAutoJoinSettings(current.autoJoinSettings ?? current.botInstanceSettings?.['1']);
   const channelPairs = updates.channelPairs === undefined
     ? existing.channelPairs
     : validateChannelPairs(updates.channelPairs);

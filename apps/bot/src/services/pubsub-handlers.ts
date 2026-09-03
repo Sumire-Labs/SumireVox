@@ -5,6 +5,7 @@ import { invalidateGuildTrie, invalidateAllTries } from './text-pipeline/index.j
 import { logger } from '../infrastructure/logger.js';
 import { config } from '../infrastructure/config.js';
 import { handleDelegatedBotCommand } from './bot-command-delegation-service.js';
+import { reconcileAutoConnectionSession } from './auto-connection-service.js';
 
 /**
  * Bot 用の Pub/Sub ハンドラを返す
@@ -16,7 +17,9 @@ export function createBotPubSubHandlers(): Record<string, (message: string) => v
       try {
         const { guildId } = JSON.parse(message) as { guildId?: string };
         if (guildId) {
-          invalidateGuildSettingsCache(guildId).catch(() => {});
+          void invalidateGuildSettingsCache(guildId)
+            .then(() => reconcileAutoConnectionSession(guildId))
+            .catch(() => {});
           logger.debug({ guildId }, 'Guild settings cache invalidated via Pub/Sub');
         }
       } catch (error) {
@@ -28,6 +31,7 @@ export function createBotPubSubHandlers(): Record<string, (message: string) => v
         const { guildId } = JSON.parse(message) as { guildId?: string };
         if (guildId) {
           invalidatePremiumCache(guildId);
+          void reconcileAutoConnectionSession(guildId).catch(() => {});
           logger.debug({ guildId }, 'Premium cache invalidated via Pub/Sub');
         }
       } catch (error) {

@@ -114,9 +114,9 @@
 
 `GET /api/guilds/:guildId/channels` のキャッシュを使わず、参加中のアクティブな Bot からDiscordの最新チャンネル一覧を取得してキャッシュを更新する。応答形式はGETと同一。認証と `ManageGuild` 権限が必要で、ユーザーごとに毎分10回まで実行できる。
 
-### Bot インスタンス自動接続設定
+### 共通自動接続設定と接続優先順位
 
-`PUT /api/guilds/:guildId/bots/:instanceId/settings` は、旧形式の `voiceChannelId` / `textChannelId` を引き続き受け付ける。複数の接続先を指定する場合は、次の `channelPairs` を送信する。
+`PUT /api/guilds/:guildId/auto-join-settings` は全Bot共通の自動接続設定を更新する。複数の接続先を指定する場合は、次の `channelPairs` を送信する。
 
 ```json
 {
@@ -128,19 +128,17 @@
 }
 ```
 
-`channelPairs` は送信された配列全体で置き換えられ、空配列で全ペアを解除できる。順序はそのまま保存され、最大25件、同じVCの重複は不可。`channelPairs` を指定しない部分更新（`{ "autoJoin": false }` など）は、既存のペアを保持する。新形式で保存すると、互換性のため旧フィールドには先頭ペアが保存される。成功時の `data` は `null`。
+`channelPairs` は送信された配列全体で置き換えられ、空配列で全ペアを解除できる。順序はそのまま保存され、最大25件、同じVCの重複は不可。`channelPairs` を指定しない部分更新（`{ "autoJoin": false }` など）は、既存のペアを保持する。成功時の `data` は `null`。
 
-`GET /api/guilds/:guildId/bots` の利用可能Botの `settings` は、常に `autoJoin`、旧フィールド、`channelPairs` を含む正規化済み形式で返る。
+`GET /api/guilds/:guildId/bots` は `autoJoinSettings`、`botInstancePriority`、Bot一覧と現在の利用枠を返す。優先順位は参加・生存中の有効Botだけを対象とし、未保存のBotはインスタンス番号順で末尾に補う。
 
-### POST /api/guilds/:guildId/bots/:instanceId/settings/copy
-
-コピー元の自動接続設定を、指定した複数のBotへ完全上書きする。
+`PUT /api/guilds/:guildId/bot-priority` は次の順序付きID配列を受け取り、参加・生存中の有効Botを重複なくすべて指定しなければならない。
 
 ```json
-{ "targetInstanceIds": [2, 3] }
+{ "instanceIds": [2, 1, 3] }
 ```
 
-コピー元自身、空配列、重複ID、存在しないBot、非アクティブなBot、または対象ギルドに参加していないBotは拒否される。対象はアクティブかつギルド参加中であれば、Boost枠外（`isAvailable: false`）でも設定保存の対象になる。コピーは1回のJSON upsertで行われ、ペアの順序を保持したディープコピーとして保存される。成功時の `data` は `null`。このエンドポイントも認証 + `ManageGuild` と既存の設定変更レート制限が必要。
+Boost枠は優先順位の先頭から使われる。順位変更は新規接続の選択規則だけを変更し、稼働中の正常な接続は移動しない。
 
 ## 認証済みユーザー向け Bot インスタンス情報
 
@@ -157,7 +155,8 @@
 | GET | /api/admin/servers/:guildId/settings | サーバー設定取得（管理者用） |
 | PUT | /api/admin/servers/:guildId/settings | サーバー設定変更（管理者用） |
 | GET | /api/admin/servers/:guildId/bots | Bot インスタンス一覧（管理者用） |
-| PUT | /api/admin/servers/:guildId/bots/:instanceId/settings | Bot インスタンス設定変更（管理者用） |
+| PUT | /api/admin/servers/:guildId/auto-join-settings | 共通自動接続設定変更（管理者用） |
+| PUT | /api/admin/servers/:guildId/bot-priority | Bot接続優先順位変更（管理者用） |
 | GET | /api/admin/servers/:guildId/channels | チャンネル一覧（管理者用） |
 | GET | /api/admin/bot-instances | 全 Bot インスタンス一覧 |
 | PUT | /api/admin/bot-instances/:instanceId/active | Bot インスタンスのアクティブ状態変更 |

@@ -25,7 +25,6 @@ import {
   generateBotInviteUrl,
   getGuildsWithBotStatus,
   getGuildBotList,
-  copyBotInstanceSettings,
   updateGuildAutoJoinSettings,
   updateGuildBotInstancePriority,
 } from '../services/bot-instance-service.js';
@@ -44,8 +43,6 @@ import {
   paginationQuerySchema,
   guildSettingsUpdateSchema,
   instanceParamsSchema,
-  guildBotInstanceSettingsBodySchema,
-  botInstanceSettingsCopyBodySchema,
   autoJoinSettingsBodySchema,
   botInstancePriorityBodySchema,
 } from '../schemas/common.js';
@@ -282,39 +279,6 @@ guildsRouter.put('/:guildId/bot-priority', requireGuildAdmin, botSettingsRateLim
   await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
   return c.json({ success: true, data: null });
 });
-
-/**
- * PUT /api/guilds/:guildId/bots/:instanceId/settings
- * 特定インスタンスの設定更新
- */
-guildsRouter.put('/:guildId/bots/:instanceId/settings', requireGuildAdmin, botSettingsRateLimit, async (c) => {
-  const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
-  const body = await validate.body(c, guildBotInstanceSettingsBodySchema);
-
-  await updateGuildBotInstanceSettings(guildId, instanceId, body);
-  await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
-
-  return c.json({ success: true, data: null });
-});
-
-/**
- * POST /api/guilds/:guildId/bots/:instanceId/settings/copy
- * 自動接続設定を複数の Bot インスタンスへコピー
- */
-guildsRouter.post(
-  '/:guildId/bots/:instanceId/settings/copy',
-  requireGuildAdmin,
-  botSettingsRateLimit,
-  async (c) => {
-    const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
-    const { targetInstanceIds } = await validate.body(c, botInstanceSettingsCopyBodySchema);
-
-    await copyBotInstanceSettings(guildId, instanceId, targetInstanceIds);
-    await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
-
-    return c.json({ success: true, data: null });
-  },
-);
 
 /**
  * GET /api/guilds/:guildId/bots/:instanceId/invite

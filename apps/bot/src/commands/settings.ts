@@ -6,10 +6,9 @@ import {
 } from 'discord.js';
 import { CommandDefinition } from './types.js';
 import { hasAdminPermission } from '../services/permission-service.js';
-import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
+import { getGuildSettings, getAutoJoinSettings } from '../services/guild-settings-service.js';
 import { buildSettingsMessage } from './settings-view-handler.js';
 import { getClient } from '../infrastructure/discord-client.js';
-import { config } from '../infrastructure/config.js';
 
 const data = new SlashCommandBuilder()
   .setName('settings')
@@ -38,7 +37,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   }
 
   const settings = await getGuildSettings(guildId);
-  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const instanceSettings = getAutoJoinSettings(settings);
   const botName = getClient().user?.username ?? 'SumireVox';
   const { components } = buildSettingsMessage(settings, 'reading', interaction.user.id, instanceSettings, botName);
   await interaction.reply({ components, flags: MessageFlags.IsComponentsV2 });

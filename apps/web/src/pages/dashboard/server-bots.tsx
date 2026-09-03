@@ -1,21 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Checkbox, Modal, Switch, Select, ListBox } from '@heroui/react';
+import { Button, Modal, Switch, Select, ListBox } from '@heroui/react';
 import { RefreshCw } from 'lucide-react';
 import { useParams } from 'react-router';
 import type {
   AutoJoinChannelPair,
-  BotInstanceSettings,
-  ResolvedBotInstanceSettings,
+  AutoJoinSettings,
+  ResolvedAutoJoinSettings,
 } from '@sumirevox/shared';
 import { api, ApiError } from '../../lib/api';
 import { Toast, useToast } from '../../components/toast';
 import {
   appendChannelPair,
-  applyBotSettingsPatch,
+  applyAutoJoinSettingsPatch,
   canAddChannelPair,
-  createEmptyBotInstanceSettings,
+  createEmptyAutoJoinSettings,
   getAvailableVoiceChannelIds,
-  getCopyableBotInfos,
   removeChannelPair,
   updateChannelPair,
 } from './server-bots-helpers';
@@ -27,14 +26,13 @@ interface BotInstanceInfo {
   isActive: boolean;
   isInGuild: boolean;
   isAvailable: boolean;
-  settings: ResolvedBotInstanceSettings | null;
 }
 
 interface BotListResponse {
   bots: BotInstanceInfo[];
   boostCount: number;
   maxBots: number;
-  autoJoinSettings: ResolvedBotInstanceSettings;
+  autoJoinSettings: ResolvedAutoJoinSettings;
   botInstancePriority: number[];
 }
 
@@ -58,12 +56,9 @@ interface ChannelsData {
 }
 
 interface PairDraft {
-  instanceNumber: number;
   voiceChannelId: string;
   textChannelId: string;
 }
-
-type CopyStep = 'select' | 'confirm';
 
 function StatusBadge({ label, variant }: { label: string; variant: 'active' | 'inactive' | 'unavailable' }) {
   const styles = {
@@ -188,10 +183,6 @@ export function ServerBotsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [pairDraft, setPairDraft] = useState<PairDraft | null>(null);
-  const [copySource, setCopySource] = useState<BotInstanceInfo | null>(null);
-  const [copyTargetIds, setCopyTargetIds] = useState<number[]>([]);
-  const [copyStep, setCopyStep] = useState<CopyStep>('select');
-  const [copyLoading, setCopyLoading] = useState(false);
   const { toastState, showSaving, showSuccess, showError } = useToast();
 
   const fetchBots = useCallback(async (signal?: AbortSignal): Promise<BotListResponse> => {
@@ -272,9 +263,9 @@ export function ServerBotsPage() {
   }, [fetchBots, fetchChannels, guildId]);
 
   const updateSettings = useCallback(
-    async (instanceNumber: number, patch: Partial<BotInstanceSettings>): Promise<boolean> => {
+    async (patch: Partial<AutoJoinSettings>): Promise<boolean> => {
       if (!guildId) return false;
-      setSavingId(instanceNumber);
+      setSavingId(0);
       showSaving();
       try {
         await api.put(`/api/guilds/${guildId}/auto-join-settings`, patch);
@@ -282,14 +273,7 @@ export function ServerBotsPage() {
           if (!previous) return previous;
           return {
             ...previous,
-            autoJoinSettings: applyBotSettingsPatch(previous.autoJoinSettings, patch),
-            bots: previous.bots.map((bot) => {
-              const currentSettings = bot.settings ?? createEmptyBotInstanceSettings();
-              return {
-                ...bot,
-                settings: applyBotSettingsPatch(currentSettings, patch),
-              };
-            }),
+            autoJoinSettings: applyAutoJoinSettingsPatch(previous.autoJoinSettings, patch),
           };
         });
         showSuccess();
@@ -341,75 +325,26 @@ export function ServerBotsPage() {
     void updatePriority(instanceIds);
   };
 
-  const openPairModal = (bot: BotInstanceInfo) => {
-    setPairDraft({ instanceNumber: bot.instanceNumber, voiceChannelId: '', textChannelId: '' });
+  const openPairModal = () => {
+    setPairDraft({ voiceChannelId: '', textChannelId: '' });
   };
 
   const closePairModal = () => {
-    if (pairDraft && savingId === pairDraft.instanceNumber) return;
+    if (pairDraft && savingId !== null) return;
     setPairDraft(null);
   };
 
   const handleAddPair = async () => {
     if (!pairDraft || !data) return;
-    const bot = data.bots.find((item) => item.instanceNumber === pairDraft.instanceNumber);
-    if (!bot) return;
-    const settings = bot.settings ?? createEmptyBotInstanceSettings();
+    const settings = data.autoJoinSettings;
     const nextPairs = appendChannelPair(settings.channelPairs, pairDraft);
     if (!nextPairs) {
       showError('VCとテキストチャンネルを選択し、VCが重複しないようにしてください');
       return;
     }
 
-    const saved = await updateSettings(bot.instanceNumber, { channelPairs: nextPairs });
+    const saved = await updateSettings({ channelPairs: nextPairs });
     if (saved) setPairDraft(null);
-  };
-
-  const openCopyModal = (bot: BotInstanceInfo) => {
-    if (!data) return;
-    const candidates = getCopyableBotInfos(data.bots, bot.instanceNumber);
-    if (candidates.length === 0) {
-      showError('コピー先に選択できるBotがありません');
-      return;
-    }
-    setCopySource(bot);
-    setCopyTargetIds([]);
-    setCopyStep('select');
-  };
-
-  const closeCopyModal = () => {
-    if (copyLoading) return;
-    setCopySource(null);
-    setCopyTargetIds([]);
-    setCopyStep('select');
-  };
-
-  const toggleCopyTarget = (instanceNumber: number, selected: boolean) => {
-    setCopyTargetIds((current) => {
-      if (selected) return current.includes(instanceNumber) ? current : [...current, instanceNumber];
-      return current.filter((id) => id !== instanceNumber);
-    });
-  };
-
-  const handleCopy = async () => {
-    if (!guildId || !copySource || copyTargetIds.length === 0) return;
-    setCopyLoading(true);
-    showSaving('コピー中…');
-    try {
-      await api.post(`/api/guilds/${guildId}/bots/${copySource.instanceNumber}/settings/copy`, {
-        targetInstanceIds: copyTargetIds,
-      });
-      await fetchBots();
-      setCopySource(null);
-      setCopyTargetIds([]);
-      setCopyStep('select');
-      showSuccess('設定をコピーしました');
-    } catch (err) {
-      showError(err instanceof ApiError ? err.message : '設定のコピーに失敗しました');
-      if (!(err instanceof ApiError)) throw err;
-    } finally {
-      setCopyLoading(false);
-    }
   };
 
   if (loading) {
@@ -427,11 +362,7 @@ export function ServerBotsPage() {
   const categories = channels?.categories ?? [];
   const readableChannels = channels?.readableChannels ?? [];
   const voiceChannels = channels?.voiceChannels ?? [];
-  const copyCandidates = copySource ? getCopyableBotInfos(data.bots, copySource.instanceNumber) : [];
-  const pairModalBot = pairDraft
-    ? data.bots.find((bot) => bot.instanceNumber === pairDraft.instanceNumber)
-    : undefined;
-  const pairModalSettings = pairModalBot?.settings ?? createEmptyBotInstanceSettings();
+  const pairModalSettings = data.autoJoinSettings ?? createEmptyAutoJoinSettings();
 
   return (
     <div className="flex flex-col gap-8">
@@ -498,7 +429,7 @@ export function ServerBotsPage() {
 
       <div className="flex flex-col gap-4">
         {data.bots.filter((bot) => bot.instanceNumber === data.botInstancePriority[0]).map((bot) => {
-          const isSaving = savingId === bot.instanceNumber;
+          const isSaving = savingId !== null;
 
           if (!bot.isAvailable) {
             return (
@@ -515,9 +446,8 @@ export function ServerBotsPage() {
             );
           }
 
-          const settings = bot.settings ?? createEmptyBotInstanceSettings();
+          const settings = data.autoJoinSettings;
           const usedVoiceChannelIds = getAvailableVoiceChannelIds(settings.channelPairs);
-          const canCopy = false;
 
           return (
             <div
@@ -530,17 +460,6 @@ export function ServerBotsPage() {
                   <p className="text-xs text-gray-500 mt-1">Bot インスタンス #{bot.instanceNumber}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {canCopy && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onPress={() => openCopyModal(bot)}
-                      isDisabled={copyLoading}
-                      className="border border-white/20 bg-white/5 text-white"
-                    >
-                      設定をコピー
-                    </Button>
-                  )}
                   <StatusBadge
                     label={bot.isActive ? '稼働中' : '停止中'}
                     variant={bot.isActive ? 'active' : 'inactive'}
@@ -580,7 +499,7 @@ export function ServerBotsPage() {
                     aria-label={`${bot.name}の自動接続`}
                     isSelected={settings.autoJoin}
                     isDisabled={!bot.isInGuild || isSaving}
-                    onChange={(selected) => void updateSettings(bot.instanceNumber, { autoJoin: selected })}
+                    onChange={(selected) => void updateSettings({ autoJoin: selected })}
                   >
                     {({ isSelected }) => (
                       <Switch.Control className={isSelected ? 'bg-purple-600' : 'bg-white/20'}>
@@ -599,7 +518,7 @@ export function ServerBotsPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onPress={() => openPairModal(bot)}
+                      onPress={openPairModal}
                       isDisabled={
                         !bot.isInGuild ||
                         isSaving ||
@@ -643,10 +562,9 @@ export function ServerBotsPage() {
                               <button
                                 type="button"
                                 aria-label={`ペア${pairIndex + 1}を削除`}
-                                onClick={() => void updateSettings(
-                                  bot.instanceNumber,
-                                  { channelPairs: removeChannelPair(settings.channelPairs, pairIndex) },
-                                )}
+                                onClick={() => void updateSettings({
+                                  channelPairs: removeChannelPair(settings.channelPairs, pairIndex),
+                                })}
                                 disabled={!bot.isInGuild || isSaving}
                                 className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                               >
@@ -662,14 +580,11 @@ export function ServerBotsPage() {
                                 placeholder="VC チャンネルを選択"
                                 disabled={!bot.isInGuild || isSaving}
                                 showChannelType
-                                onChange={(value) => void updateSettings(
-                                  bot.instanceNumber,
-                                  {
-                                    channelPairs: updateChannelPair(settings.channelPairs, pairIndex, {
-                                      voiceChannelId: value,
-                                    }),
-                                  },
-                                )}
+                                onChange={(value) => void updateSettings({
+                                  channelPairs: updateChannelPair(settings.channelPairs, pairIndex, {
+                                    voiceChannelId: value,
+                                  }),
+                                })}
                               />
                               <ChannelSelect
                                 label="読み上げ対象チャンネル"
@@ -679,14 +594,11 @@ export function ServerBotsPage() {
                                 placeholder="テキストチャンネルを選択"
                                 disabled={!bot.isInGuild || isSaving}
                                 showChannelType
-                                onChange={(value) => void updateSettings(
-                                  bot.instanceNumber,
-                                  {
-                                    channelPairs: updateChannelPair(settings.channelPairs, pairIndex, {
-                                      textChannelId: value,
-                                    }),
-                                  },
-                                )}
+                                onChange={(value) => void updateSettings({
+                                  channelPairs: updateChannelPair(settings.channelPairs, pairIndex, {
+                                    textChannelId: value,
+                                  }),
+                                })}
                               />
                             </div>
                           </div>
@@ -722,7 +634,7 @@ export function ServerBotsPage() {
                   channels={voiceChannels.filter((channel) => !getAvailableVoiceChannelIds(pairModalSettings.channelPairs).has(channel.id))}
                   categories={categories}
                   placeholder="VC チャンネルを選択"
-                  disabled={pairDraft === null || savingId === pairDraft.instanceNumber}
+                  disabled={pairDraft === null || savingId !== null}
                   showChannelType
                   onChange={(value) => setPairDraft((current) => current ? { ...current, voiceChannelId: value } : current)}
                 />
@@ -732,7 +644,7 @@ export function ServerBotsPage() {
                   channels={readableChannels}
                   categories={categories}
                   placeholder="テキストチャンネルを選択"
-                  disabled={pairDraft === null || savingId === pairDraft.instanceNumber}
+                  disabled={pairDraft === null || savingId !== null}
                   showChannelType
                   onChange={(value) => setPairDraft((current) => current ? { ...current, textChannelId: value } : current)}
                 />
@@ -741,7 +653,7 @@ export function ServerBotsPage() {
                 <Button
                   variant="secondary"
                   onPress={closePairModal}
-                  isDisabled={pairDraft !== null && savingId === pairDraft.instanceNumber}
+                  isDisabled={pairDraft !== null && savingId !== null}
                   className="border border-white/20 bg-white/5 text-white"
                 >
                   キャンセル
@@ -749,113 +661,11 @@ export function ServerBotsPage() {
                 <Button
                   className="gradient-bg text-white"
                   onPress={() => void handleAddPair()}
-                  isPending={pairDraft !== null && savingId === pairDraft.instanceNumber}
+                  isPending={pairDraft !== null && savingId !== null}
                   isDisabled={!pairDraft || !canAddChannelPair(pairModalSettings.channelPairs, pairDraft)}
                 >
                   追加
                 </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      <Modal>
-        <Modal.Backdrop isOpen={copySource !== null} onOpenChange={(open) => { if (!open) closeCopyModal(); }}>
-          <Modal.Container>
-            <Modal.Dialog className="bg-[#1a1a2e] border border-white/10 max-w-xl">
-              <Modal.Header>
-                <Modal.Heading className="text-white">
-                  {copyStep === 'select' ? '設定のコピー先を選択' : '設定の上書きを確認'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="flex flex-col gap-4 max-h-[65vh] overflow-y-auto">
-                {copySource && copyStep === 'select' && (
-                  <>
-                    <p className="text-sm text-gray-400">
-                      {copySource.name} の自動接続設定をコピーします。コピー先の既存設定は上書きされます。
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {copyCandidates.map((candidate) => (
-                        <Checkbox
-                          key={candidate.instanceNumber}
-                          isSelected={copyTargetIds.includes(candidate.instanceNumber)}
-                          onChange={(selected) => toggleCopyTarget(candidate.instanceNumber, selected)}
-                          className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3 text-white"
-                        >
-                          <Checkbox.Control className="border-white/30 data-[selected=true]:bg-purple-600">
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                          <Checkbox.Content>
-                            <span className="flex flex-col">
-                              <span>{candidate.name}</span>
-                              <span className="text-xs text-gray-500">
-                                {candidate.isAvailable ? '利用可能' : 'ブースト枠外（設定保存可）'}
-                              </span>
-                            </span>
-                          </Checkbox.Content>
-                        </Checkbox>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {copySource && copyStep === 'confirm' && (
-                  <div className="flex flex-col gap-4">
-                    <p className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
-                      選択したBotの自動接続設定を、{copySource.name} の設定で上書きします。この操作は取り消せません。
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {copyCandidates
-                        .filter((candidate) => copyTargetIds.includes(candidate.instanceNumber))
-                        .map((candidate) => (
-                          <div key={candidate.instanceNumber} className="flex items-center justify-between text-sm">
-                            <span className="text-white">{candidate.name}</span>
-                            <span className="text-gray-500">上書き対象</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </Modal.Body>
-              <Modal.Footer className="border-t border-white/5">
-                {copyStep === 'select' ? (
-                  <>
-                    <Button
-                      variant="secondary"
-                      onPress={closeCopyModal}
-                      className="border border-white/20 bg-white/5 text-white"
-                    >
-                      キャンセル
-                    </Button>
-                    <Button
-                      className="gradient-bg text-white"
-                      onPress={() => setCopyStep('confirm')}
-                      isDisabled={copyTargetIds.length === 0}
-                    >
-                      確認へ
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="secondary"
-                      onPress={() => setCopyStep('select')}
-                      isDisabled={copyLoading}
-                      className="border border-white/20 bg-white/5 text-white"
-                    >
-                      戻る
-                    </Button>
-                    <Button
-                      className="bg-purple-600 text-white"
-                      onPress={() => void handleCopy()}
-                      isPending={copyLoading}
-                      isDisabled={copyTargetIds.length === 0}
-                    >
-                      上書きしてコピー
-                    </Button>
-                  </>
-                )}
               </Modal.Footer>
             </Modal.Dialog>
           </Modal.Container>

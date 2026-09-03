@@ -9,12 +9,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../services/guild-settings-service.js', () => ({
   getGuildSettings: vi.fn(),
   getInstanceSettings: vi.fn(),
+  getAutoJoinSettings: vi.fn(),
 }));
 
 vi.mock('../../services/guild-settings-update-service.js', () => ({
   copyBotInstanceSettings: vi.fn(),
   updateGuildSettings: vi.fn(),
   updateBotInstanceSettings: vi.fn(),
+  updateAutoJoinSettings: vi.fn(),
 }));
 
 vi.mock('../../services/bot-instance-registry.js', () => ({
@@ -38,10 +40,11 @@ vi.mock('../../infrastructure/config.js', () => ({
   config: { botInstanceId: 1, defaultSpeakerId: 10 },
 }));
 
-import { getGuildSettings, getInstanceSettings } from '../../services/guild-settings-service.js';
+import { getGuildSettings, getInstanceSettings, getAutoJoinSettings } from '../../services/guild-settings-service.js';
 import {
   copyBotInstanceSettings,
   updateBotInstanceSettings,
+  updateAutoJoinSettings,
 } from '../../services/guild-settings-update-service.js';
 import { getCopyableBotInstances } from '../../services/bot-instance-registry.js';
 import { getClient } from '../../infrastructure/discord-client.js';
@@ -52,7 +55,9 @@ import {
 
 const mockGetGuildSettings = vi.mocked(getGuildSettings);
 const mockGetInstanceSettings = vi.mocked(getInstanceSettings);
+const mockGetAutoJoinSettings = vi.mocked(getAutoJoinSettings);
 const mockUpdateBotInstanceSettings = vi.mocked(updateBotInstanceSettings);
+const mockUpdateAutoJoinSettings = vi.mocked(updateAutoJoinSettings);
 const mockGetCopyableBotInstances = vi.mocked(getCopyableBotInstances);
 const mockCopyBotInstanceSettings = vi.mocked(copyBotInstanceSettings);
 const mockGetClient = vi.mocked(getClient);
@@ -152,6 +157,7 @@ describe('settings-view-handler connection UI', () => {
     vi.clearAllMocks();
     mockGetGuildSettings.mockResolvedValue(makeSettings());
     mockGetInstanceSettings.mockReturnValue(makeInstanceSettings());
+    mockGetAutoJoinSettings.mockReturnValue(makeInstanceSettings());
     mockGetClient.mockReturnValue({ user: { username: 'SumireVox' } } as unknown as ReturnType<typeof getClient>);
     mockGetCopyableBotInstances.mockResolvedValue([makeBot(2), makeBot(3)]);
     mockCopyBotInstanceSettings.mockResolvedValue({
@@ -162,7 +168,7 @@ describe('settings-view-handler connection UI', () => {
     } satisfies BotInstanceSettings);
   });
 
-  it('旧形式をペア一覧として表示し、追加・削除・コピー操作を表示する', () => {
+  it('旧形式を共通ペア一覧として表示し、追加・削除操作を表示する', () => {
     const settings = makeSettings();
     const oldSettings: BotInstanceSettings = {
       autoJoin: true,
@@ -183,7 +189,6 @@ describe('settings-view-handler connection UI', () => {
     expect(serialized).toContain('legacy-text');
     expect(serialized).toContain('pair_remove');
     expect(serialized).toContain('pair_add');
-    expect(serialized).toContain('copy_settings');
   });
 
   it('ペア追加はVC選択後にTC選択画面へ進み、TC選択時だけ保存する', async () => {
@@ -198,7 +203,7 @@ describe('settings-view-handler connection UI', () => {
     expect(getSerializedComponents(addButton.update.mock.calls[0]?.[0].components)).toContain(
       'pair_add_voice',
     );
-    expect(mockUpdateBotInstanceSettings).not.toHaveBeenCalled();
+    expect(mockUpdateAutoJoinSettings).not.toHaveBeenCalled();
 
     const channels = new Map([
       ['voice-2', { isVoiceBased: () => true }],
@@ -214,7 +219,7 @@ describe('settings-view-handler connection UI', () => {
       userId: 'user-1',
       timestamp: 9999999999,
     });
-    expect(mockUpdateBotInstanceSettings).not.toHaveBeenCalled();
+    expect(mockUpdateAutoJoinSettings).not.toHaveBeenCalled();
     expect(getSerializedComponents(voiceInteraction.update.mock.calls[0]?.[0].components)).toContain(
       'pair_add_text:voice-2',
     );
@@ -229,7 +234,7 @@ describe('settings-view-handler connection UI', () => {
       userId: 'user-1',
       timestamp: 9999999999,
     });
-    expect(mockUpdateBotInstanceSettings).toHaveBeenCalledWith('guild-1', 1, {
+    expect(mockUpdateAutoJoinSettings).toHaveBeenCalledWith('guild-1', {
       channelPairs: [
         { voiceChannelId: 'voice-1', textChannelId: 'text-1' },
         { voiceChannelId: 'voice-2', textChannelId: 'text-2' },
@@ -237,41 +242,4 @@ describe('settings-view-handler connection UI', () => {
     });
   });
 
-  it('コピー先を複数選択して確認後に実行する', async () => {
-    const copyButton = makeInteraction('button');
-    await handleSettingsView(copyButton as never, {
-      command: 'settings',
-      action: 'copy_settings',
-      userId: 'user-1',
-      timestamp: 9999999999,
-    });
-    expect(getSerializedComponents(copyButton.update.mock.calls[0]?.[0].components)).toContain(
-      'copy_select',
-    );
-
-    const selection = makeInteraction('string', ['2', '3']);
-    await handleSettingsView(selection as never, {
-      command: 'settings',
-      action: 'copy_select',
-      userId: 'user-1',
-      timestamp: 9999999999,
-    });
-    const confirmationId = findCustomId(
-      selection.update.mock.calls[0]?.[0].components,
-      'copy_confirm',
-    );
-    expect(confirmationId).toBeDefined();
-
-    const confirmation = makeInteraction('button');
-    Object.assign(confirmation, { customId: confirmationId });
-    await handleSettingsView(confirmation as never, {
-      command: 'settings',
-      action: 'copy_confirm',
-      userId: 'user-1',
-      timestamp: 9999999999,
-    });
-    expect(mockCopyBotInstanceSettings).toHaveBeenCalledWith('guild-1', 1, [2, 3]);
-    expect(confirmation.deferUpdate).toHaveBeenCalled();
-    expect(confirmation.followUp).toHaveBeenCalled();
-  });
 });

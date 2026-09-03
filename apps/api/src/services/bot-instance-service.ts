@@ -187,15 +187,13 @@ export interface GuildBotListItem {
   isActive: boolean;
   isInGuild: boolean;
   isAvailable: boolean;
-  /** 旧クライアント互換。新規UIはautoJoinSettingsを使用する。 */
-  settings: ResolvedBotInstanceSettings | null;
 }
 
 export interface GuildBotListResult {
   bots: GuildBotListItem[];
   boostCount: number;
   maxBots: number;
-  autoJoinSettings: ResolvedBotInstanceSettings;
+  autoJoinSettings: ResolvedAutoJoinSettings;
   botInstancePriority: number[];
 }
 
@@ -220,12 +218,6 @@ export async function getGuildBotList(guildId: string): Promise<GuildBotListResu
   const priority = normalizePriority(settings?.botInstancePriority, joinedIds);
   const availableIds = new Set(priority.slice(0, availableCount));
   const autoJoinSettings = resolveSharedAutoJoinSettings(settings?.autoJoinSettings, settings?.botInstanceSettings);
-  const compatibilitySettings: ResolvedBotInstanceSettings = {
-    autoJoin: autoJoinSettings.autoJoin,
-    voiceChannelId: autoJoinSettings.channelPairs[0]?.voiceChannelId ?? null,
-    textChannelId: autoJoinSettings.channelPairs[0]?.textChannelId ?? null,
-    channelPairs: autoJoinSettings.channelPairs,
-  };
   const bots = membership.map(({ instance, isInGuild }) => ({
     instanceNumber: instance.instanceId,
     name: instance.name,
@@ -233,14 +225,13 @@ export async function getGuildBotList(guildId: string): Promise<GuildBotListResu
     isActive: instance.isActive,
     isInGuild,
     isAvailable: availableIds.has(instance.instanceId),
-    settings: compatibilitySettings,
   }));
 
   return {
     bots,
     boostCount,
     maxBots: availableCount,
-    autoJoinSettings: compatibilitySettings,
+    autoJoinSettings,
     botInstancePriority: priority,
   };
 }

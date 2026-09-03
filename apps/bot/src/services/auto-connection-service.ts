@@ -355,6 +355,24 @@ export async function scheduleDisconnectTimersForRestoredSessions(): Promise<voi
   }
 }
 
+/** 設定またはBoost枠の変更後、無効になった自動接続だけを安全に退出させる。 */
+export async function reconcileAutoConnectionSession(guildId: string): Promise<void> {
+  const session = getVcSession(guildId);
+  if (!session || session.connectionMode !== 'auto') return;
+
+  const [settings, availableInstanceIds] = await Promise.all([
+    getGuildSettings(guildId),
+    getAvailableBotInstanceIds(guildId),
+  ]);
+  const autoJoinSettings = getAutoJoinSettings(settings);
+  const isConfigured = autoJoinSettings.autoJoin && autoJoinSettings.channelPairs.some(
+    (pair) => pair.voiceChannelId === session.voiceChannelId,
+  );
+  if (!isConfigured || !availableInstanceIds.includes(config.botInstanceId)) {
+    await destroyAutoSessionIfCurrent(guildId, session);
+  }
+}
+
 function collectAutoJoinCandidates(
   guild: Guild,
   instanceSettings: ResolvedAutoJoinSettings,

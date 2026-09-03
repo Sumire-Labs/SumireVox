@@ -30,14 +30,14 @@ import {
   AutoJoinChannelPair,
   BotInstance,
   BotInstanceSettings,
-  DEFAULT_BOT_INSTANCE_SETTINGS,
-  normalizeBotInstanceSettings,
+  AutoJoinSettings,
+  normalizeAutoJoinSettings,
 } from '@sumirevox/shared';
-import { getGuildSettings, getInstanceSettings } from '../services/guild-settings-service.js';
+import { getGuildSettings, getAutoJoinSettings, getInstanceSettings } from '../services/guild-settings-service.js';
 import {
   copyBotInstanceSettings,
   updateGuildSettings,
-  updateBotInstanceSettings,
+  updateAutoJoinSettings,
 } from '../services/guild-settings-update-service.js';
 import { getCopyableBotInstances } from '../services/bot-instance-registry.js';
 import { getSpeakers, getSpeakerStyleName } from '../services/voicevox-speaker-cache.js';
@@ -72,7 +72,7 @@ export function buildSettingsMessage(
   settings: GuildSettings,
   category: Category,
   userId: string,
-  instanceSettings: BotInstanceSettings = DEFAULT_BOT_INSTANCE_SETTINGS,
+  instanceSettings: AutoJoinSettings,
   botName: string = 'SumireVox',
 ): { components: ContainerBuilder[] } {
   const mainContainer = buildSettingsNavigation(category, userId);
@@ -121,7 +121,7 @@ function buildCategoryContainer(
   settings: GuildSettings,
   category: Category,
   userId: string,
-  instanceSettings: BotInstanceSettings,
+  instanceSettings: AutoJoinSettings,
   botName: string,
 ): ContainerBuilder {
   switch (category) {
@@ -323,10 +323,10 @@ function buildFilterCategory(settings: GuildSettings, userId: string): Container
 
 function buildConnectionCategory(
   userId: string,
-  instanceSettings: BotInstanceSettings,
+  instanceSettings: AutoJoinSettings,
   botName: string,
 ): ContainerBuilder {
-  const resolvedSettings = normalizeBotInstanceSettings(instanceSettings);
+  const resolvedSettings = normalizeAutoJoinSettings(instanceSettings);
   const { autoJoin, channelPairs } = resolvedSettings;
 
   const container = new ContainerBuilder().setAccentColor(0x7c3aed);
@@ -342,7 +342,7 @@ function buildConnectionCategory(
   container
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('### 🔗 接続設定'))
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`**Bot: ${botName}** の自動接続設定`),
+      new TextDisplayBuilder().setContent('**全Bot共通** の自動接続設定'),
     )
     .addSeparatorComponents(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
@@ -396,10 +396,6 @@ function buildConnectionCategory(
         .setLabel('チャンネルペアを追加')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS),
-      new ButtonBuilder()
-        .setCustomId(buildCustomId('settings', 'copy_settings', userId))
-        .setLabel('他のBotへコピー')
-        .setStyle(ButtonStyle.Secondary),
     ),
   );
 
@@ -605,7 +601,7 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
   if (action === 'category' && interaction.isStringSelectMenu()) {
     const category = interaction.values[0] as Category;
     const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const instanceSettings = getAutoJoinSettings(settings);
     const botName = getClient().user?.username ?? 'SumireVox';
     const { components } = buildSettingsMessage(settings, category, parsed.userId, instanceSettings, botName);
     await interaction.update({ components });
@@ -614,7 +610,7 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
 
   if (action === 'toggle_auto_join' && interaction.isButton()) {
     const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const instanceSettings = getAutoJoinSettings(settings);
     await updateInstanceAndRefresh(interaction, guildId, parsed.userId, {
       autoJoin: !instanceSettings.autoJoin,
     });
@@ -643,39 +639,6 @@ export async function handleSettingsView(interaction: Interaction, parsed: Parse
 
   if (action === 'pair_remove' && interaction.isStringSelectMenu()) {
     await handlePairRemove(interaction, parsed.userId, guildId, interaction.values[0]);
-    return;
-  }
-
-  if (action === 'copy_settings' && interaction.isButton()) {
-    await showCopySelectionView(interaction, parsed.userId, guildId);
-    return;
-  }
-
-  if (action === 'copy_select' && interaction.isStringSelectMenu()) {
-    await handleCopySelection(interaction, parsed.userId, guildId, interaction.values);
-    return;
-  }
-
-  if (action === 'copy_confirm' && interaction.isButton()) {
-    await handleCopyConfirmation(interaction, parsed.userId, guildId, interaction.customId);
-    return;
-  }
-
-  if (action === 'copy_cancel' && interaction.isButton()) {
-    clearPendingCopySelections(guildId, parsed.userId);
-    await refreshInstanceView(interaction, guildId, parsed.userId);
-    return;
-  }
-
-  if (action === 'connection_voice_channel' && interaction.isChannelSelectMenu()) {
-    const value = interaction.values[0] ?? null;
-    await updateInstanceAndRefresh(interaction, guildId, parsed.userId, { voiceChannelId: value });
-    return;
-  }
-
-  if (action === 'connection_text_channel' && interaction.isChannelSelectMenu()) {
-    const value = interaction.values[0] ?? null;
-    await updateInstanceAndRefresh(interaction, guildId, parsed.userId, { textChannelId: value });
     return;
   }
 
@@ -749,7 +712,7 @@ async function showPairAddView(
 ): Promise<void> {
   try {
     const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const instanceSettings = getAutoJoinSettings(settings);
     if (instanceSettings.channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS) {
       await replySettingsError(
         interaction,
@@ -786,7 +749,7 @@ async function handlePairAddVoice(
 
   try {
     const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const instanceSettings = getAutoJoinSettings(settings);
     if (instanceSettings.channelPairs.length >= LIMITS.MAX_AUTO_JOIN_CHANNEL_PAIRS) {
       throw new AppError(
         'VALIDATION_ERROR',
@@ -831,7 +794,7 @@ async function handlePairAddText(
     }
 
     const pair: AutoJoinChannelPair = { voiceChannelId, textChannelId };
-    await updateBotInstanceSettings(guildId, config.botInstanceId, {
+    await updateAutoJoinSettings(guildId, {
       channelPairs: [...instanceSettings.channelPairs, pair],
     });
     await refreshInstanceView(interaction, guildId, userId);
@@ -856,7 +819,7 @@ async function handlePairRemove(
 
   try {
     const settings = await getGuildSettings(guildId);
-    const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+    const instanceSettings = getAutoJoinSettings(settings);
     const channelPairs = instanceSettings.channelPairs.filter(
       (pair) => pair.voiceChannelId !== voiceChannelId,
     );
@@ -864,7 +827,7 @@ async function handlePairRemove(
       throw new AppError('VALIDATION_ERROR', '選択したペアはすでに削除されています。');
     }
 
-    await updateBotInstanceSettings(guildId, config.botInstanceId, { channelPairs });
+    await updateAutoJoinSettings(guildId, { channelPairs });
     await refreshInstanceView(interaction, guildId, userId);
   } catch (error) {
     await replySettingsError(interaction, error);
@@ -1007,7 +970,7 @@ async function getInstanceViewComponents(
   userId: string,
 ): Promise<ContainerBuilder[]> {
   const settings = await getGuildSettings(guildId);
-  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const instanceSettings = getAutoJoinSettings(settings);
   const botName = getClient().user?.username ?? 'SumireVox';
   return buildSettingsMessage(
     settings,
@@ -1111,7 +1074,7 @@ async function handleMaxLengthSubmit(
   }
 
   const settings = await updateGuildSettings(guildId, { maxReadLength: value });
-  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const instanceSettings = getAutoJoinSettings(settings);
   const botName = getClient().user?.username ?? 'SumireVox';
   const { components } = buildSettingsMessage(settings, 'reading', parsed.userId, instanceSettings, botName);
 
@@ -1137,7 +1100,7 @@ async function updateAndRefresh(
   category: Category,
 ): Promise<void> {
   const settings = await updateGuildSettings(guildId, updates);
-  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const instanceSettings = getAutoJoinSettings(settings);
   const botName = getClient().user?.username ?? 'SumireVox';
   const { components } = buildSettingsMessage(settings, category, userId, instanceSettings, botName);
   await interaction.update({ components });
@@ -1147,11 +1110,11 @@ async function updateInstanceAndRefresh(
   interaction: ButtonInteraction | ChannelSelectMenuInteraction,
   guildId: string,
   userId: string,
-  updates: Partial<BotInstanceSettings>,
+  updates: Partial<AutoJoinSettings>,
 ): Promise<void> {
-  await updateBotInstanceSettings(guildId, config.botInstanceId, updates);
+  await updateAutoJoinSettings(guildId, updates);
   const settings = await getGuildSettings(guildId);
-  const instanceSettings = getInstanceSettings(settings, config.botInstanceId);
+  const instanceSettings = getAutoJoinSettings(settings);
   const botName = getClient().user?.username ?? 'SumireVox';
   const { components } = buildSettingsMessage(settings, 'connection', userId, instanceSettings, botName);
   await interaction.update({ components });

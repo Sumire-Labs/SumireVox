@@ -10,7 +10,6 @@ const {
   publishEventMock,
 } = vi.hoisted(() => ({
   botServiceMock: {
-    copyBotInstanceSettings: vi.fn(),
     getActiveBotInstances: vi.fn(),
     getAvailableBotCount: vi.fn(),
     getBotGuilds: vi.fn(),
@@ -18,7 +17,8 @@ const {
     getGuildBotList: vi.fn(),
     getGuildsWithBotStatus: vi.fn(),
     generateBotInviteUrl: vi.fn(),
-    updateGuildBotInstanceSettings: vi.fn(),
+    updateGuildAutoJoinSettings: vi.fn(),
+    updateGuildBotInstancePriority: vi.fn(),
   },
   discordApiMock: {
     fetchManagedGuilds: vi.fn(),
@@ -196,9 +196,9 @@ describe('POST /api/guilds/:guildId/channels/refresh', () => {
   });
 });
 
-describe('POST /api/guilds/:guildId/bots/:instanceId/settings/copy', () => {
+describe('PUT /api/guilds/:guildId/auto-join-settings', () => {
   beforeEach(() => {
-    botServiceMock.copyBotInstanceSettings.mockReset();
+    botServiceMock.updateGuildAutoJoinSettings.mockReset();
     discordApiMock.hasManageGuildPermission.mockReset().mockResolvedValue(true);
     redisMock.get.mockReset().mockResolvedValue(null);
     redisMock.set.mockReset().mockResolvedValue('OK');
@@ -207,30 +207,30 @@ describe('POST /api/guilds/:guildId/bots/:instanceId/settings/copy', () => {
 
   it('requires authentication and guild management permission', async () => {
     const unauthenticatedResponse = await buildApp(false).request(
-      '/api/guilds/123456789012345678/bots/1/settings/copy',
+      '/api/guilds/123456789012345678/auto-join-settings',
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ targetInstanceIds: [2] }),
+        body: JSON.stringify({ autoJoin: true }),
       },
     );
     expect(unauthenticatedResponse.status).toBe(401);
 
     discordApiMock.hasManageGuildPermission.mockResolvedValue(false);
     const forbiddenResponse = await buildApp(true).request(
-      '/api/guilds/123456789012345678/bots/1/settings/copy',
+      '/api/guilds/123456789012345678/auto-join-settings',
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ targetInstanceIds: [2] }),
+        body: JSON.stringify({ autoJoin: true }),
       },
     );
     expect(forbiddenResponse.status).toBe(403);
-    expect(botServiceMock.copyBotInstanceSettings).not.toHaveBeenCalled();
+    expect(botServiceMock.updateGuildAutoJoinSettings).not.toHaveBeenCalled();
   });
 
-  it('copies settings and publishes one guild update event', async () => {
-    botServiceMock.copyBotInstanceSettings.mockResolvedValue({
+  it('updates shared settings and publishes one guild update event', async () => {
+    botServiceMock.updateGuildAutoJoinSettings.mockResolvedValue({
       autoJoin: true,
       voiceChannelId: '123456789012345678',
       textChannelId: '223456789012345678',
@@ -240,31 +240,33 @@ describe('POST /api/guilds/:guildId/bots/:instanceId/settings/copy', () => {
     });
 
     const response = await buildApp(true).request(
-      '/api/guilds/123456789012345678/bots/1/settings/copy',
+      '/api/guilds/123456789012345678/auto-join-settings',
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ targetInstanceIds: [2, 3] }),
+        body: JSON.stringify({ autoJoin: true, channelPairs: [{ voiceChannelId: '123456789012345678', textChannelId: '223456789012345678' }] }),
       },
     );
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, data: null });
-    expect(botServiceMock.copyBotInstanceSettings).toHaveBeenCalledWith(
+    expect(botServiceMock.updateGuildAutoJoinSettings).toHaveBeenCalledWith(
       '123456789012345678',
-      1,
-      [2, 3],
+      { autoJoin: true, channelPairs: [{ voiceChannelId: '123456789012345678', textChannelId: '223456789012345678' }] },
     );
     expect(publishEventMock).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects duplicate targets before calling the copy service', async () => {
+  it('rejects duplicate voice channels before calling the service', async () => {
     const response = await buildApp(true).request(
-      '/api/guilds/123456789012345678/bots/1/settings/copy',
+      '/api/guilds/123456789012345678/auto-join-settings',
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ targetInstanceIds: [2, 2] }),
+        body: JSON.stringify({ channelPairs: [
+          { voiceChannelId: '123456789012345678', textChannelId: '223456789012345678' },
+          { voiceChannelId: '123456789012345678', textChannelId: '323456789012345678' },
+        ] }),
       },
     );
 
@@ -272,21 +274,21 @@ describe('POST /api/guilds/:guildId/bots/:instanceId/settings/copy', () => {
     const body = (await response.json()) as { success: boolean; error: { code: string } };
     expect(body.success).toBe(false);
     expect(body.error.code).toBe('VALIDATION_ERROR');
-    expect(botServiceMock.copyBotInstanceSettings).not.toHaveBeenCalled();
+    expect(botServiceMock.updateGuildAutoJoinSettings).not.toHaveBeenCalled();
     expect(publishEventMock).not.toHaveBeenCalled();
   });
 
-  it('does not publish when the copy service rejects the request', async () => {
-    botServiceMock.copyBotInstanceSettings.mockRejectedValue(
-      new AppError('VALIDATION_ERROR', 'コピー先のBotが利用できません。', 400),
+  it('does not publish when the update service rejects the request', async () => {
+    botServiceMock.updateGuildAutoJoinSettings.mockRejectedValue(
+      new AppError('VALIDATION_ERROR', '自動接続設定が不正です。', 400),
     );
 
     const response = await buildApp(true).request(
-      '/api/guilds/123456789012345678/bots/1/settings/copy',
+      '/api/guilds/123456789012345678/auto-join-settings',
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ targetInstanceIds: [2] }),
+        body: JSON.stringify({ autoJoin: true }),
       },
     );
 

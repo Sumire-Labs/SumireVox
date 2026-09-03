@@ -1,20 +1,12 @@
 import type {
   AutoJoinChannelPair,
-  BotInstanceSettings,
-  ResolvedBotInstanceSettings,
+  AutoJoinSettings,
+  ResolvedAutoJoinSettings,
 } from '@sumirevox/shared';
 
-export interface CopyableBotInfo {
-  instanceNumber: number;
-  isActive: boolean;
-  isInGuild: boolean;
-}
-
-export function createEmptyBotInstanceSettings(): ResolvedBotInstanceSettings {
+export function createEmptyAutoJoinSettings(): ResolvedAutoJoinSettings {
   return {
     autoJoin: false,
-    textChannelId: null,
-    voiceChannelId: null,
     channelPairs: [],
   };
 }
@@ -67,22 +59,20 @@ export function getAvailableVoiceChannelIds(
 }
 
 export function applyChannelPairs(
-  settings: ResolvedBotInstanceSettings,
+  settings: ResolvedAutoJoinSettings,
   channelPairs: readonly AutoJoinChannelPair[],
-): ResolvedBotInstanceSettings {
+): ResolvedAutoJoinSettings {
   const nextPairs = channelPairs.map((pair) => ({ ...pair }));
   return {
     autoJoin: settings.autoJoin,
-    voiceChannelId: nextPairs[0]?.voiceChannelId ?? null,
-    textChannelId: nextPairs[0]?.textChannelId ?? null,
     channelPairs: nextPairs,
   };
 }
 
-export function applyBotSettingsPatch(
-  settings: ResolvedBotInstanceSettings,
-  patch: Partial<BotInstanceSettings>,
-): ResolvedBotInstanceSettings {
+export function applyAutoJoinSettingsPatch(
+  settings: ResolvedAutoJoinSettings,
+  patch: Partial<AutoJoinSettings>,
+): ResolvedAutoJoinSettings {
   if (patch.channelPairs !== undefined) {
     return applyChannelPairs(
       { ...settings, autoJoin: patch.autoJoin ?? settings.autoJoin },
@@ -95,16 +85,4 @@ export function applyBotSettingsPatch(
     ...patch,
     channelPairs: settings.channelPairs.map((pair) => ({ ...pair })),
   };
-}
-
-export function getCopyableBotInfos<T extends CopyableBotInfo>(
-  bots: readonly T[],
-  sourceInstanceId: number,
-): T[] {
-  return bots.filter(
-    (bot) =>
-      bot.instanceNumber !== sourceInstanceId &&
-      bot.isActive &&
-      bot.isInGuild,
-  );
 }

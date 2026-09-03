@@ -12,7 +12,8 @@ import {
   getBotGuildMemberships,
   setBotInstanceActive,
   getGuildBotList,
-  updateGuildBotInstanceSettings,
+  updateGuildAutoJoinSettings,
+  updateGuildBotInstancePriority,
 } from '../services/bot-instance-service.js';
 import { REDIS_CHANNELS, type AdminServerItem } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
@@ -34,7 +35,8 @@ import {
   paginationQuerySchema,
   guildSettingsUpdateSchema,
   instanceParamsSchema,
-  guildBotInstanceSettingsBodySchema,
+  autoJoinSettingsBodySchema,
+  botInstancePriorityBodySchema,
   announcementIdParamsSchema,
   announcementCreateBodySchema,
   announcementUpdateBodySchema,
@@ -343,17 +345,19 @@ adminRouter.get('/servers/:guildId/bots', async (c) => {
   });
 });
 
-/**
- * PUT /api/admin/servers/:guildId/bots/:instanceId/settings
- * 特定インスタンスの設定更新（管理者用）
- */
-adminRouter.put('/servers/:guildId/bots/:instanceId/settings', adminBotSettingsRateLimit, async (c) => {
-  const { guildId, instanceId } = await validate.params(c, instanceParamsSchema);
-  const body = await validate.body(c, guildBotInstanceSettingsBodySchema);
-
-  await updateGuildBotInstanceSettings(guildId, instanceId, body);
+adminRouter.put('/servers/:guildId/auto-join-settings', adminBotSettingsRateLimit, async (c) => {
+  const { guildId } = await validate.params(c, guildParamsSchema);
+  const body = await validate.body(c, autoJoinSettingsBodySchema);
+  await updateGuildAutoJoinSettings(guildId, body);
   await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
+  return c.json({ success: true, data: null });
+});
 
+adminRouter.put('/servers/:guildId/bot-priority', adminBotSettingsRateLimit, async (c) => {
+  const { guildId } = await validate.params(c, guildParamsSchema);
+  const { instanceIds } = await validate.body(c, botInstancePriorityBodySchema);
+  await updateGuildBotInstancePriority(guildId, instanceIds);
+  await publishEvent(REDIS_CHANNELS.GUILD_SETTINGS_UPDATED, JSON.stringify({ guildId }));
   return c.json({ success: true, data: null });
 });
 

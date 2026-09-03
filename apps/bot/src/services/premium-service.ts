@@ -7,6 +7,12 @@ const PREMIUM_CACHE_TTL_MS = 60_000;
 
 const premiumCache = new Map<string, { isPremium: boolean; cachedAt: number }>();
 
+export interface GuildBotPriorityItem {
+  instanceId: number;
+  name: string;
+  isAvailable: boolean;
+}
+
 export function invalidatePremiumCache(guildId: string): void {
   premiumCache.delete(guildId);
 }
@@ -98,4 +104,30 @@ export async function getAvailableBotInstanceIds(guildId: string): Promise<numbe
     ? priority.length
     : Math.min(priority.length, Math.max(1, await getGuildActiveBoostCount(guildId)));
   return priority.slice(0, max);
+}
+
+/** 参加・生存中のBotを、保存済み優先順位と番号順の補完規則で返す。 */
+export async function getGuildBotPriority(guildId: string): Promise<GuildBotPriorityItem[]> {
+  const [settings, records] = await Promise.all([
+    getGuildSettings(guildId),
+    getPrisma().botInstance.findMany({ where: { isActive: true }, orderBy: { instanceId: 'asc' } }),
+  ]);
+  const presentRecords = (await Promise.all(records.map(async (record) => ({
+    record,
+    present: (await getRedisClient().exists(REDIS_KEYS.BOT_GUILD_PRESENCE(record.instanceId, guildId))) === 1,
+  })))).filter((item) => item.present).map((item) => item.record);
+  const presentIds = presentRecords.map((record) => record.instanceId);
+  const stored = Array.isArray(settings.botInstancePriority)
+    ? settings.botInstancePriority.filter((id): id is number => typeof id === 'number' && presentIds.includes(id))
+    : [];
+  const priority = [...new Set([...stored, ...presentIds.filter((id) => !stored.includes(id))])];
+  const limit = settings.manualPremium
+    ? priority.length
+    : Math.min(priority.length, Math.max(1, await getGuildActiveBoostCount(guildId)));
+  const availableIds = new Set(priority.slice(0, limit));
+  const byId = new Map(presentRecords.map((record) => [record.instanceId, record]));
+  return priority.flatMap((instanceId) => {
+    const record = byId.get(instanceId);
+    return record ? [{ instanceId, name: record.name, isAvailable: availableIds.has(instanceId) }] : [];
+  });
 }
