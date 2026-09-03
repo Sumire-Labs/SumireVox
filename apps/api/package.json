@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @sumirevox/shared build",
     "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
