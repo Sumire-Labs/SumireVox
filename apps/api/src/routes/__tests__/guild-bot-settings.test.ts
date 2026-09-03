@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { botServiceMock, discordApiMock, redisMock, publishEventMock } = vi.hoisted(() => ({
+const { botServiceMock, discordApiMock, guildChannelServiceMock, redisMock, publishEventMock } = vi.hoisted(() => ({
   botServiceMock: {
     copyBotInstanceSettings: vi.fn(),
     getActiveBotInstances: vi.fn(),
@@ -16,6 +16,9 @@ const { botServiceMock, discordApiMock, redisMock, publishEventMock } = vi.hoist
   discordApiMock: {
     fetchManagedGuilds: vi.fn(),
     hasManageGuildPermission: vi.fn(),
+  },
+  guildChannelServiceMock: {
+    getGuildChannelsSorted: vi.fn(),
   },
   redisMock: {
     get: vi.fn(),
@@ -54,7 +57,7 @@ vi.mock('../../services/dictionary-service.js', () => ({
   getServerDictionaryEntries: vi.fn(),
   isGuildPremium: vi.fn(),
 }));
-vi.mock('../../services/guild-channel-service.js', () => ({ getGuildChannelsSorted: vi.fn() }));
+vi.mock('../../services/guild-channel-service.js', () => guildChannelServiceMock);
 vi.mock('../../services/guild-role-service.js', () => ({ getGuildRolesSorted: vi.fn() }));
 vi.mock('../../services/guild-settings-service.js', () => ({
   getGuildSettings: vi.fn(),
@@ -86,6 +89,51 @@ function buildApp(authenticated: boolean): Hono {
   app.route('/api/guilds', guildsRouter);
   return app;
 }
+
+describe('GET /api/guilds/:guildId/channels', () => {
+  beforeEach(() => {
+    discordApiMock.hasManageGuildPermission.mockReset().mockResolvedValue(true);
+    guildChannelServiceMock.getGuildChannelsSorted.mockReset();
+    redisMock.get.mockReset().mockResolvedValue(null);
+    redisMock.set.mockReset().mockResolvedValue('OK');
+  });
+
+  it('returns channels from a joined secondary Bot through the existing API contract', async () => {
+    const channels = {
+      textChannels: [{ id: '123456789012345678', name: 'general', parentId: null, type: 'text' }],
+      voiceChannels: [{ id: '223456789012345678', name: 'VC', parentId: null, type: 'voice' }],
+      readableChannels: [
+        { id: '123456789012345678', name: 'general', parentId: null, type: 'text' },
+        { id: '223456789012345678', name: 'VC', parentId: null, type: 'voice' },
+      ],
+      categories: [],
+    };
+    guildChannelServiceMock.getGuildChannelsSorted.mockResolvedValue(channels);
+
+    const response = await buildApp(true).request('/api/guilds/123456789012345678/channels');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: channels });
+    expect(guildChannelServiceMock.getGuildChannelsSorted).toHaveBeenCalledWith('123456789012345678');
+  });
+
+  it('returns a visible service error when no joined Bot can retrieve channels', async () => {
+    guildChannelServiceMock.getGuildChannelsSorted.mockRejectedValue(
+      new AppError('SERVICE_UNAVAILABLE', 'チャンネル一覧を取得できる参加中の Bot が見つかりません。', 503),
+    );
+
+    const response = await buildApp(true).request('/api/guilds/123456789012345678/channels');
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'チャンネル一覧を取得できる参加中の Bot が見つかりません。',
+      },
+    });
+  });
+});
 
 describe('POST /api/guilds/:guildId/bots/:instanceId/settings/copy', () => {
   beforeEach(() => {

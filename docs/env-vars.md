@@ -4,7 +4,7 @@
 |---|---|---|
 | NODE_ENV | development / production | production |
 | BOT_INSTANCE_ID | 起動する Bot インスタンス番号。`DISCORD_TOKEN_<N>` / `DISCORD_CLIENT_ID_<N>` の `N` に対応 | 1 |
-| DISCORD_TOKEN_<N> | Discord Bot トークン。`N = BOT_INSTANCE_ID`。複数インスタンス運用時は `DISCORD_TOKEN_1`, `DISCORD_TOKEN_2` ... を設定 | Bot 起動時は対応する番号が必須 |
+| DISCORD_TOKEN_<N> | Discord Bot トークン。`N = BOT_INSTANCE_ID`。複数インスタンス運用時は `DISCORD_TOKEN_1`, `DISCORD_TOKEN_2` ... を設定。API は対象サーバーに参加中の Bot を選んでチャンネル一覧を取得するため、稼働させる各インスタンスのトークンを API にも設定する | Bot 起動時は対応する番号が必須 |
 | DISCORD_CLIENT_ID_<N> | Discord Bot 用クライアントID。`N = BOT_INSTANCE_ID`。複数インスタンス運用時は `DISCORD_CLIENT_ID_1`, `DISCORD_CLIENT_ID_2` ... を設定 | Bot 起動時は対応する番号が必須 |
 | DISCORD_CLIENT_ID | API サーバーの Discord OAuth2 用クライアントID（サフィックスなし） | API 起動時は必須 |
 | DISCORD_CLIENT_SECRET | Discord OAuth2 シークレット | (必須) |

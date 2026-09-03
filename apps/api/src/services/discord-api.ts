@@ -106,12 +106,15 @@ export interface DiscordRole {
 /**
  * Bot トークンでギルドのチャンネル一覧を取得する
  */
-export async function fetchGuildChannels(guildId: string): Promise<DiscordChannel[]> {
-  if (!config.discordBotToken) {
+export async function fetchGuildChannels(
+  guildId: string,
+  botToken: string,
+): Promise<DiscordChannel[]> {
+  if (!botToken) {
     throw new AppError('DISCORD_API_ERROR', 'Bot token not configured', 503);
   }
   const response = await fetchDiscord(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
-    headers: { Authorization: `Bot ${config.discordBotToken}` },
+    headers: { Authorization: `Bot ${botToken}` },
   });
   if (response.status === 429) {
     const retryAfter = response.headers.get('Retry-After') ?? '5';

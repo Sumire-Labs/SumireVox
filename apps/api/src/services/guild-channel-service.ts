@@ -1,6 +1,9 @@
 import { fetchGuildChannels } from './discord-api.js';
 import type { DiscordChannel } from './discord-api.js';
 import { getRedisClient } from '../infrastructure/redis.js';
+import { AppError } from '../infrastructure/app-error.js';
+import { config } from '../infrastructure/config.js';
+import { getActiveBotInstances, isBotInGuild } from './bot-instance-service.js';
 
 const CHANNEL_CACHE_TTL = 120;
 const channelCacheKey = (guildId: string) => `guild:${guildId}:channels:v2`;
@@ -54,7 +57,8 @@ export async function getGuildChannelsSorted(guildId: string): Promise<GuildChan
     return JSON.parse(cached) as GuildChannelsSorted;
   }
 
-  const channels = await fetchGuildChannels(guildId);
+  const botToken = await getGuildChannelAccessToken(guildId);
+  const channels = await fetchGuildChannels(guildId, botToken);
 
   const categories = channels
     .filter((ch) => ch.type === DISCORD_CHANNEL_TYPES.GuildCategory)
@@ -76,4 +80,23 @@ export async function getGuildChannelsSorted(guildId: string): Promise<GuildChan
   await redis.set(cacheKey, JSON.stringify(result), 'EX', CHANNEL_CACHE_TTL);
 
   return result;
+}
+
+async function getGuildChannelAccessToken(guildId: string): Promise<string> {
+  const instances = await getActiveBotInstances();
+
+  for (const instance of instances) {
+    const botToken = config.discordBotTokens.get(instance.instanceId);
+    if (!botToken) continue;
+
+    if (await isBotInGuild(instance.instanceId, guildId)) {
+      return botToken;
+    }
+  }
+
+  throw new AppError(
+    'SERVICE_UNAVAILABLE',
+    'チャンネル一覧を取得できる参加中の Bot が見つかりません。',
+    503,
+  );
 }

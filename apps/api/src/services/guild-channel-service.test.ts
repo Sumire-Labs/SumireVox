@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppError } from '../infrastructure/app-error.js';
 
-const { redisMock, fetchGuildChannelsMock } = vi.hoisted(() => ({
+const { redisMock, fetchGuildChannelsMock, botInstanceServiceMock, configMock } = vi.hoisted(() => ({
   redisMock: {
     get: vi.fn(),
     set: vi.fn(),
   },
   fetchGuildChannelsMock: vi.fn(),
+  botInstanceServiceMock: {
+    getActiveBotInstances: vi.fn(),
+    isBotInGuild: vi.fn(),
+  },
+  configMock: {
+    discordBotTokens: new Map<number, string>(),
+  },
 }));
 
 vi.mock('../infrastructure/redis.js', () => ({
@@ -16,6 +24,10 @@ vi.mock('./discord-api.js', () => ({
   fetchGuildChannels: fetchGuildChannelsMock,
 }));
 
+vi.mock('./bot-instance-service.js', () => botInstanceServiceMock);
+
+vi.mock('../infrastructure/config.js', () => ({ config: configMock }));
+
 import { getGuildChannelsSorted } from './guild-channel-service.js';
 
 describe('getGuildChannelsSorted', () => {
@@ -23,6 +35,9 @@ describe('getGuildChannelsSorted', () => {
     redisMock.get.mockReset();
     redisMock.set.mockReset();
     fetchGuildChannelsMock.mockReset();
+    botInstanceServiceMock.getActiveBotInstances.mockReset();
+    botInstanceServiceMock.isBotInGuild.mockReset();
+    configMock.discordBotTokens.clear();
   });
 
   it('returns cached channels when present', async () => {
@@ -47,6 +62,9 @@ describe('getGuildChannelsSorted', () => {
 
   it('sorts and caches all readable channel types while preserving legacy candidates', async () => {
     redisMock.get.mockResolvedValue(null);
+    botInstanceServiceMock.getActiveBotInstances.mockResolvedValue([{ instanceId: 1 }]);
+    botInstanceServiceMock.isBotInGuild.mockResolvedValue(true);
+    configMock.discordBotTokens.set(1, 'bot-token-1');
     fetchGuildChannelsMock.mockResolvedValue([
       { id: '20', name: 'Stage', type: 13, parent_id: '2', position: 4 },
       { id: '30', name: 'Text B', type: 0, parent_id: '1', position: 3 },
@@ -87,5 +105,49 @@ describe('getGuildChannelsSorted', () => {
       'EX',
       120,
     );
+    expect(fetchGuildChannelsMock).toHaveBeenCalledWith('guild-1', 'bot-token-1');
+  });
+
+  it('uses a joined secondary Bot token when the primary Bot is not in the guild', async () => {
+    redisMock.get.mockResolvedValue(null);
+    botInstanceServiceMock.getActiveBotInstances.mockResolvedValue([
+      { instanceId: 1 },
+      { instanceId: 2 },
+    ]);
+    botInstanceServiceMock.isBotInGuild.mockImplementation(async (instanceId: number) => instanceId === 2);
+    configMock.discordBotTokens.set(1, 'bot-token-1');
+    configMock.discordBotTokens.set(2, 'bot-token-2');
+    fetchGuildChannelsMock.mockResolvedValue([]);
+
+    await getGuildChannelsSorted('guild-1');
+
+    expect(fetchGuildChannelsMock).toHaveBeenCalledWith('guild-1', 'bot-token-2');
+  });
+
+  it('fails clearly when no joined Bot has an API token configured', async () => {
+    redisMock.get.mockResolvedValue(null);
+    botInstanceServiceMock.getActiveBotInstances.mockResolvedValue([{ instanceId: 2 }]);
+    botInstanceServiceMock.isBotInGuild.mockResolvedValue(true);
+
+    await expect(getGuildChannelsSorted('guild-1')).rejects.toMatchObject({
+      code: 'SERVICE_UNAVAILABLE',
+      statusCode: 503,
+    });
+    expect(fetchGuildChannelsMock).not.toHaveBeenCalled();
+  });
+
+  it('propagates Discord API failures to the route error handler', async () => {
+    redisMock.get.mockResolvedValue(null);
+    botInstanceServiceMock.getActiveBotInstances.mockResolvedValue([{ instanceId: 2 }]);
+    botInstanceServiceMock.isBotInGuild.mockResolvedValue(true);
+    configMock.discordBotTokens.set(2, 'bot-token-2');
+    fetchGuildChannelsMock.mockRejectedValue(
+      new AppError('DISCORD_API_ERROR', 'Failed to fetch guild channels', 500),
+    );
+
+    await expect(getGuildChannelsSorted('guild-1')).rejects.toMatchObject({
+      code: 'DISCORD_API_ERROR',
+      statusCode: 500,
+    });
   });
 });

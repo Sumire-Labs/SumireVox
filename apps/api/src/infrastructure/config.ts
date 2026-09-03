@@ -5,6 +5,7 @@ interface AppConfig {
   discordClientId: string;
   discordClientSecret: string;
   discordBotToken: string;
+  discordBotTokens: ReadonlyMap<number, string>;
   databaseUrl: string;
   redisUrl: string;
   voicevoxUrls: string[];
@@ -23,7 +24,21 @@ interface AppConfig {
   stripeReconcileIntervalMs: number;
 }
 
+function getDiscordBotTokens(): ReadonlyMap<number, string> {
+  const tokens = new Map<number, string>();
+
+  for (const [key, value] of Object.entries(process.env)) {
+    const match = /^DISCORD_TOKEN_([1-9]\d*)$/.exec(key);
+    if (!match || !value) continue;
+
+    tokens.set(Number(match[1]), value);
+  }
+
+  return tokens;
+}
+
 function buildConfig(): AppConfig {
+  const discordBotTokens = getDiscordBotTokens();
   const stripeSecretKey = process.env['STRIPE_SECRET_KEY'] ?? '';
   // Stripe 有効時（STRIPE_SECRET_KEY 設定時）は Webhook signing secret を必須にする。
   // 未設定のまま起動すると署名検証が必ず失敗し、Stripe 側で全配信が 400 扱いとなり
@@ -36,7 +51,8 @@ function buildConfig(): AppConfig {
     nodeEnv: process.env['NODE_ENV'] ?? 'production',
     discordClientId: requireEnv('DISCORD_CLIENT_ID'),
     discordClientSecret: requireEnv('DISCORD_CLIENT_SECRET'),
-    discordBotToken: process.env['DISCORD_TOKEN_1'] ?? '',
+    discordBotToken: discordBotTokens.get(1) ?? '',
+    discordBotTokens,
     databaseUrl: requireEnv('DATABASE_URL'),
     voicevoxUrls: (process.env['VOICEVOX_URLS'] ?? 'http://voicevox:50021')
       .split(',')

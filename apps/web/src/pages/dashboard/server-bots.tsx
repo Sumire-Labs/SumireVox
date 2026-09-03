@@ -179,6 +179,8 @@ export function ServerBotsPage() {
   const { guildId } = useParams<{ guildId: string }>();
   const [data, setData] = useState<BotListResponse | null>(null);
   const [channels, setChannels] = useState<ChannelsData | null>(null);
+  const [channelsLoading, setChannelsLoading] = useState(false);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -196,6 +198,32 @@ export function ServerBotsPage() {
     return result;
   }, [guildId]);
 
+  const fetchChannels = useCallback(async (signal?: AbortSignal): Promise<ChannelsData | null> => {
+    if (!guildId) return null;
+
+    setChannelsLoading(true);
+    setChannelsError(null);
+    try {
+      const result = await api.get<ChannelsData>(
+        `/api/guilds/${guildId}/channels`,
+        signal ? { signal } : undefined,
+      );
+      if (!signal?.aborted) setChannels(result);
+      return result;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
+      if (!signal?.aborted) {
+        setChannels(null);
+        setChannelsError(
+          err instanceof ApiError ? err.message : 'チャンネル一覧の読み込みに失敗しました。',
+        );
+      }
+      return null;
+    } finally {
+      if (!signal?.aborted) setChannelsLoading(false);
+    }
+  }, [guildId]);
+
   useEffect(() => {
     if (!guildId) {
       setLoading(false);
@@ -207,19 +235,16 @@ export function ServerBotsPage() {
     setLoadError(null);
     setData(null);
     setChannels(null);
+    setChannelsError(null);
 
     const load = async () => {
       try {
-        const [botData, channelData] = await Promise.all([
+        const [botData] = await Promise.all([
           fetchBots(controller.signal),
-          api.get<ChannelsData>(`/api/guilds/${guildId}/channels`, { signal: controller.signal }).catch((err: unknown) => {
-            if (err instanceof Error && err.name === 'AbortError') throw err;
-            return null;
-          }),
+          fetchChannels(controller.signal),
         ]);
         if (!controller.signal.aborted) {
           setData(botData);
-          if (channelData) setChannels(channelData);
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
@@ -231,7 +256,7 @@ export function ServerBotsPage() {
 
     void load();
     return () => controller.abort();
-  }, [fetchBots, guildId]);
+  }, [fetchBots, fetchChannels, guildId]);
 
   const updateSettings = useCallback(
     async (instanceNumber: number, patch: Partial<BotInstanceSettings>): Promise<boolean> => {
@@ -389,6 +414,24 @@ export function ServerBotsPage() {
         </div>
       </div>
 
+      {channelsError && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        >
+          <span>チャンネル候補を取得できませんでした。{channelsError}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onPress={() => void fetchChannels()}
+            isDisabled={channelsLoading}
+            className="border border-amber-400/40 bg-transparent text-amber-100 shrink-0"
+          >
+            再試行
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         {data.bots.map((bot) => {
           const isSaving = savingId === bot.instanceNumber;
@@ -493,7 +536,12 @@ export function ServerBotsPage() {
                       size="sm"
                       variant="secondary"
                       onPress={() => openPairModal(bot)}
-                      isDisabled={!bot.isInGuild || isSaving || voiceChannels.every((channel) => usedVoiceChannelIds.has(channel.id))}
+                      isDisabled={
+                        !bot.isInGuild ||
+                        isSaving ||
+                        channelsLoading ||
+                        voiceChannels.every((channel) => usedVoiceChannelIds.has(channel.id))
+                      }
                       className="border border-white/20 bg-white/5 text-white shrink-0"
                     >
                       ペアを追加
