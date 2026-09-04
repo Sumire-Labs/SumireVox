@@ -20,7 +20,7 @@ import { registerAllViewHandlers } from './commands/register-view-handlers.js';
 import {
   cancelAllVcSessionRecovery,
   restoreVcSessions,
-  destroyAllVcSessions,
+  destroyAllVcSessionsForRestart,
   startVcOwnershipRenewal,
   stopVcOwnershipRenewal,
 } from './services/vc-session-manager.js';
@@ -186,10 +186,10 @@ async function bootstrap(): Promise<void> {
     // Bot インスタンス非アクティブ化
     await deactivateBotInstance();
 
-    // 全 VC セッション破棄
+    // 全 VC セッション停止（Redis の復元情報は保持）
     cancelAllVcSessionRecovery();
     stopVcOwnershipRenewal();
-    await destroyAllVcSessions();
+    await destroyAllVcSessionsForRestart();
 
     client.destroy();
     childLogger.info('Discord client destroyed');

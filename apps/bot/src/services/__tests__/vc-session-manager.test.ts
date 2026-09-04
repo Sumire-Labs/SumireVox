@@ -72,14 +72,23 @@ import {
   removeVcSessionFromRedis,
   saveVcSessionToRedis,
 } from '../../infrastructure/vc-session-store.js';
-import { claimVcOwnership, getVcOwnershipRecoveryDelayMs } from '../vc-ownership-service.js';
+import { cancelDisconnectTimer } from '../auto-disconnect-timer.js';
+import { destroyTrieSlot } from '../text-pipeline/index.js';
+import {
+  claimVcOwnership,
+  getVcOwnershipRecoveryDelayMs,
+  releaseVcOwnership,
+} from '../vc-ownership-service.js';
 import {
   createVcSession,
   cancelAllVcSessionRecovery,
+  destroyVcSession,
   getAllVcSessions,
+  getConnection,
   getVcSession,
   moveVcSession,
   restoreVcSessions,
+  destroyAllVcSessionsForRestart,
   updateTextChannel,
 } from '../vc-session-manager.js';
 
@@ -93,6 +102,9 @@ const mockGetAllVcSessionsForBotInstance = vi.mocked(getAllVcSessionsForBotInsta
 const mockClaimVcOwnership = vi.mocked(claimVcOwnership);
 const mockGetVcOwnershipRecoveryDelayMs = vi.mocked(getVcOwnershipRecoveryDelayMs);
 const mockDeleteGuildQueue = vi.mocked(deleteGuildQueue);
+const mockCancelDisconnectTimer = vi.mocked(cancelDisconnectTimer);
+const mockDestroyTrieSlot = vi.mocked(destroyTrieSlot);
+const mockReleaseVcOwnership = vi.mocked(releaseVcOwnership);
 
 function makeConnection() {
   return {
@@ -141,6 +153,50 @@ describe('vc-session-manager connection mode', () => {
 
     expect(session.connectionMode).toBe('auto');
     expect(mockSaveVcSessionToRedis).toHaveBeenCalledWith(session);
+  });
+
+  it('再起動時はローカル状態と接続を破棄するが、復元情報を残してleaseだけ解放する', async () => {
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    await createVcSession('guild-1', 'voice-1', 'text-1', {} as never, 'auto');
+
+    const destroyedHandler = connection.on.mock.calls.find(
+      ([event]) => event === voiceConnectionStatus.Destroyed,
+    )?.[1] as (() => void) | undefined;
+    expect(destroyedHandler).toBeDefined();
+    connection.destroy.mockImplementation(() => destroyedHandler?.());
+
+    await destroyAllVcSessionsForRestart();
+
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
+    expect(getAllVcSessions().size).toBe(0);
+    expect(getVcSession('guild-1')).toBeUndefined();
+    expect(getConnection('guild-1')).toBeUndefined();
+    expect(mockDeleteGuildQueue).toHaveBeenCalledWith('guild-1');
+    expect(mockCancelDisconnectTimer).toHaveBeenCalledWith('guild-1');
+    expect(mockDestroyTrieSlot).toHaveBeenCalledWith('guild-1');
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+    expect(mockReleaseVcOwnership).toHaveBeenCalledWith('guild-1', 'voice-1', {
+      instanceId: 1,
+      claimId: 'claim-1',
+    });
+
+    destroyedHandler?.();
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+  });
+
+  it('通常のセッション破棄ではRedisの復元情報とownership leaseを削除する', async () => {
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    await createVcSession('guild-1', 'voice-1', 'text-1', {} as never);
+
+    await destroyVcSession('guild-1');
+
+    expect(mockRemoveVcSessionFromRedis).toHaveBeenCalledWith('guild-1', 1);
+    expect(mockReleaseVcOwnership).toHaveBeenCalledWith('guild-1', 'voice-1', {
+      instanceId: 1,
+      claimId: 'claim-1',
+    });
   });
 
   it('/join相当のTC更新でセッションをmanualへ変更する', async () => {

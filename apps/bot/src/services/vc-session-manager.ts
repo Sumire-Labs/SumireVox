@@ -29,6 +29,8 @@ import {
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
+// 再起動時に破棄した接続から遅れて届くイベントを通常の退出処理へ流さない。
+const restartShutdownConnections = new WeakSet<VoiceConnection>();
 const pendingCreates = new Map<string, Promise<VcSession>>();
 let ownershipRenewalTimer: ReturnType<typeof setInterval> | null = null;
 const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -266,6 +268,54 @@ export async function destroyAllVcSessions(): Promise<void> {
   logger.info({ count: guildIds.length }, 'All VC sessions destroyed');
 }
 
+/**
+ * 再起動時にVCセッションのローカル状態だけを停止する。
+ * Redisの復元情報は残し、次回起動時に再接続できるようownership leaseだけ解放する。
+ */
+export async function destroyVcSessionForRestart(guildId: string): Promise<void> {
+  cancelVcSessionRecovery(guildId);
+  recoveryAttempts.delete(guildId);
+  cancelDisconnectTimer(guildId);
+  deleteGuildQueue(guildId);
+
+  const session = sessions.get(guildId);
+  const connection = connections.get(guildId) ?? getVoiceConnection(guildId);
+
+  // Destroyedイベントが同期的に発火してもRedisセッションを削除しないよう、
+  // 接続破棄より先にローカル状態を外す。
+  if (connection) restartShutdownConnections.add(connection);
+  destroyTrieSlot(guildId);
+  sessions.delete(guildId);
+  connections.delete(guildId);
+
+  try {
+    if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+      connection.destroy();
+    }
+  } catch (error) {
+    logger.warn({ err: error, guildId }, 'Failed to destroy VC connection during restart');
+  }
+
+  if (session?.claimId) {
+    await releaseVcOwnership(guildId, session.voiceChannelId, {
+      instanceId: session.botInstanceId,
+      claimId: session.claimId,
+    });
+  }
+
+  logger.info({ guildId }, 'VC session stopped for restart');
+}
+
+/** 再起動時に全VCセッションを停止する。Redisの復元情報は削除しない。 */
+export async function destroyAllVcSessionsForRestart(): Promise<void> {
+  cancelAllVcSessionRecovery();
+  const guildIds = Array.from(sessions.keys());
+  for (const guildId of guildIds) {
+    await destroyVcSessionForRestart(guildId);
+  }
+  logger.info({ count: guildIds.length }, 'All VC sessions stopped for restart');
+}
+
 export async function restoreVcSessions(): Promise<void> {
   const client = getClient();
   const shardId = client.shard?.ids[0] ?? 0;
@@ -392,11 +442,13 @@ async function renewAllVcOwnership(): Promise<void> {
         instanceId: session.botInstanceId,
         claimId: session.claimId,
       });
+      if (sessions.get(session.guildId) !== session) continue;
       if (!renewed) {
         logger.warn({ guildId: session.guildId }, 'VC ownership lease lost; disconnecting safely');
         await destroyVcSession(session.guildId);
       }
     } catch (error) {
+      if (sessions.get(session.guildId) !== session) continue;
       logger.error({ err: error, guildId: session.guildId }, 'Failed to renew VC ownership; disconnecting safely');
       await destroyVcSession(session.guildId);
     }
@@ -405,18 +457,22 @@ async function renewAllVcOwnership(): Promise<void> {
 
 function setupConnectionListeners(connection: VoiceConnection, guildId: string): void {
   connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    if (restartShutdownConnections.has(connection)) return;
+
     try {
       await Promise.race([
         entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
         entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
       ]);
     } catch {
+      if (restartShutdownConnections.has(connection) || connections.get(guildId) !== connection) return;
       logger.warn({ guildId }, 'Voice connection failed to reconnect, destroying session');
       await destroyVcSession(guildId);
     }
   });
 
   connection.on(VoiceConnectionStatus.Destroyed, () => {
+    if (restartShutdownConnections.has(connection)) return;
     if (connections.get(guildId) !== connection) return;
 
     logger.info({ guildId }, 'Voice connection destroyed');
