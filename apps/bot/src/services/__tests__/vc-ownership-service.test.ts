@@ -27,7 +27,7 @@ describe('VC ownership lease', () => {
       'vc-claim:guild-1:channel:voice-1',
       'vc-claim:guild-1:bot:2',
       '2:claim-a',
-      '60000',
+      '3000',
     );
   });
 
@@ -36,11 +36,31 @@ describe('VC ownership lease', () => {
     await expect(claimVcOwnership('guild-1', 'voice-1', 2, 'claim-a')).resolves.toBeNull();
   });
 
-  it('renews only the matching ownership token and moves atomically', async () => {
+  it('renews and moves ownership with a 3秒lease', async () => {
     redis.eval.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
     const ownership = { instanceId: 2, claimId: 'claim-a' };
     await expect(renewVcOwnership('guild-1', 'voice-1', ownership)).resolves.toBe(true);
     await expect(moveVcOwnership('guild-1', 'voice-1', 'voice-2', ownership)).resolves.toMatchObject({ instanceId: 2 });
+    expect(redis.eval).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("PEXPIRE', KEYS[1]"),
+      2,
+      'vc-claim:guild-1:channel:voice-1',
+      'vc-claim:guild-1:bot:2',
+      '2:claim-a',
+      '3000',
+    );
+    expect(redis.eval).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("SET', KEYS[3]"),
+      3,
+      'vc-claim:guild-1:channel:voice-1',
+      'vc-claim:guild-1:bot:2',
+      'vc-claim:guild-1:channel:voice-2',
+      '2:claim-a',
+      expect.stringMatching(/^2:/),
+      '3000',
+    );
   });
 
   it('waits for the longer VC or Bot lease before a safe recovery attempt', async () => {

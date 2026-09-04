@@ -3,7 +3,7 @@ import { REDIS_KEYS } from '@sumirevox/shared';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 
-export const VC_OWNERSHIP_LEASE_TTL_MS = 60_000;
+export const VC_OWNERSHIP_LEASE_TTL_MS = 3_000;
 const RECOVERY_LEASE_BUFFER_MS = 250;
 
 export interface VcOwnership {

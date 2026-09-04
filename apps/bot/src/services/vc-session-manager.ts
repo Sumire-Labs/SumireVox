@@ -419,7 +419,7 @@ export function startVcOwnershipRenewal(): void {
   if (ownershipRenewalTimer) return;
   ownershipRenewalTimer = setInterval(() => {
     void renewAllVcOwnership();
-  }, 20_000);
+  }, 1_000);
 }
 
 export function stopVcOwnershipRenewal(): void {

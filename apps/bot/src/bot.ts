@@ -130,8 +130,8 @@ async function bootstrap(): Promise<void> {
       childLogger.info('Predefined audio preloaded');
 
       // VC セッション復旧
-      await restoreVcSessions();
       startVcOwnershipRenewal();
+      await restoreVcSessions();
       await scheduleDisconnectTimersForRestoredSessions();
 
       memoryInterval = setInterval(() => {
