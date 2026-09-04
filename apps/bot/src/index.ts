@@ -11,6 +11,7 @@ dotenvConfig({ path: resolve(__dirname, '..', '..', '..', '.env') });
 import { ShardingManager } from 'discord.js';
 import { config } from './infrastructure/config.js';
 import { logger } from './infrastructure/logger.js';
+import { shutdownShardProcesses } from './infrastructure/shard-shutdown.js';
 
 function main(): void {
   const jsEntry = resolve(__dirname, 'bot.js');
@@ -25,6 +26,23 @@ function main(): void {
     totalShards: 'auto',
     execArgv: isTs ? ['--import', 'tsx'] : [],
   });
+
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+
+    shutdownPromise = (async () => {
+      logger.info({ signal }, 'Shutting down shard manager');
+      manager.respawn = false;
+      await shutdownShardProcesses(Array.from(manager.shards.values(), (shard) => shard.process));
+      logger.info('All shards stopped');
+      process.exit(0);
+    })();
+    return shutdownPromise;
+  };
+
+  process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+  process.once('SIGINT', () => { void shutdown('SIGINT'); });
 
   manager.on('shardCreate', (shard) => {
     logger.info({ shardId: shard.id }, `Shard ${shard.id} launched`);

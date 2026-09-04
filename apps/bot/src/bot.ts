@@ -66,6 +66,7 @@ async function bootstrap(): Promise<void> {
 
   let memoryInterval: ReturnType<typeof setInterval> | null = null;
   let guildPresenceInterval: ReturnType<typeof setInterval> | null = null;
+  let shutdownPromise: Promise<void> | null = null;
 
   // コマンドと永続Viewは主Botだけが提供する。
   if (config.botInstanceId === 1) {
@@ -161,7 +162,13 @@ async function bootstrap(): Promise<void> {
   });
 
   // Graceful Shutdown
-  const shutdown = async (signal: string): Promise<void> => {
+  const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = shutdownShard(signal);
+    return shutdownPromise;
+  };
+
+  async function shutdownShard(signal: NodeJS.Signals): Promise<void> {
     childLogger.info({ signal }, `Received ${signal}, shutting down...`);
 
     // ヘルスチェック停止
@@ -205,7 +212,7 @@ async function bootstrap(): Promise<void> {
 
     childLogger.info('Shutdown complete');
     process.exit(0);
-  };
+  }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));

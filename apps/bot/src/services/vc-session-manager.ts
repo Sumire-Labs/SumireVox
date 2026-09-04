@@ -29,8 +29,10 @@ import {
 
 const sessions = new Map<string, VcSession>();
 const connections = new Map<string, VoiceConnection>();
-// 再起動時に破棄した接続から遅れて届くイベントを通常の退出処理へ流さない。
-const restartShutdownConnections = new WeakSet<VoiceConnection>();
+// Redis復元情報を保持して停止した接続から遅れて届くイベントを通常の退出処理へ流さない。
+const preservedSessionConnections = new WeakSet<VoiceConnection>();
+// `/leave` と自動切断による明示的な破棄だけがRedis復元情報を削除する。
+const destructiveSessionConnections = new WeakSet<VoiceConnection>();
 const pendingCreates = new Map<string, Promise<VcSession>>();
 let ownershipRenewalTimer: ReturnType<typeof setInterval> | null = null;
 const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -128,6 +130,7 @@ export async function destroyVcSession(guildId: string): Promise<void> {
   const session = sessions.get(guildId);
   const connection = connections.get(guildId) ?? getVoiceConnection(guildId);
   if (connection && connection.state.status !== VoiceConnectionStatus.Destroyed) {
+    destructiveSessionConnections.add(connection);
     connection.destroy();
   }
 
@@ -260,19 +263,25 @@ export function getAllVcSessions(): Map<string, VcSession> {
   return sessions;
 }
 
-export async function destroyAllVcSessions(): Promise<void> {
-  const guildIds = Array.from(sessions.keys());
-  for (const guildId of guildIds) {
-    await destroyVcSession(guildId);
-  }
-  logger.info({ count: guildIds.length }, 'All VC sessions destroyed');
-}
-
 /**
  * 再起動時にVCセッションのローカル状態だけを停止する。
  * Redisの復元情報は残し、次回起動時に再接続できるようownership leaseだけ解放する。
  */
 export async function destroyVcSessionForRestart(guildId: string): Promise<void> {
+  await stopVcSessionWhilePreservingRedis(guildId);
+  logger.info({ guildId }, 'VC session stopped for restart');
+}
+
+async function stopVcSessionForRecovery(guildId: string): Promise<void> {
+  const session = await stopVcSessionWhilePreservingRedis(guildId);
+  if (!session) return;
+
+  const delay = nextRecoveryBackoffMs(guildId);
+  logger.warn({ guildId, voiceChannelId: session.voiceChannelId, delay }, 'VC session stopped; recovery scheduled');
+  scheduleVcSessionRecovery(session, delay);
+}
+
+async function stopVcSessionWhilePreservingRedis(guildId: string): Promise<VcSession | undefined> {
   cancelVcSessionRecovery(guildId);
   recoveryAttempts.delete(guildId);
   cancelDisconnectTimer(guildId);
@@ -283,7 +292,7 @@ export async function destroyVcSessionForRestart(guildId: string): Promise<void>
 
   // Destroyedイベントが同期的に発火してもRedisセッションを削除しないよう、
   // 接続破棄より先にローカル状態を外す。
-  if (connection) restartShutdownConnections.add(connection);
+  if (connection) preservedSessionConnections.add(connection);
   destroyTrieSlot(guildId);
   sessions.delete(guildId);
   connections.delete(guildId);
@@ -303,7 +312,7 @@ export async function destroyVcSessionForRestart(guildId: string): Promise<void>
     });
   }
 
-  logger.info({ guildId }, 'VC session stopped for restart');
+  return session;
 }
 
 /** 再起動時に全VCセッションを停止する。Redisの復元情報は削除しない。 */
@@ -344,18 +353,9 @@ async function restoreVcSession(session: VcSession): Promise<void> {
   if (!voiceChannel || !voiceChannel.isVoiceBased()) {
     logger.warn(
       { guildId: session.guildId, voiceChannelId: session.voiceChannelId },
-      'Voice channel not found during session restore, removing session',
+      'Voice channel not found during session restore; retrying',
     );
-    await abandonVcSessionRecovery(session.guildId);
-    return;
-  }
-
-  if (guild.members?.me?.voice.channelId) {
-    logger.warn(
-      { guildId: session.guildId, voiceChannelId: guild.members?.me?.voice.channelId },
-      'Bot is already connected during session restore, removing stale session',
-    );
-    await abandonVcSessionRecovery(session.guildId);
+    scheduleVcSessionRecovery(session, nextRecoveryBackoffMs(session.guildId));
     return;
   }
 
@@ -415,12 +415,6 @@ function cancelVcSessionRecovery(guildId: string): void {
   recoveryTimers.delete(guildId);
 }
 
-async function abandonVcSessionRecovery(guildId: string): Promise<void> {
-  cancelVcSessionRecovery(guildId);
-  recoveryAttempts.delete(guildId);
-  await removeVcSessionFromRedis(guildId, config.botInstanceId);
-}
-
 export function startVcOwnershipRenewal(): void {
   if (ownershipRenewalTimer) return;
   ownershipRenewalTimer = setInterval(() => {
@@ -444,20 +438,20 @@ async function renewAllVcOwnership(): Promise<void> {
       });
       if (sessions.get(session.guildId) !== session) continue;
       if (!renewed) {
-        logger.warn({ guildId: session.guildId }, 'VC ownership lease lost; disconnecting safely');
-        await destroyVcSession(session.guildId);
+        logger.warn({ guildId: session.guildId }, 'VC ownership lease lost; preserving session for recovery');
+        await stopVcSessionForRecovery(session.guildId);
       }
     } catch (error) {
       if (sessions.get(session.guildId) !== session) continue;
-      logger.error({ err: error, guildId: session.guildId }, 'Failed to renew VC ownership; disconnecting safely');
-      await destroyVcSession(session.guildId);
+      logger.error({ err: error, guildId: session.guildId }, 'Failed to renew VC ownership; preserving session for recovery');
+      await stopVcSessionForRecovery(session.guildId);
     }
   }
 }
 
 function setupConnectionListeners(connection: VoiceConnection, guildId: string): void {
   connection.on(VoiceConnectionStatus.Disconnected, async () => {
-    if (restartShutdownConnections.has(connection)) return;
+    if (preservedSessionConnections.has(connection)) return;
 
     try {
       await Promise.race([
@@ -465,26 +459,20 @@ function setupConnectionListeners(connection: VoiceConnection, guildId: string):
         entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
       ]);
     } catch {
-      if (restartShutdownConnections.has(connection) || connections.get(guildId) !== connection) return;
-      logger.warn({ guildId }, 'Voice connection failed to reconnect, destroying session');
-      await destroyVcSession(guildId);
+      if (preservedSessionConnections.has(connection) || connections.get(guildId) !== connection) return;
+      logger.warn({ guildId }, 'Voice connection failed to reconnect; preserving session for recovery');
+      await stopVcSessionForRecovery(guildId);
     }
   });
 
   connection.on(VoiceConnectionStatus.Destroyed, () => {
-    if (restartShutdownConnections.has(connection)) return;
+    if (preservedSessionConnections.has(connection)) return;
+    if (destructiveSessionConnections.has(connection)) return;
     if (connections.get(guildId) !== connection) return;
 
-    logger.info({ guildId }, 'Voice connection destroyed');
-    const session = sessions.get(guildId);
-    sessions.delete(guildId);
-    connections.delete(guildId);
-    removeVcSessionFromRedis(guildId, config.botInstanceId).catch(() => {});
-    if (session?.claimId) {
-      releaseVcOwnership(guildId, session.voiceChannelId, {
-        instanceId: session.botInstanceId,
-        claimId: session.claimId,
-      }).catch(() => {});
-    }
+    logger.warn({ guildId }, 'Voice connection destroyed unexpectedly; preserving session for recovery');
+    void stopVcSessionForRecovery(guildId).catch((error) => {
+      logger.error({ err: error, guildId }, 'Failed to preserve destroyed VC session for recovery');
+    });
   });
 }

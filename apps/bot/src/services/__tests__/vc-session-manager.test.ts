@@ -199,6 +199,22 @@ describe('vc-session-manager connection mode', () => {
     });
   });
 
+  it('予期しない接続破棄ではRedisの復元情報を保持して復旧対象にする', async () => {
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    await createVcSession('guild-1', 'voice-1', 'text-1', {} as never);
+
+    const destroyedHandler = connection.on.mock.calls.find(
+      ([event]) => event === voiceConnectionStatus.Destroyed,
+    )?.[1] as (() => void) | undefined;
+    destroyedHandler?.();
+
+    await vi.waitFor(() => {
+      expect(getVcSession('guild-1')).toBeUndefined();
+    });
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+  });
+
   it('/join相当のTC更新でセッションをmanualへ変更する', async () => {
     const connection = makeConnection();
     mockJoinVoiceChannel.mockReturnValue(connection as never);
@@ -305,7 +321,9 @@ describe('vc-session-manager connection mode', () => {
     });
   });
 
-  it('既にBotがVCへ接続済みなら復旧せず、古い記録を削除する', async () => {
+  it('Discord側にBotのVC状態が残っていても復元情報を保持して再接続する', async () => {
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
     const savedSession: VcSession = {
       guildId: 'guild-1', voiceChannelId: 'voice-1', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
     };
@@ -321,11 +339,12 @@ describe('vc-session-manager connection mode', () => {
 
     await restoreVcSessions();
 
-    expect(mockJoinVoiceChannel).not.toHaveBeenCalled();
-    expect(mockRemoveVcSessionFromRedis).toHaveBeenCalledWith('guild-1', 1);
+    expect(mockJoinVoiceChannel).toHaveBeenCalledTimes(1);
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
+    expect(getVcSession('guild-1')).toMatchObject({ voiceChannelId: 'voice-1' });
   });
 
-  it('削除済みVCの記録だけを恒久的な失敗として削除する', async () => {
+  it('削除済みVCの記録も明示的な退出まで保持する', async () => {
     const savedSession: VcSession = {
       guildId: 'guild-1', voiceChannelId: 'deleted-voice', textChannelId: 'text-1', shardId: 0, botInstanceId: 1,
     };
@@ -341,7 +360,7 @@ describe('vc-session-manager connection mode', () => {
 
     await restoreVcSessions();
 
-    expect(mockRemoveVcSessionFromRedis).toHaveBeenCalledWith('guild-1', 1);
+    expect(mockRemoveVcSessionFromRedis).not.toHaveBeenCalled();
   });
 
   it('Discord接続の一時失敗では記録を削除せず、バックオフして再試行する', async () => {

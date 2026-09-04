@@ -44,7 +44,7 @@ Redis 停止時はサービス停止を許容。フォールバックなし。`r
 - Bot 1だけがDiscordコマンドを提供する。サブBotへの接続・退出はRedis Pub/Subの内部指示で委譲する。
 
 - メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, connectionMode, ... })
-- Redis に復旧用の実行時セッションを記録（通常の退出時に削除。再起動用シャットダウンでは保持）
+- Redis に復旧用の実行時セッションを記録する。削除するのは明示的な `/leave` と自動切断だけであり、再起動・接続断・ownership lease 喪失・一時的な復旧失敗では保持する
 - シャード再起動時に Redis から前回の接続情報を読み取り、自動で VC 再参加。異常終了後に所有権leaseが残っている場合は、lease失効後に再試行する。保存時と異なるシャードに再割当された場合も、現在そのギルドを保持するシャードが復旧を担当する
 
 ## PostgreSQL 接続数管理
@@ -53,7 +53,7 @@ Prisma の `DATABASE_URL` に `?connection_limit=N` を付与。シャードプ�
 
 ## Graceful Shutdown
 
-SIGTERM/SIGINT 受信 → 再生中の音声を中断 → 全キュー・自動退出タイマーを停止 → 全 VC 接続とローカル実行状態を破棄（Redis の VC 復元セッションは保持し、ownership lease は解放）→ その他の終了処理 → プロセス終了。切断時の読み上げは行わない。`/leave`、自動退出、接続不可、ownership lease 喪失など通常の退出処理では Redis の復元セッションも削除する。
+ShardingManager 親プロセスが SIGTERM/SIGINT を受けると、全シャードへ同じシグナルを送信して終了を待機する。各シャードは再生中の音声・全キュー・自動退出タイマーを停止し、VC 接続とローカル実行状態を破棄する。Redis の VC 復元セッションは保持し、ownership lease は解放する。復元時に Discord 側でBotが既にVCにいるように見えても、記録は削除せず再接続を試みる。Redis の復元セッションを削除するのは、明示的な `/leave` と自動切断だけである。
 
 ## 必要な Discord Intents
 
