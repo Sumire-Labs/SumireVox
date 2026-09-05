@@ -52,13 +52,14 @@ export async function addGuildsToBotInstanceRegistry(
 ): Promise<void> {
   if (guildIds.length === 0) return;
 
+  const shardId = getClient().shard?.ids[0] ?? 0;
   await getRedisClient().sadd(
     REDIS_KEYS.BOT_GUILDS(config.botInstanceId),
     ...guildIds,
   );
   await Promise.all(guildIds.map((guildId) => getRedisClient().set(
     REDIS_KEYS.BOT_GUILD_PRESENCE(config.botInstanceId, guildId),
-    '1',
+    String(shardId),
     'EX',
     60,
   )));
@@ -85,7 +86,7 @@ export async function isBotInstancePresentInGuild(instanceId: number, guildId: s
 }
 
 /**
- * 設定コピーの対象として扱える Bot インスタンスを取得する。
+ * 設定コピーの対象として扱える、稼働確認済みの Bot インスタンスを取得する。
  * Boost/Premium による接続可否は設定コピーとは別のため、ここでは判定しない。
  */
 export async function getCopyableBotInstances(
@@ -102,7 +103,9 @@ export async function getCopyableBotInstances(
   const available = await Promise.all(
     candidates.map(async (record) => {
       try {
-        const isInGuild = (await redis.sismember(REDIS_KEYS.BOT_GUILDS(record.instanceId), guildId)) === 1;
+        const isInGuild = (await redis.exists(
+          REDIS_KEYS.BOT_GUILD_PRESENCE(record.instanceId, guildId),
+        )) === 1;
         return isInGuild ? mapBotInstance(record) : null;
       } catch (error) {
         logger.warn(

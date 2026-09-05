@@ -99,7 +99,24 @@ export async function getBotGuildMemberships(instances: BotInstance[]): Promise<
   );
   const memberships = new Map<string, number[]>();
 
-  guildIdSets.forEach((guildIds, index) => {
+  const activeGuildIdSets = await Promise.all(guildIdSets.map(async (guildIds, index) => {
+    const instance = instances[index];
+    if (!instance) return [] as string[];
+
+    const presence = await Promise.all(guildIds.map(async (guildId) => {
+      try {
+        const isPresent = await redis.exists(
+          REDIS_KEYS.BOT_GUILD_PRESENCE(instance.instanceId, guildId),
+        );
+        return isPresent === 1 ? guildId : null;
+      } catch {
+        return null;
+      }
+    }));
+    return presence.filter((guildId): guildId is string => guildId !== null);
+  }));
+
+  activeGuildIdSets.forEach((guildIds, index) => {
     const instance = instances[index];
     if (!instance) return;
 
@@ -271,7 +288,11 @@ export async function updateGuildBotInstancePriority(
   })));
   const eligibleIds = joined.filter((item) => item.joined).map((item) => item.id);
   const normalized = normalizePriority(instanceIds, eligibleIds);
-  if (instanceIds.length !== normalized.length || new Set(instanceIds).size !== instanceIds.length) {
+  const requestedIds = new Set(instanceIds);
+  const eligibleIdSet = new Set(eligibleIds);
+  const hasExactEligibleIds = requestedIds.size === eligibleIdSet.size &&
+    [...requestedIds].every((instanceId) => eligibleIdSet.has(instanceId));
+  if (instanceIds.length !== requestedIds.size || !hasExactEligibleIds) {
     throw new AppError('VALIDATION_ERROR', '参加済みで有効なBotを重複なく指定してください。', 400);
   }
   await getPrisma().guildSettings.upsert({
@@ -550,7 +571,7 @@ export async function generateBotInviteUrl(instanceId: number, guildId: string):
 export async function isBotInGuild(instanceId: number, guildId: string): Promise<boolean> {
   try {
     const redis = getRedisClient();
-    const result = await redis.sismember(REDIS_KEYS.BOT_GUILDS(instanceId), guildId);
+    const result = await redis.exists(REDIS_KEYS.BOT_GUILD_PRESENCE(instanceId, guildId));
     return result === 1;
   } catch {
     return false;
@@ -577,7 +598,7 @@ export async function getGuildsWithBotStatus(
 
     for (const guildId of guildIds) {
       for (const instance of instances) {
-        pipeline.sismember(REDIS_KEYS.BOT_GUILDS(instance.instanceId), guildId);
+        pipeline.exists(REDIS_KEYS.BOT_GUILD_PRESENCE(instance.instanceId, guildId));
       }
     }
 

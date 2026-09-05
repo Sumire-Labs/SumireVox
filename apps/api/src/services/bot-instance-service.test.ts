@@ -3,12 +3,12 @@ import type { BotInstance } from '@sumirevox/shared';
 
 const { pipelineMock, redisMock, prismaMock, cacheMock, loggerMock } = vi.hoisted(() => ({
   pipelineMock: {
-    sismember: vi.fn(),
+    exists: vi.fn(),
     exec: vi.fn(),
   },
   redisMock: {
     pipeline: vi.fn(),
-    sismember: vi.fn(),
+    exists: vi.fn(),
     smembers: vi.fn(),
   },
   prismaMock: {
@@ -51,6 +51,7 @@ import {
   getCopyableBotInstances,
   getGuildBotList,
   getGuildsWithBotStatus,
+  updateGuildBotInstancePriority,
   updateGuildBotInstanceSettings,
 } from './bot-instance-service.js';
 
@@ -77,7 +78,7 @@ describe('getGuildsWithBotStatus', () => {
   ];
 
   beforeEach(() => {
-    pipelineMock.sismember.mockReset().mockReturnValue(pipelineMock);
+    pipelineMock.exists.mockReset().mockReturnValue(pipelineMock);
     pipelineMock.exec.mockReset();
     redisMock.pipeline.mockClear();
     prismaMock.botInstance.findMany.mockReset();
@@ -85,12 +86,12 @@ describe('getGuildsWithBotStatus', () => {
     prismaMock.guildSettings.upsert.mockReset();
     prismaMock.boost.count.mockReset();
     redisMock.smembers.mockReset();
-    redisMock.sismember.mockReset();
+    redisMock.exists.mockReset();
     cacheMock.invalidateGuildSettingsCache.mockReset();
     loggerMock.info.mockReset();
   });
 
-  it('groups guilds by the registered bot instances', async () => {
+  it('groups only guilds with a live Bot presence by the registered instances', async () => {
     const instances: BotInstance[] = [
       {
         instanceId: 1,
@@ -114,13 +115,16 @@ describe('getGuildsWithBotStatus', () => {
     redisMock.smembers
       .mockResolvedValueOnce(['guild-1', 'guild-2'])
       .mockResolvedValueOnce(['guild-1']);
+    redisMock.exists
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
 
     const result = await getBotGuildMemberships(instances);
 
     expect(result).toEqual(
       new Map([
         ['guild-1', [1, 2]],
-        ['guild-2', [1]],
       ]),
     );
   });
@@ -136,7 +140,7 @@ describe('getGuildsWithBotStatus', () => {
     const result = await getGuildsWithBotStatus(['guild-1', 'guild-2'], instances);
 
     expect(redisMock.pipeline).toHaveBeenCalledTimes(1);
-    expect(pipelineMock.sismember).toHaveBeenCalledTimes(4);
+    expect(pipelineMock.exists).toHaveBeenCalledTimes(4);
     expect(result.get('guild-1')).toBe(true);
     expect(result.get('guild-2')).toBe(false);
   });
@@ -193,8 +197,7 @@ describe('getGuildsWithBotStatus', () => {
     prismaMock.boost.count
       .mockResolvedValueOnce(2)
       .mockResolvedValueOnce(2);
-    redisMock.sismember = vi
-      .fn()
+    redisMock.exists
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0);
 
@@ -415,7 +418,7 @@ describe('getGuildsWithBotStatus', () => {
       makeInstance(3, false),
       makeInstance(4),
     ]);
-    redisMock.sismember.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    redisMock.exists.mockResolvedValueOnce(1).mockResolvedValueOnce(0);
 
     const result = await getCopyableBotInstances('guild-1', 1);
 
@@ -434,7 +437,7 @@ describe('getGuildsWithBotStatus', () => {
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     });
     prismaMock.botInstance.findMany.mockResolvedValue([makeInstance(1), makeInstance(2), makeInstance(3)]);
-    redisMock.sismember.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+    redisMock.exists.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
     prismaMock.guildSettings.findUnique.mockResolvedValue({
       botInstanceSettings: {
         '1': {
@@ -498,7 +501,7 @@ describe('getGuildsWithBotStatus', () => {
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
       },
     ]);
-    redisMock.sismember.mockResolvedValueOnce(1);
+    redisMock.exists.mockResolvedValueOnce(1);
     prismaMock.guildSettings.findUnique.mockResolvedValue({
       botInstanceSettings: {
         '1': {
@@ -545,5 +548,51 @@ describe('getGuildsWithBotStatus', () => {
       statusCode: 400,
     });
     expect(prismaMock.guildSettings.upsert).not.toHaveBeenCalled();
+  });
+
+  it('requires a priority to contain each live eligible Bot exactly once', async () => {
+    prismaMock.botInstance.findMany.mockResolvedValue([
+      {
+        instanceId: 1,
+        botUserId: 'bot-1',
+        clientId: 'client-1',
+        name: 'Bot 1',
+        isActive: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      {
+        instanceId: 2,
+        botUserId: 'bot-2',
+        clientId: 'client-2',
+        name: 'Bot 2',
+        isActive: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+
+    redisMock.exists.mockResolvedValue(1);
+    await expect(updateGuildBotInstancePriority('guild-1', [1, 1])).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      statusCode: 400,
+    });
+    await expect(updateGuildBotInstancePriority('guild-1', [1, 3])).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      statusCode: 400,
+    });
+    await expect(updateGuildBotInstancePriority('guild-1', [1])).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      statusCode: 400,
+    });
+
+    const priority = await updateGuildBotInstancePriority('guild-1', [2, 1]);
+
+    expect(priority).toEqual([2, 1]);
+    expect(prismaMock.guildSettings.upsert).toHaveBeenCalledWith({
+      where: { guildId: 'guild-1' },
+      create: { guildId: 'guild-1', botInstancePriority: [2, 1] },
+      update: { botInstancePriority: [2, 1] },
+    });
   });
 });

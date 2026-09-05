@@ -426,7 +426,7 @@ function buildPairAddContainer(
     const voiceSelect = new ChannelSelectMenuBuilder()
       .setCustomId(buildCustomId('settings', 'pair_add_voice', userId))
       .setPlaceholder('VC チャンネルを選択')
-      .setChannelTypes(ChannelType.GuildVoice)
+      .setChannelTypes(ChannelType.GuildVoice, ChannelType.GuildStageVoice)
       .setMinValues(1)
       .setMaxValues(1);
     container

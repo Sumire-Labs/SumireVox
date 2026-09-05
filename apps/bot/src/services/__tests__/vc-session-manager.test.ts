@@ -56,6 +56,7 @@ vi.mock('../vc-ownership-service.js', () => ({
   getVcOwnershipRecoveryDelayMs: vi.fn(async () => 0),
   moveVcOwnership: vi.fn(async (_guildId: string, _from: string, _to: string, ownership: { instanceId: number }) => ({ ...ownership, claimId: 'claim-2' })),
   renewVcOwnership: vi.fn(async () => true),
+  renewVcOwnershipMove: vi.fn(async () => true),
   releaseVcOwnership: vi.fn(async () => {}),
   rollbackVcOwnershipMove: vi.fn(async () => {}),
 }));
@@ -79,6 +80,7 @@ import {
   getVcOwnershipRecoveryDelayMs,
   releaseVcOwnership,
   renewVcOwnership,
+  renewVcOwnershipMove,
 } from '../vc-ownership-service.js';
 import {
   createVcSession,
@@ -109,6 +111,7 @@ const mockCancelDisconnectTimer = vi.mocked(cancelDisconnectTimer);
 const mockDestroyTrieSlot = vi.mocked(destroyTrieSlot);
 const mockReleaseVcOwnership = vi.mocked(releaseVcOwnership);
 const mockRenewVcOwnership = vi.mocked(renewVcOwnership);
+const mockRenewVcOwnershipMove = vi.mocked(renewVcOwnershipMove);
 
 function makeConnection() {
   return {
@@ -276,6 +279,35 @@ describe('vc-session-manager connection mode', () => {
     });
     expect(mockSaveVcSessionToRedis).toHaveBeenLastCalledWith(moved);
     expect(mockDeleteGuildQueue).toHaveBeenCalledWith('guild-1');
+  });
+
+  it('VC移動の接続待機中は旧VC・新VC・Botの全leaseを更新する', async () => {
+    vi.useFakeTimers();
+    const connection = makeConnection();
+    mockJoinVoiceChannel.mockReturnValue(connection as never);
+    await createVcSession('guild-1', 'voice-1', 'text-1', {} as never, 'auto');
+
+    let completeMove: (() => void) | undefined;
+    mockEntersState.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      completeMove = resolve;
+    }) as never);
+
+    const moving = moveVcSession('guild-1', 'voice-2', 'text-2', {} as never, 'auto');
+    await vi.advanceTimersByTimeAsync(0);
+    startVcOwnershipRenewal();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(mockRenewVcOwnershipMove).toHaveBeenCalledWith(
+      'guild-1',
+      'voice-1',
+      'voice-2',
+      { instanceId: 1, claimId: 'claim-1' },
+      { instanceId: 1, claimId: 'claim-2' },
+    );
+    expect(mockRenewVcOwnership).not.toHaveBeenCalled();
+
+    completeMove?.();
+    await moving;
   });
 
   it('保存時と異なるシャードでも、現在の所有シャードで旧Redisセッションをmanualとして復旧する', async () => {

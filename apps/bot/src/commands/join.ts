@@ -54,6 +54,18 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
 
   try {
     await interaction.deferReply();
+    const owningInstanceId = await findOwningInstance(guildId, voiceChannel.id);
+    if (owningInstanceId) {
+      const result = await delegateBotCommand(owningInstanceId, {
+        action: 'join', guildId, voiceChannelId: voiceChannel.id, textChannelId,
+      });
+      if (!result.success) {
+        await interaction.editReply({ content: result.message ?? '読み上げチャンネルの変更に失敗しました。' });
+        return;
+      }
+      await interaction.editReply({ content: `読み上げチャンネルを <#${textChannelId}> に変更しました。` });
+      return;
+    }
     const candidates = await getAvailableBotInstanceIds(guildId);
     const targetInstanceId = await findFreeInstance(guildId, candidates);
     if (!targetInstanceId) {
@@ -78,6 +90,12 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       content: 'ボイスチャンネルへの接続に失敗しました。Bot の権限を確認してください。',
     });
   }
+}
+
+async function findOwningInstance(guildId: string, voiceChannelId: string): Promise<number | undefined> {
+  const value = await getRedisClient().get(REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId));
+  const instanceId = value ? Number(value.split(':', 1)[0]) : Number.NaN;
+  return Number.isInteger(instanceId) ? instanceId : undefined;
 }
 
 async function findFreeInstance(guildId: string, candidates: readonly number[]): Promise<number | undefined> {

@@ -25,6 +25,13 @@ redis.call('PEXPIRE', KEYS[1], ARGV[2])
 redis.call('PEXPIRE', KEYS[2], ARGV[2])
 return 1`;
 
+const renewMoveScript = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] or redis.call('GET', KEYS[2]) ~= ARGV[2] or redis.call('GET', KEYS[3]) ~= ARGV[2] then return 0 end
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+redis.call('PEXPIRE', KEYS[2], ARGV[3])
+redis.call('PEXPIRE', KEYS[3], ARGV[3])
+return 1`;
+
 const releaseScript = `
 if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('DEL', KEYS[1]) end
 if redis.call('GET', KEYS[2]) == ARGV[1] then redis.call('DEL', KEYS[2]) end
@@ -78,6 +85,27 @@ export async function renewVcOwnership(
     REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId),
     REDIS_KEYS.BOT_VC_CLAIM(guildId, ownership.instanceId),
     claimValue(ownership.instanceId, ownership.claimId),
+    String(VC_OWNERSHIP_LEASE_TTL_MS),
+  );
+  return result === 1;
+}
+
+/** VC移動中の旧VC・新VC・Bot claimをまとめて更新する。 */
+export async function renewVcOwnershipMove(
+  guildId: string,
+  fromVoiceChannelId: string,
+  toVoiceChannelId: string,
+  previous: VcOwnership,
+  current: VcOwnership,
+): Promise<boolean> {
+  const result = await getRedisClient().eval(
+    renewMoveScript,
+    3,
+    REDIS_KEYS.VC_CLAIM(guildId, fromVoiceChannelId),
+    REDIS_KEYS.VC_CLAIM(guildId, toVoiceChannelId),
+    REDIS_KEYS.BOT_VC_CLAIM(guildId, current.instanceId),
+    claimValue(previous.instanceId, previous.claimId),
+    claimValue(current.instanceId, current.claimId),
     String(VC_OWNERSHIP_LEASE_TTL_MS),
   );
   return result === 1;

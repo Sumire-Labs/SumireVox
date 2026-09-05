@@ -32,7 +32,7 @@ discord.js の `ShardingManager` 方式。bot サービスのエントリポイ�
 1. **Pub/Sub**: Bot ↔ API、シャード間のリアルタイム通知。辞書更新時はトライ木の無効化フラグのみ立て、再構築は次回アクセス時に遅延実行
 2. **セッションストア**: Web の Discord OAuth2 セッション。TTL 7日
 3. **設定キャッシュ**: GuildSettings / UserVoiceSetting を Redis キャッシュ。TTL は `SETTINGS_CACHE_TTL_SECONDS`
-4. **VC 実行時セッションと所有権**: `vc-session:*` に再接続用の実行時セッションをTTLなしで保存し、`vc-claim:*` にguild/VCとguild/Botの3秒TTL付きleaseをLuaで同時にclaimする。leaseは1秒ごとに更新する。DBは接続設定だけを保持し、実行中の接続は保存しない。leaseを更新できない接続は切断し、異常停止後は残存TTL（最大3秒）+ 250msで回収する。
+4. **VC 実行時セッションと所有権**: `vc-session:*` に再接続用の実行時セッションをTTLなしで保存し、`vc-claim:*` にguild/VCとguild/Botの3秒TTL付きleaseをLuaで同時にclaimする。leaseは1秒ごとに更新する。VC移動中は旧VC・新VC・Bot claimを遷移leaseとしてまとめて更新し、完了時にだけ旧VCを解放する。DBは接続設定だけを保持し、実行中の接続は保存しない。leaseを更新できない接続は切断し、異常停止後は残存TTL（最大3秒）+ 250msで回収する。
 
 Redis 停止時はサービス停止を許容。フォールバックなし。`restart: unless-stopped` で自動復旧。
 
@@ -41,7 +41,8 @@ Redis 停止時はサービス停止を許容。フォールバックなし。`r
 - 自動接続セッションは接続中 VC が無人になった場合、退出猶予タイマー満了後に対象 VC を再走査し、最も人間ユーザーが多い VC へ設定順で切り替える
 - 手動 `/join` セッションは自動切り替えせず、従来どおり退出猶予後に退出する
 - `GuildSettings.autoJoinSettings` は全Bot共通の最大25件のVC/TCペアを保持する。`botInstancePriority` に従い、Boost枠内の参加済みBotへ空きVCを割り当てる。旧 `botInstanceSettings["1"]` は移行時のみ読み取る。
-- Bot 1だけがDiscordコマンドを提供する。サブBotへの接続・退出はRedis Pub/Subの内部指示で委譲する。
+- Bot 1だけがDiscordコマンドを提供する。サブBotへの接続・退出はRedis Pub/Subの内部指示で、presenceに記録された担当シャードへ委譲する。
+- `bot:*:guilds` は参加候補の索引、TTL付き `bot:*:guild:*:presence` は稼働確認済みの参加状態を表す。APIの参加状態・接続先Bot選択・優先順位はpresenceを唯一の判定にする。
 
 - メモリ上の Map で高速参照 (guildId → { voiceChannelId, textChannelId, connectionMode, ... })
 - Redis に復旧用の実行時セッションを記録する。削除するのは明示的な `/leave` と自動切断だけであり、再起動・接続断・ownership lease 喪失・一時的な復旧失敗では保持する

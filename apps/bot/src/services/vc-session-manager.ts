@@ -24,6 +24,7 @@ import {
   moveVcOwnership,
   releaseVcOwnership,
   renewVcOwnership,
+  renewVcOwnershipMove,
   rollbackVcOwnershipMove,
 } from './vc-ownership-service.js';
 
@@ -37,6 +38,13 @@ const pendingCreates = new Map<string, Promise<VcSession>>();
 let ownershipRenewalTimer: ReturnType<typeof setInterval> | null = null;
 const recoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const recoveryAttempts = new Map<string, number>();
+interface PendingVcMove {
+  fromVoiceChannelId: string;
+  toVoiceChannelId: string;
+  previousOwnership: { instanceId: number; claimId: string };
+  currentOwnership: { instanceId: number; claimId: string };
+}
+const pendingVcMoves = new Map<string, PendingVcMove>();
 const RECOVERY_BACKOFF_BASE_MS = 5_000;
 const RECOVERY_BACKOFF_MAX_MS = 60_000;
 
@@ -138,12 +146,7 @@ export async function destroyVcSession(guildId: string): Promise<void> {
   sessions.delete(guildId);
   connections.delete(guildId);
   await removeVcSessionFromRedis(guildId, config.botInstanceId);
-  if (session?.claimId) {
-    await releaseVcOwnership(guildId, session.voiceChannelId, {
-      instanceId: session.botInstanceId,
-      claimId: session.claimId,
-    });
-  }
+  await releaseVcSessionOwnership(guildId, session);
 
   logger.info({ guildId }, 'VC session destroyed');
 }
@@ -200,6 +203,12 @@ export async function moveVcSession(
     claimId: session.claimId,
   });
   if (!ownership) throw new Error('Target voice channel or bot instance is already owned');
+  pendingVcMoves.set(guildId, {
+    fromVoiceChannelId: session.voiceChannelId,
+    toVoiceChannelId: voiceChannelId,
+    previousOwnership: { instanceId: session.botInstanceId, claimId: session.claimId },
+    currentOwnership: ownership,
+  });
   const connection = joinVoiceChannel({
     channelId: voiceChannelId,
     guildId,
@@ -219,15 +228,20 @@ export async function moveVcSession(
       { err: error, guildId, voiceChannelId },
       'Failed to move VC session',
     );
-    await rollbackVcOwnershipMove(guildId, session.voiceChannelId, voiceChannelId, {
-      instanceId: session.botInstanceId,
-      claimId: session.claimId,
-    }, ownership);
+    try {
+      await rollbackVcOwnershipMove(guildId, session.voiceChannelId, voiceChannelId, {
+        instanceId: session.botInstanceId,
+        claimId: session.claimId,
+      }, ownership);
+    } finally {
+      pendingVcMoves.delete(guildId);
+    }
     throw error;
   }
 
   // /leave や別の接続処理が完了していた場合、古い移動処理でセッションを復活させない。
   if (sessions.get(guildId) !== session) {
+    pendingVcMoves.delete(guildId);
     if (
       connection !== currentConnection &&
       connection.state.status !== VoiceConnectionStatus.Destroyed
@@ -250,6 +264,7 @@ export async function moveVcSession(
   sessions.set(guildId, updated);
   connections.set(guildId, connection);
   await saveVcSessionToRedis(updated);
+  pendingVcMoves.delete(guildId);
   await releaseVcOwnership(guildId, session.voiceChannelId, {
     instanceId: session.botInstanceId,
     claimId: session.claimId,
@@ -305,12 +320,7 @@ async function stopVcSessionWhilePreservingRedis(guildId: string): Promise<VcSes
     logger.warn({ err: error, guildId }, 'Failed to destroy VC connection during restart');
   }
 
-  if (session?.claimId) {
-    await releaseVcOwnership(guildId, session.voiceChannelId, {
-      instanceId: session.botInstanceId,
-      claimId: session.claimId,
-    });
-  }
+  await releaseVcSessionOwnership(guildId, session);
 
   return session;
 }
@@ -432,10 +442,19 @@ async function renewAllVcOwnership(): Promise<void> {
   for (const session of sessions.values()) {
     if (!session.claimId) continue;
     try {
-      const renewed = await renewVcOwnership(session.guildId, session.voiceChannelId, {
-        instanceId: session.botInstanceId,
-        claimId: session.claimId,
-      });
+      const pendingMove = pendingVcMoves.get(session.guildId);
+      const renewed = pendingMove
+        ? await renewVcOwnershipMove(
+            session.guildId,
+            pendingMove.fromVoiceChannelId,
+            pendingMove.toVoiceChannelId,
+            pendingMove.previousOwnership,
+            pendingMove.currentOwnership,
+          )
+        : await renewVcOwnership(session.guildId, session.voiceChannelId, {
+            instanceId: session.botInstanceId,
+            claimId: session.claimId,
+          });
       if (sessions.get(session.guildId) !== session) continue;
       if (!renewed) {
         logger.warn({ guildId: session.guildId }, 'VC ownership lease lost; preserving session for recovery');
@@ -446,6 +465,25 @@ async function renewAllVcOwnership(): Promise<void> {
       logger.error({ err: error, guildId: session.guildId }, 'Failed to renew VC ownership; preserving session for recovery');
       await stopVcSessionForRecovery(session.guildId);
     }
+  }
+}
+
+async function releaseVcSessionOwnership(
+  guildId: string,
+  session: VcSession | undefined,
+): Promise<void> {
+  const pendingMove = pendingVcMoves.get(guildId);
+  pendingVcMoves.delete(guildId);
+  if (pendingMove) {
+    await releaseVcOwnership(guildId, pendingMove.fromVoiceChannelId, pendingMove.previousOwnership);
+    await releaseVcOwnership(guildId, pendingMove.toVoiceChannelId, pendingMove.currentOwnership);
+    return;
+  }
+  if (session?.claimId) {
+    await releaseVcOwnership(guildId, session.voiceChannelId, {
+      instanceId: session.botInstanceId,
+      claimId: session.claimId,
+    });
   }
 }
 

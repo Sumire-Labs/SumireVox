@@ -25,6 +25,7 @@ vi.mock('../../infrastructure/redis.js', () => ({
 }));
 
 import { getPrisma } from '../../infrastructure/database.js';
+import { getClient } from '../../infrastructure/discord-client.js';
 import { getRedisClient } from '../../infrastructure/redis.js';
 import {
   addGuildsToBotInstanceRegistry,
@@ -33,6 +34,7 @@ import {
 } from '../bot-instance-registry.js';
 
 const mockGetPrisma = vi.mocked(getPrisma);
+const mockGetClient = vi.mocked(getClient);
 const mockGetRedisClient = vi.mocked(getRedisClient);
 
 function makeRecord(instanceId: number) {
@@ -50,15 +52,16 @@ function makeRecord(instanceId: number) {
 describe('getCopyableBotInstances', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetClient.mockReturnValue({ shard: { ids: [2] } } as unknown as ReturnType<typeof getClient>);
   });
 
-  it('アクティブかつBOT_GUILDSに参加中で、コピー元でないBotだけを返す', async () => {
+  it('アクティブかつ稼働確認済みで、コピー元でないBotだけを返す', async () => {
     const findMany = vi.fn().mockResolvedValue([makeRecord(1), makeRecord(2), makeRecord(3)]);
     mockGetPrisma.mockReturnValue({ botInstance: { findMany } } as unknown as ReturnType<typeof getPrisma>);
-    const sismember = vi.fn(async (key: string, member: string) =>
-      key === 'bot:2:guilds' && member === 'guild-1' ? 1 : 0,
+    const exists = vi.fn(async (key: string) =>
+      key === 'bot:2:guild:guild-1:presence' ? 1 : 0,
     );
-    mockGetRedisClient.mockReturnValue({ sismember } as unknown as ReturnType<typeof getRedisClient>);
+    mockGetRedisClient.mockReturnValue({ exists } as unknown as ReturnType<typeof getRedisClient>);
 
     const candidates = await getCopyableBotInstances('guild-1', 1);
 
@@ -67,18 +70,18 @@ describe('getCopyableBotInstances', () => {
       orderBy: { instanceId: 'asc' },
     });
     expect(candidates.map((candidate) => candidate.instanceId)).toEqual([2]);
-    expect(sismember).toHaveBeenCalledTimes(2);
+    expect(exists).toHaveBeenCalledTimes(2);
   });
 
   it('ブースト判定をせず、Redis確認に失敗したBotを候補から除外する', async () => {
     mockGetPrisma.mockReturnValue({
       botInstance: { findMany: vi.fn().mockResolvedValue([makeRecord(2), makeRecord(3)]) },
     } as unknown as ReturnType<typeof getPrisma>);
-    const sismember = vi
+    const exists = vi
       .fn()
       .mockResolvedValueOnce(1)
       .mockRejectedValueOnce(new Error('redis unavailable'));
-    mockGetRedisClient.mockReturnValue({ sismember } as unknown as ReturnType<typeof getRedisClient>);
+    mockGetRedisClient.mockReturnValue({ exists } as unknown as ReturnType<typeof getRedisClient>);
 
     const candidates = await getCopyableBotInstances('guild-1', 1);
 
@@ -89,6 +92,7 @@ describe('getCopyableBotInstances', () => {
 describe('Bot instance guild registry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetClient.mockReturnValue({ shard: { ids: [2] } } as unknown as ReturnType<typeof getClient>);
   });
 
   it('シャードごとのギルドを既存集合を消さずに追加する', async () => {
@@ -105,6 +109,7 @@ describe('Bot instance guild registry', () => {
     expect(sadd).toHaveBeenNthCalledWith(1, 'bot:1:guilds', 'guild-1', 'guild-2');
     expect(sadd).toHaveBeenNthCalledWith(2, 'bot:1:guilds', 'guild-3');
     expect(srem).toHaveBeenCalledWith('bot:1:guilds', 'guild-2');
+    expect(set).toHaveBeenCalledWith('bot:1:guild:guild-1:presence', '2', 'EX', 60);
   });
 
   it('空のギルド一覧では Redis を更新しない', async () => {

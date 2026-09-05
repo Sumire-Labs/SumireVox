@@ -99,7 +99,7 @@
 
 成功時の `data` は、チャンネル項目を `{ id, name, parentId, type }` で返す。`type` は `text | announcement | voice | stage` のいずれかで、カテゴリは `{ id, name }` で返す。
 
-チャンネル一覧は、対象ギルドに参加しているアクティブな Bot インスタンスのトークンで取得する。1号機が未参加でも、参加中の追加 Bot のトークンが設定されていれば取得できる。
+チャンネル一覧は、対象ギルドへの稼働確認が取れているアクティブな Bot インスタンスのトークンで取得する。1号機が未参加でも、参加中の追加 Bot のトークンが設定されていれば取得できる。停止済み・presence期限切れのBotは参加済みとして扱わない。
 
 | フィールド | 内容 |
 |---|---|
@@ -132,7 +132,7 @@
 
 `GET /api/guilds/:guildId/bots` は `autoJoinSettings`、`botInstancePriority`、Bot一覧と現在の利用枠を返す。優先順位は参加・生存中の有効Botだけを対象とし、未保存のBotはインスタンス番号順で末尾に補う。
 
-`PUT /api/guilds/:guildId/bot-priority` は次の順序付きID配列を受け取り、参加・生存中の有効Botを重複なくすべて指定しなければならない。
+`PUT /api/guilds/:guildId/bot-priority` は次の順序付きID配列を受け取り、参加・生存中の有効Botを重複なくすべて指定しなければならない。不明ID・欠落ID・重複IDは `VALIDATION_ERROR` で拒否する。
 
 ```json
 { "instanceIds": [2, 1, 3] }
