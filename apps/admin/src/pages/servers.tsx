@@ -1,16 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Switch, Spinner } from '@heroui/react';
 import { Link } from 'react-router';
+import type { AdminServerItem } from '@sumirevox/shared';
 import { api } from '../lib/api';
 import { useToast, Toast } from '../components/toast';
 
-interface ServerItem {
-  guildId: string;
-  name: string;
-  icon: string | null;
-  manualPremium: boolean;
-  botJoinedAt: string | null;
-}
+type ServerItem = AdminServerItem;
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -95,6 +90,8 @@ export function AdminServersPage() {
                 <thead>
                   <tr className="border-b border-white/5">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">サーバー</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">ブースト</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">導入 Bot</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Manual PREMIUM</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide">Bot 導入日時</th>
                   </tr>
@@ -102,7 +99,7 @@ export function AdminServersPage() {
                 <tbody className="divide-y divide-white/5">
                   {servers.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="px-4 py-8 text-center text-gray-500">サーバーがありません</td>
+                      <td colSpan={5} className="px-4 py-8 text-center text-gray-500">サーバーがありません</td>
                     </tr>
                   ) : servers.map((server) => (
                     <tr key={server.guildId} className="hover:bg-white/[0.02] transition-colors">
@@ -124,6 +121,32 @@ export function AdminServersPage() {
                             <div className="font-mono text-xs text-gray-500">{server.guildId}</div>
                           </div>
                         </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-white">{server.boostCount}</span>
+                        <span className="text-xs text-gray-500 ml-1">件</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {server.botInstances.length === 0 ? (
+                          <span className="text-sm text-gray-500">—</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 min-w-[180px]">
+                            {server.botInstances.map((bot) => (
+                              <span
+                                key={bot.instanceId}
+                                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
+                                  bot.isActive
+                                    ? 'bg-purple-500/15 text-purple-300'
+                                    : 'bg-yellow-500/15 text-yellow-300'
+                                }`}
+                              >
+                                <span className="font-medium">Bot #{bot.instanceId}</span>
+                                <span className="text-current/80">{bot.name}</span>
+                                {!bot.isActive && <span className="text-yellow-200/80">停止中</span>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Switch

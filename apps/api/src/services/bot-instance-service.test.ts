@@ -11,6 +11,7 @@ const { pipelineMock, redisMock, prismaMock } = vi.hoisted(() => ({
     set: vi.fn(),
     pipeline: vi.fn(),
     sismember: vi.fn(),
+    smembers: vi.fn(),
   },
   prismaMock: {
     botInstance: {
@@ -39,6 +40,7 @@ vi.mock('../infrastructure/database.js', () => ({
 
 import {
   getAvailableBotCount,
+  getBotGuildMemberships,
   getMaxBoostsPerGuild,
   getGuildBotList,
   getGuildsWithBotStatus,
@@ -78,6 +80,42 @@ describe('getGuildsWithBotStatus', () => {
     prismaMock.guildSettings.findUnique.mockReset();
     prismaMock.guildSettings.upsert.mockReset();
     prismaMock.boost.count.mockReset();
+    redisMock.smembers.mockReset();
+  });
+
+  it('groups guilds by the registered bot instances', async () => {
+    const instances: BotInstance[] = [
+      {
+        instanceId: 1,
+        botUserId: 'bot-1',
+        clientId: 'client-1',
+        name: 'Bot 1',
+        isActive: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      {
+        instanceId: 2,
+        botUserId: 'bot-2',
+        clientId: 'client-2',
+        name: 'Bot 2',
+        isActive: false,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ];
+    redisMock.smembers
+      .mockResolvedValueOnce(['guild-1', 'guild-2'])
+      .mockResolvedValueOnce(['guild-1']);
+
+    const result = await getBotGuildMemberships(instances);
+
+    expect(result).toEqual(
+      new Map([
+        ['guild-1', [1, 2]],
+        ['guild-2', [1]],
+      ]),
+    );
   });
 
   it('reserves the first bot slot when calculating the guild boost limit', async () => {

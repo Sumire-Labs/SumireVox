@@ -3,18 +3,18 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/require-auth.js';
 import { requireBotAdmin } from '../middleware/require-bot-admin.js';
 import { getPrisma } from '../infrastructure/database.js';
-import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { getGuildInfo } from '../infrastructure/discord-guild-info.js';
 import { getGuildSettings, updateGuildSettings } from '../services/guild-settings-service.js';
 import { isGuildPremium } from '../services/dictionary-service.js';
 import {
   getAllBotInstances,
+  getBotGuildMemberships,
   setBotInstanceActive,
   getGuildBotList,
   updateGuildBotInstanceSettings,
 } from '../services/bot-instance-service.js';
-import { REDIS_KEYS, REDIS_CHANNELS } from '@sumirevox/shared';
+import { REDIS_CHANNELS, type AdminServerItem } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import {
   getGlobalDictionaryEntries,
@@ -121,15 +121,10 @@ adminRouter.get('/servers', async (c) => {
   const prisma = getPrisma();
   const { page, perPage } = await validate.query(c, paginationQuerySchema);
 
-  // Redis の BOT_GUILDS セットから Bot が現在参加しているギルド ID を収集
+  // Redis の BOT_GUILDS セットから Bot が現在参加しているギルド ID とインスタンスを収集
   const botInstances = await getAllBotInstances();
-  const redis = getRedisClient();
-  const guildIdSets = await Promise.all(
-    botInstances.map((instance) =>
-      redis.smembers(REDIS_KEYS.BOT_GUILDS(instance.instanceId)).catch(() => [] as string[]),
-    ),
-  );
-  const botGuildIds = [...new Set(guildIdSets.flat())].sort();
+  const botGuildMemberships = await getBotGuildMemberships(botInstances);
+  const botGuildIds = [...botGuildMemberships.keys()].sort();
 
   const total = botGuildIds.length;
   if (total === 0) {
@@ -139,27 +134,47 @@ adminRouter.get('/servers', async (c) => {
   // ページネーション（Redis セット上で行う）
   const pagedGuildIds = botGuildIds.slice((page - 1) * perPage, page * perPage);
 
-  // guild_settings から既存レコードを取得（存在するもののみ）
-  const existingSettings = await prisma.guildSettings.findMany({
-    where: { guildId: { in: pagedGuildIds } },
-  });
+  const [existingSettings, boostGroups, guildInfos] = await Promise.all([
+    prisma.guildSettings.findMany({
+      where: { guildId: { in: pagedGuildIds } },
+    }),
+    prisma.boost.groupBy({
+      by: ['guildId'],
+      where: {
+        guildId: { in: pagedGuildIds },
+        subscription: { status: 'ACTIVE' },
+      },
+      _count: { id: true },
+    }),
+    Promise.all(pagedGuildIds.map((id) => getGuildInfo(id))),
+  ]);
   const settingsMap = new Map(existingSettings.map((s) => [s.guildId, s]));
-
-  // Discord からギルド情報を取得
-  const guildInfos = await Promise.all(pagedGuildIds.map((id) => getGuildInfo(id)));
+  const boostCountMap = new Map<string, number>();
+  boostGroups.forEach((group) => {
+    if (group.guildId) boostCountMap.set(group.guildId, group._count.id);
+  });
+  const botInstanceMap = new Map(botInstances.map((instance) => [instance.instanceId, instance]));
 
   return c.json({
     success: true,
     data: {
-      items: pagedGuildIds.map((guildId, i) => {
+      items: pagedGuildIds.map((guildId, i): AdminServerItem => {
         const settings = settingsMap.get(guildId);
         const info = guildInfos[i];
+        const installedBotInstances = (botGuildMemberships.get(guildId) ?? []).flatMap((instanceId) => {
+          const instance = botInstanceMap.get(instanceId);
+          return instance
+            ? [{ instanceId: instance.instanceId, name: instance.name, isActive: instance.isActive }]
+            : [];
+        });
         return {
           guildId,
           name: info?.name ?? guildId,
           icon: info?.icon ?? null,
           manualPremium: settings?.manualPremium ?? false,
           botJoinedAt: info?.botJoinedAt ?? null,
+          boostCount: boostCountMap.get(guildId) ?? 0,
+          botInstances: installedBotInstances,
         };
       }),
       total,

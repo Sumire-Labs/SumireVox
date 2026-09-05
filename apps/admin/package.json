@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroui/react": "^3.0.1",
     "@heroui/styles": "^3.0.1",
+    "@sumirevox/shared": "workspace:*",
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "react": "^19.0.0",
