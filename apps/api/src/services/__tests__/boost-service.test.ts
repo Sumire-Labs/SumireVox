@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prismaMock, loggerMock, getActiveInstanceCountMock, publishGuildPremiumInvalidationMock } = vi.hoisted(
+const { prismaMock, loggerMock, getMaxBoostsPerGuildMock, publishGuildPremiumInvalidationMock } = vi.hoisted(
   () => ({
     prismaMock: {
       boost: {
@@ -9,7 +9,7 @@ const { prismaMock, loggerMock, getActiveInstanceCountMock, publishGuildPremiumI
         updateMany: vi.fn(),
       },
     },
-    getActiveInstanceCountMock: vi.fn(),
+    getMaxBoostsPerGuildMock: vi.fn(),
     publishGuildPremiumInvalidationMock: vi.fn(),
     loggerMock: {
       info: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('../../infrastructure/database.js', () => ({
 }));
 
 vi.mock('../bot-instance-service.js', () => ({
-  getActiveInstanceCount: getActiveInstanceCountMock,
+  getMaxBoostsPerGuild: getMaxBoostsPerGuildMock,
 }));
 
 vi.mock('../premium-cache-sync.js', () => ({
@@ -47,7 +47,7 @@ describe('reconcileBoosts', () => {
     prismaMock.boost.groupBy.mockReset();
     prismaMock.boost.findMany.mockReset();
     prismaMock.boost.updateMany.mockReset();
-    getActiveInstanceCountMock.mockReset();
+    getMaxBoostsPerGuildMock.mockReset();
     publishGuildPremiumInvalidationMock.mockReset();
     loggerMock.info.mockReset();
     loggerMock.warn.mockReset();
@@ -56,7 +56,7 @@ describe('reconcileBoosts', () => {
   });
 
   it('skips reconciliation and does not groupBy when there are no active bot instances', async () => {
-    getActiveInstanceCountMock.mockResolvedValue(0);
+    getMaxBoostsPerGuildMock.mockResolvedValue(0);
 
     await reconcileBoosts();
 

@@ -37,7 +37,7 @@ export function buildVoiceMessage(
     .addTextDisplayComponents(new TextDisplayBuilder().setContent('## 🎤 音声設定'))
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        'あなたの音声設定です。PREMIUM サーバーで適用されます。',
+        'あなたの音声設定です。FREE・PREMIUM を問わず読み上げに適用されます。',
       ),
     )
     .addSeparatorComponents(

@@ -32,7 +32,7 @@ const {
   },
   botInstanceServiceMock: {
     getActiveBotInstances: vi.fn(),
-    getActiveInstanceCount: vi.fn(),
+    getMaxBoostsPerGuild: vi.fn(),
     getGuildsWithBotStatus: vi.fn(),
   },
   fetchUserGuildsMock: vi.fn(),
@@ -118,7 +118,7 @@ describe('POST /api/user/subscription/sync', () => {
     boostServiceMock.getUserBoosts.mockReset().mockResolvedValue(createBoostData());
     boostServiceMock.getGuildBoostInfo.mockReset().mockResolvedValue([]);
     botInstanceServiceMock.getActiveBotInstances.mockReset().mockResolvedValue([]);
-    botInstanceServiceMock.getActiveInstanceCount.mockReset().mockResolvedValue(3);
+    botInstanceServiceMock.getMaxBoostsPerGuild.mockReset().mockResolvedValue(2);
     botInstanceServiceMock.getGuildsWithBotStatus.mockReset().mockResolvedValue(new Map());
     fetchUserGuildsMock.mockReset().mockResolvedValue([]);
   });
@@ -137,7 +137,7 @@ describe('POST /api/user/subscription/sync', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       success: true,
-      data: { ...createBoostData(), maxBoostsPerGuild: 3, guildBoostInfo: [] },
+      data: { ...createBoostData(), maxBoostsPerGuild: 2, guildBoostInfo: [] },
     });
     expect(syncMock).toHaveBeenCalledWith('user1');
     expect(staleSyncMock).not.toHaveBeenCalled();

@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { hasManageGuildPermission } from '../services/discord-api.js';
+import { getUserGuilds } from '../services/user-guild-service.js';
 import { getRedisClient } from '../infrastructure/redis.js';
 import { logger } from '../infrastructure/logger.js';
 import { AppError } from '../infrastructure/app-error.js';
@@ -46,7 +47,8 @@ export const requireGuildAdmin: MiddlewareHandler = async (c, next) => {
 
   let hasPermission: boolean;
   try {
-    hasPermission = await hasManageGuildPermission(session.accessToken, guildId);
+    const userGuilds = await getUserGuilds(session.userId, session.accessToken);
+    hasPermission = await hasManageGuildPermission(session.accessToken, guildId, userGuilds);
   } catch (err) {
     // Discord アクセストークン失効（AppError 401）は user/guild ルートと同様に SESSION_EXPIRED へ変換する。
     // それ以外のエラーはそのまま伝播させる。

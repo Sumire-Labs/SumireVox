@@ -79,6 +79,34 @@ describe('dictionary-service', () => {
     expect(prismaMock.serverDictionary.create).toHaveBeenCalled();
   });
 
+  it.each([
+    [29, false, true],
+    [30, false, false],
+    [299, true, true],
+    [300, true, false],
+  ])('enforces the %s-entry %s limit at the boundary', async (currentCount, isPremium, succeeds) => {
+    prismaMock.serverDictionary.count.mockResolvedValue(currentCount);
+    prismaMock.serverDictionary.findUnique.mockResolvedValue(null);
+    prismaMock.serverDictionary.create.mockResolvedValue({
+      guildId: 'guild-1',
+      word: 'テスト',
+      reading: 'テスト',
+      registeredBy: 'user-1',
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
+    });
+
+    const result = await addServerDictionaryEntry('guild-1', 'テスト', 'テスト', 'user-1', isPremium).catch(
+      (error: unknown) => error,
+    );
+
+    if (succeeds) {
+      expect(result).toMatchObject({ word: 'テスト' });
+    } else {
+      expect(result).toMatchObject({ code: 'DICTIONARY_LIMIT_REACHED', statusCode: 400 });
+    }
+  });
+
   it('rethrows a duplicate-create race (P2002) as VALIDATION_ERROR', async () => {
     prismaMock.serverDictionary.count.mockResolvedValue(0);
     prismaMock.serverDictionary.findUnique.mockResolvedValue(null);

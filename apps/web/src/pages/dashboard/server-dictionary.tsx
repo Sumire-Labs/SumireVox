@@ -49,6 +49,7 @@ export function ServerDictionaryPage() {
   const [serverTotal, setServerTotal] = useState(0);
   const [serverPage, setServerPage] = useState(1);
   const [serverLoading, setServerLoading] = useState(true);
+  const [dictionaryLimit, setDictionaryLimit] = useState<number | null>(null);
 
   const [globalEntries, setGlobalEntries] = useState<DictEntry[]>([]);
   const [globalTotal, setGlobalTotal] = useState(0);
@@ -104,6 +105,18 @@ export function ServerDictionaryPage() {
     fetchServerDict(serverPage, controller.signal);
     return () => controller.abort();
   }, [fetchServerDict, serverPage]);
+
+  useEffect(() => {
+    if (guildId) {
+      const controller = new AbortController();
+      api.get<{ dictionaryLimit: number }>(`/api/guilds/${guildId}/settings`, { signal: controller.signal })
+        .then((data) => setDictionaryLimit(data.dictionaryLimit))
+        .catch((err: unknown) => {
+          if (!(err instanceof Error && err.name === 'AbortError')) setDictionaryLimit(null);
+        });
+      return () => controller.abort();
+    }
+  }, [guildId]);
 
   const handleTabChange = (key: React.Key) => {
     if (key === 'global' && globalEntries.length === 0) {
@@ -187,7 +200,9 @@ export function ServerDictionaryPage() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-white">サーバー辞書</span>
-                <span className="text-xs bg-white/10 text-gray-400 px-2 py-0.5 rounded-full">{serverTotal}件</span>
+                <span className="text-xs bg-white/10 text-gray-400 px-2 py-0.5 rounded-full">
+                  {serverTotal}件 / 上限 {dictionaryLimit === null ? '—' : dictionaryLimit}件
+                </span>
               </div>
               <button
                 onClick={() => setAddOpen(true)}

@@ -37,6 +37,16 @@ export async function getActiveInstanceCount(): Promise<number> {
 }
 
 /**
+ * ギルドに割り当てられる最大ブースト数を取得する
+ *
+ * 1号機はFREEで利用できるため、最大Bot台数より1つ少ない値が上限になる。
+ */
+export async function getMaxBoostsPerGuild(): Promise<number> {
+  const activeInstanceCount = await getActiveInstanceCount();
+  return Math.max(0, Math.min(activeInstanceCount, LIMITS.MAX_BOT_INSTANCES) - 1);
+}
+
+/**
  * 全アクティブな Bot インスタンスを取得
  */
 export async function getActiveBotInstances(): Promise<BotInstance[]> {
@@ -122,10 +132,8 @@ export async function getBotInstance(instanceId: number): Promise<BotInstance | 
 /**
  * サーバーが利用可能な Bot インスタンス数を取得（ブーストレベルに基づく）
  *
- * FREE (0 boosts) → 1台
- * 1 boost → 1台（PREMIUM だが追加 Bot なし）
- * 2 boosts → 2台
- * 3+ boosts → 最大 MAX_BOT_INSTANCES 台
+ * 利用可能な Bot 台数 = min(ブースト数 + 1, MAX_BOT_INSTANCES)
+ * 0 boosts → 1台、1 boost → 2台、2 boosts → 3台 ...
  */
 export async function getAvailableBotCount(guildId: string): Promise<number> {
   const prisma = getPrisma();
@@ -143,8 +151,7 @@ export async function getAvailableBotCount(guildId: string): Promise<number> {
     },
   });
 
-  if (boostCount <= 1) return 1;
-  return Math.min(boostCount, LIMITS.MAX_BOT_INSTANCES);
+  return Math.min(boostCount + 1, LIMITS.MAX_BOT_INSTANCES);
 }
 
 /**

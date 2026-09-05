@@ -7,12 +7,15 @@ const { pipelineMock, redisMock, prismaMock } = vi.hoisted(() => ({
     exec: vi.fn(),
   },
   redisMock: {
+    get: vi.fn(),
+    set: vi.fn(),
     pipeline: vi.fn(),
     sismember: vi.fn(),
     smembers: vi.fn(),
   },
   prismaMock: {
     botInstance: {
+      count: vi.fn(),
       findMany: vi.fn(),
     },
     guildSettings: {
@@ -36,7 +39,9 @@ vi.mock('../infrastructure/database.js', () => ({
 }));
 
 import {
+  getAvailableBotCount,
   getBotGuildMemberships,
+  getMaxBoostsPerGuild,
   getGuildBotList,
   getGuildsWithBotStatus,
   updateGuildBotInstanceSettings,
@@ -67,7 +72,10 @@ describe('getGuildsWithBotStatus', () => {
   beforeEach(() => {
     pipelineMock.sismember.mockReset().mockReturnValue(pipelineMock);
     pipelineMock.exec.mockReset();
+    redisMock.get.mockReset().mockResolvedValue(null);
+    redisMock.set.mockReset().mockResolvedValue('OK');
     redisMock.pipeline.mockClear();
+    prismaMock.botInstance.count.mockReset();
     prismaMock.botInstance.findMany.mockReset();
     prismaMock.guildSettings.findUnique.mockReset();
     prismaMock.guildSettings.upsert.mockReset();
@@ -110,6 +118,12 @@ describe('getGuildsWithBotStatus', () => {
     );
   });
 
+  it('reserves the first bot slot when calculating the guild boost limit', async () => {
+    prismaMock.botInstance.count.mockResolvedValue(5);
+
+    await expect(getMaxBoostsPerGuild()).resolves.toBe(4);
+  });
+
   it('returns true when any instance is in the guild', async () => {
     pipelineMock.exec.mockResolvedValue([
       [null, 0],
@@ -140,6 +154,27 @@ describe('getGuildsWithBotStatus', () => {
 
     expect(redisMock.pipeline).not.toHaveBeenCalled();
     expect(result.size).toBe(0);
+  });
+
+  it.each([
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 4],
+    [4, 5],
+    [5, 5],
+  ])('returns %d available bots for %d active boosts', async (boostCount, expected) => {
+    prismaMock.guildSettings.findUnique.mockResolvedValue({ manualPremium: false });
+    prismaMock.boost.count.mockResolvedValue(boostCount);
+
+    await expect(getAvailableBotCount('guild-1')).resolves.toBe(expected);
+  });
+
+  it('makes all active bot instances available for manualPremium guilds', async () => {
+    prismaMock.guildSettings.findUnique.mockResolvedValue({ manualPremium: true });
+
+    await expect(getAvailableBotCount('guild-1')).resolves.toBe(5);
+    expect(prismaMock.boost.count).not.toHaveBeenCalled();
   });
 
   it('builds the guild bot list with defaults for available instances only', async () => {
@@ -215,7 +250,7 @@ describe('getGuildsWithBotStatus', () => {
         },
       ],
       boostCount: 2,
-      maxBots: 2,
+      maxBots: 3,
     });
   });
 

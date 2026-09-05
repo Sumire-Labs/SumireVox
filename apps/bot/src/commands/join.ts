@@ -37,13 +37,13 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
     return;
   }
 
-  // インスタンス接続制限チェック (2号機以降はブースト数が必要)
+  // インスタンス接続制限チェック (2号機以降はインスタンス番号 - 1 Boost が必要)
   if (config.botInstanceId > 1) {
     const allowed = await canInstanceConnect(guildId, config.botInstanceId);
     if (!allowed) {
       const boostCount = await getGuildActiveBoostCount(guildId);
       await interaction.reply({
-        content: `このBotを利用するにはブーストが${config.botInstanceId}つ以上必要です。現在のブースト数: ${boostCount}`,
+        content: `このBotを利用するにはブーストが${config.botInstanceId - 1}つ以上必要です。現在のブースト数: ${boostCount}`,
         flags: MessageFlags.Ephemeral,
       });
       return;

@@ -26,7 +26,7 @@ import {
   getGuildsWithBotStatus,
   getGuildBotList,
 } from '../services/bot-instance-service.js';
-import { REDIS_CHANNELS } from '@sumirevox/shared';
+import { LIMITS, REDIS_CHANNELS } from '@sumirevox/shared';
 import { publishEvent } from '../infrastructure/pubsub.js';
 import { rateLimit } from '../middleware/rate-limit.js';
 
@@ -141,7 +141,8 @@ guildsRouter.get('/:guildId/settings', requireGuildAdmin, async (c) => {
     getGuildSettings(guildId),
     isGuildPremium(guildId),
   ]);
-  return c.json({ success: true, data: { ...settings, isPremium } });
+  const dictionaryLimit = isPremium ? LIMITS.PREMIUM_DICTIONARY_ENTRIES : LIMITS.FREE_DICTIONARY_ENTRIES;
+  return c.json({ success: true, data: { ...settings, isPremium, dictionaryLimit } });
 });
 
 /**
@@ -156,7 +157,8 @@ guildsRouter.put('/:guildId/settings', requireGuildAdmin, async (c) => {
     updateGuildSettings(guildId, body),
     isGuildPremium(guildId),
   ]);
-  return c.json({ success: true, data: { ...updated, isPremium } });
+  const dictionaryLimit = isPremium ? LIMITS.PREMIUM_DICTIONARY_ENTRIES : LIMITS.FREE_DICTIONARY_ENTRIES;
+  return c.json({ success: true, data: { ...updated, isPremium, dictionaryLimit } });
 });
 
 /**
@@ -277,7 +279,7 @@ guildsRouter.get('/:guildId/bots/:instanceId/invite', requireGuildAdmin, async (
         success: false,
         error: {
           code: 'BOOST_LIMIT_REACHED',
-          message: 'このインスタンスを利用するにはブーストが必要です。',
+          message: `このインスタンスを利用するにはブーストが${instanceId - 1}つ以上必要です。`,
         },
       },
       400,

@@ -20,7 +20,7 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
       },
       {
         name: '/voice',
-        value: '音声設定（話者・速度・ピッチ）を変更します。PREMIUM サーバーで適用されます。',
+        value: '音声設定（話者・速度・ピッチ）を変更します。FREE・PREMIUM のどちらでも読み上げに適用されます。',
       },
       {
         name: '/settings',

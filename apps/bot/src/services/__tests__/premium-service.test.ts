@@ -61,43 +61,19 @@ describe('canInstanceConnect', () => {
     expect(result).toBe(true);
   });
 
-  it('2号機: ブースト数1 → 拒否', async () => {
+  it.each([
+    [2, 0, false],
+    [2, 1, true],
+    [3, 1, false],
+    [3, 2, true],
+    [4, 3, true],
+    [5, 4, true],
+  ])('%d号機: ブースト数%d → %s', async (instanceId, boostCount, expected) => {
     mockGetGuildSettings.mockResolvedValue(makeSettings(false));
-    mockGetPrisma.mockReturnValue(makeMockPrisma(1));
+    mockGetPrisma.mockReturnValue(makeMockPrisma(boostCount));
 
-    const result = await canInstanceConnect('guild-1', 2);
-    expect(result).toBe(false);
-  });
+    const result = await canInstanceConnect('guild-1', instanceId);
 
-  it('2号機: ブースト数2 → 許可', async () => {
-    mockGetGuildSettings.mockResolvedValue(makeSettings(false));
-    mockGetPrisma.mockReturnValue(makeMockPrisma(2));
-
-    const result = await canInstanceConnect('guild-1', 2);
-    expect(result).toBe(true);
-  });
-
-  it('3号機: ブースト数2 → 拒否', async () => {
-    mockGetGuildSettings.mockResolvedValue(makeSettings(false));
-    mockGetPrisma.mockReturnValue(makeMockPrisma(2));
-
-    const result = await canInstanceConnect('guild-1', 3);
-    expect(result).toBe(false);
-  });
-
-  it('3号機: ブースト数3 → 許可', async () => {
-    mockGetGuildSettings.mockResolvedValue(makeSettings(false));
-    mockGetPrisma.mockReturnValue(makeMockPrisma(3));
-
-    const result = await canInstanceConnect('guild-1', 3);
-    expect(result).toBe(true);
-  });
-
-  it('ブースト数0 で2号機 → 拒否', async () => {
-    mockGetGuildSettings.mockResolvedValue(makeSettings(false));
-    mockGetPrisma.mockReturnValue(makeMockPrisma(0));
-
-    const result = await canInstanceConnect('guild-1', 2);
-    expect(result).toBe(false);
+    expect(result).toBe(expected);
   });
 });
