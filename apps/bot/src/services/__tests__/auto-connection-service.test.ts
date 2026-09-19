@@ -1,13 +1,20 @@
 import type { GuildSettings, ResolvedBotInstanceSettings, VcSession } from '@sumirevox/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { redisMock } = vi.hoisted(() => ({
+  redisMock: {
+    get: vi.fn(),
+    set: vi.fn(),
+  },
+}));
+
 vi.mock('../../infrastructure/discord-client.js', () => ({
   getClient: vi.fn(),
 }));
 
 vi.mock('../../infrastructure/config.js', () => ({
   config: {
-    botInstanceId: 2,
+    botInstanceId: 1,
     defaultSpeakerId: 10,
     voiceDisconnectTimeoutSeconds: 1,
   },
@@ -36,13 +43,17 @@ vi.mock('../vc-session-manager.js', () => ({
   moveVcSession: vi.fn(),
 }));
 
+vi.mock('../vc-allocation-service.js', () => ({
+  allocateVoiceConnection: vi.fn(),
+}));
+
 vi.mock('../premium-service.js', () => ({
   canInstanceConnect: vi.fn(),
   getAvailableBotInstanceIds: vi.fn(),
 }));
 
 vi.mock('../../infrastructure/redis.js', () => ({
-  getRedisClient: vi.fn(() => ({ get: vi.fn().mockResolvedValue(null) })),
+  getRedisClient: vi.fn(() => redisMock),
 }));
 
 vi.mock('../auto-disconnect-timer.js', () => ({
@@ -67,6 +78,7 @@ import {
   getVcSession,
   moveVcSession,
 } from '../vc-session-manager.js';
+import { allocateVoiceConnection } from '../vc-allocation-service.js';
 import { canInstanceConnect, getAvailableBotInstanceIds } from '../premium-service.js';
 import { cancelDisconnectTimer, startDisconnectTimer } from '../auto-disconnect-timer.js';
 import { enqueuePreSynthesized } from '../speech-queue.js';
@@ -93,6 +105,7 @@ const mockCancelDisconnectTimer = vi.mocked(cancelDisconnectTimer);
 const mockStartDisconnectTimer = vi.mocked(startDisconnectTimer);
 const mockGetPredefinedAudio = vi.mocked(getPredefinedAudio);
 const mockEnqueuePreSynthesized = vi.mocked(enqueuePreSynthesized);
+const mockAllocateVoiceConnection = vi.mocked(allocateVoiceConnection);
 
 function makeSettings(): GuildSettings {
   return {
@@ -149,7 +162,7 @@ function makeVoiceChannel(
 }
 
 function makeTextChannel(id: string) {
-  return { id, isTextBased: () => true, isVoiceBased: () => false };
+  return { id, isTextBased: () => true, isVoiceBased: () => false, send: vi.fn() };
 }
 
 function makeGuild(channels: Record<string, unknown>) {
@@ -192,8 +205,11 @@ describe('auto-connection-service', () => {
     mockGetVcSession.mockReturnValue(undefined);
     mockGetAllVcSessions.mockReturnValue(new Map());
     mockCanInstanceConnect.mockResolvedValue(true);
-    mockGetAvailableBotInstanceIds.mockResolvedValue([2]);
+    mockGetAvailableBotInstanceIds.mockResolvedValue([1]);
     mockGetPredefinedAudio.mockResolvedValue(null);
+    mockAllocateVoiceConnection.mockResolvedValue({ status: 'connected', instanceId: 2 });
+    redisMock.get.mockResolvedValue(null);
+    redisMock.set.mockResolvedValue('OK');
     mockGetClient.mockReturnValue({ guilds: { cache: { get: vi.fn() } } } as unknown as ReturnType<typeof getClient>);
   });
 
@@ -204,18 +220,15 @@ describe('auto-connection-service', () => {
       'voice-2': makeVoiceChannel('voice-2', 1),
       'text-2': makeTextChannel('text-2'),
     });
-    mockCreateVcSession.mockResolvedValue(makeSession({ voiceChannelId: 'voice-2', textChannelId: 'text-2' }));
-
     await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-2'));
 
-    expect(mockCreateVcSession).toHaveBeenCalledWith(
-      'guild-1',
-      'voice-2',
-      'text-2',
-      guild.voiceAdapterCreator,
-      'auto',
-    );
-    expect(mockGetAvailableBotInstanceIds).toHaveBeenCalledWith('guild-1');
+    expect(mockAllocateVoiceConnection).toHaveBeenCalledWith({
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-2',
+      textChannelId: 'text-2',
+      connectionMode: 'auto',
+      existingOwnerBehavior: 'preserve',
+    });
   });
 
   it('対象外VC、権限不足、Premium不足では接続しない', async () => {
@@ -225,18 +238,18 @@ describe('auto-connection-service', () => {
     });
 
     await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'other-voice'));
-    expect(mockCreateVcSession).not.toHaveBeenCalled();
+    expect(mockAllocateVoiceConnection).not.toHaveBeenCalled();
 
     await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
-    expect(mockCreateVcSession).not.toHaveBeenCalled();
+    expect(mockAllocateVoiceConnection).not.toHaveBeenCalled();
 
-    mockGetAvailableBotInstanceIds.mockResolvedValue([]);
+    mockAllocateVoiceConnection.mockResolvedValue({ status: 'capacity' });
     const allowedGuild = makeGuild({
       'voice-1': makeVoiceChannel('voice-1', 1),
       'text-1': makeTextChannel('text-1'),
     });
     await handleAutoJoinVoiceState(makeState(allowedGuild, null), makeState(allowedGuild, 'voice-1'));
-    expect(mockCreateVcSession).not.toHaveBeenCalled();
+    expect(mockAllocateVoiceConnection).toHaveBeenCalledTimes(1);
   });
 
   it('同時の自動接続イベントは1つの接続処理へ直列化する', async () => {
@@ -244,25 +257,25 @@ describe('auto-connection-service', () => {
       'voice-1': makeVoiceChannel('voice-1', 1),
       'text-1': makeTextChannel('text-1'),
     });
-    let resolveCreate: (session: VcSession) => void = () => {};
+    let resolveAllocation: (result: { status: 'connected'; instanceId: number }) => void = () => {};
+    const allocationPromise = new Promise<{ status: 'connected'; instanceId: number }>((resolve) => {
+      resolveAllocation = resolve;
+    });
     let currentSession: VcSession | undefined;
-    const createPromise = new Promise<VcSession>((resolve) => {
-      resolveCreate = resolve;
-    });
-    mockCreateVcSession.mockImplementation(async () => {
-      const session = await createPromise;
-      currentSession = session;
-      return session;
-    });
     mockGetVcSession.mockImplementation(() => currentSession);
+    mockAllocateVoiceConnection.mockImplementation(async () => {
+      const result = await allocationPromise;
+      currentSession = makeSession();
+      return result;
+    });
 
     const first = handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
     const second = handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
-    await vi.waitFor(() => expect(mockCreateVcSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mockAllocateVoiceConnection).toHaveBeenCalledTimes(1));
 
-    resolveCreate(makeSession());
+    resolveAllocation({ status: 'connected', instanceId: 2 });
     await Promise.all([first, second]);
-    expect(mockCreateVcSession).toHaveBeenCalledTimes(1);
+    expect(mockAllocateVoiceConnection).toHaveBeenCalledTimes(1);
   });
 
   it('タイマー確認時に人間が戻っていれば維持する', async () => {
@@ -455,21 +468,18 @@ describe('auto-connection-service', () => {
     expect(mockStartDisconnectTimer).toHaveBeenCalledWith('guild-1', expect.any(Function));
   });
 
-  it('自動接続時だけ挨拶し、切り替え時は挨拶しない', async () => {
+  it('自動接続をautoモードで委譲し、切り替え時は挨拶しない', async () => {
     const guild = makeGuild({
       'voice-1': makeVoiceChannel('voice-1', 1),
       'text-1': makeTextChannel('text-1'),
     });
     mockGetGuildSettings.mockResolvedValue({ ...makeSettings(), greetingOnJoin: true });
-    mockGetPredefinedAudio.mockResolvedValue(Buffer.from('audio'));
-    const createdSession = makeSession();
-    mockCreateVcSession.mockImplementation(async () => {
-      mockGetVcSession.mockReturnValue(createdSession);
-      return createdSession;
-    });
+    mockGetVcSession.mockReturnValue(undefined);
 
     await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
-    expect(mockEnqueuePreSynthesized).toHaveBeenCalledWith('guild-1', expect.any(Buffer));
+    expect(mockAllocateVoiceConnection).toHaveBeenCalledWith(expect.objectContaining({
+      connectionMode: 'auto',
+    }));
 
     vi.clearAllMocks();
     mockGetVcSession.mockReturnValue(makeSession());
@@ -478,5 +488,46 @@ describe('auto-connection-service', () => {
     } as unknown as ReturnType<typeof getClient>);
     await handleAutoDisconnectTimerExpired('guild-1');
     expect(mockEnqueuePreSynthesized).not.toHaveBeenCalled();
+  });
+
+  it('容量不足通知をVCごとに30秒抑止する', async () => {
+    const guild = makeGuild({
+      'voice-1': makeVoiceChannel('voice-1', 1),
+      'text-1': makeTextChannel('text-1'),
+      'voice-2': makeVoiceChannel('voice-2', 1),
+      'text-2': makeTextChannel('text-2'),
+    });
+    mockAllocateVoiceConnection.mockResolvedValue({ status: 'capacity' });
+    mockGetAutoJoinSettings.mockReturnValue(makeInstanceSettings({
+      channelPairs: [
+        { voiceChannelId: 'voice-1', textChannelId: 'text-1' },
+        { voiceChannelId: 'voice-2', textChannelId: 'text-2' },
+      ],
+    }));
+    redisMock.set.mockResolvedValueOnce('OK').mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+
+    await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
+    await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-2'));
+    await handleAutoJoinVoiceState(makeState(guild, null), makeState(guild, 'voice-1'));
+
+    expect(redisMock.set).toHaveBeenCalledTimes(3);
+    expect((guild.channels.cache.get('text-1') as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledTimes(1);
+    expect((guild.channels.cache.get('text-2') as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledTimes(1);
+    expect(redisMock.set).toHaveBeenNthCalledWith(
+      1,
+      'vc-capacity-notice:guild-1:voice-1',
+      '1',
+      'EX',
+      30,
+      'NX',
+    );
+    expect(redisMock.set).toHaveBeenNthCalledWith(
+      2,
+      'vc-capacity-notice:guild-1:voice-2',
+      '1',
+      'EX',
+      30,
+      'NX',
+    );
   });
 });

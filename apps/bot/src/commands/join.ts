@@ -1,11 +1,12 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, MessageFlags } from 'discord.js';
 import { CommandDefinition } from './types.js';
-import { getVcSession, updateTextChannel } from '../services/vc-session-manager.js';
-import { getAvailableBotInstanceIds } from '../services/premium-service.js';
 import { logger } from '../infrastructure/logger.js';
-import { getRedisClient } from '../infrastructure/redis.js';
-import { REDIS_KEYS } from '@sumirevox/shared';
-import { delegateBotCommand } from '../services/bot-command-delegation-service.js';
+import {
+  allocateVoiceConnection,
+  inspectVoiceConnectionAllocation,
+} from '../services/vc-allocation-service.js';
+
+const CAPACITY_ERROR_MESSAGE = '利用可能なBotがすべて別のVCで使用中です。';
 
 const data = new SlashCommandBuilder()
   .setName('join')
@@ -30,79 +31,68 @@ async function execute(interaction: ChatInputCommandInteraction): Promise<void> 
   if (!voiceChannel) {
     await interaction.reply({
       content: 'ボイスチャンネルに参加してからコマンドを実行してください。',
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  const existingSession = getVcSession(guildId);
-  if (existingSession && existingSession.voiceChannelId === voiceChannel.id) {
-      // 同じ VC に接続中 → 読み上げチャンネルを変更
-      await updateTextChannel(guildId, textChannelId);
-      await interaction.reply({
-        content: `読み上げチャンネルを <#${textChannelId}> に変更しました。`,
-      });
-      return;
-  }
-  if (existingSession) {
-    await interaction.reply({
-      content: `現在 <#${existingSession.voiceChannelId}> で使用中です。切り替えるには \`/leave\` で退出してから再度 \`/join\` してください。`,
-      ephemeral: true,
-    });
-    return;
-  }
-
+  let deferred = false;
   try {
-    await interaction.deferReply();
-    const owningInstanceId = await findOwningInstance(guildId, voiceChannel.id);
-    if (owningInstanceId) {
-      const result = await delegateBotCommand(owningInstanceId, {
-        action: 'join', guildId, voiceChannelId: voiceChannel.id, textChannelId,
+    // 容量不足はdefer前に判定し、Interaction自体をEphemeralで返せるようにする。
+    const inspection = await inspectVoiceConnectionAllocation(guildId, voiceChannel.id);
+    if (inspection.status === 'capacity') {
+      await interaction.reply({
+        content: CAPACITY_ERROR_MESSAGE,
+        flags: MessageFlags.Ephemeral,
       });
-      if (!result.success) {
-        await interaction.editReply({ content: result.message ?? '読み上げチャンネルの変更に失敗しました。' });
-        return;
-      }
-      await interaction.editReply({ content: `読み上げチャンネルを <#${textChannelId}> に変更しました。` });
       return;
     }
-    const candidates = await getAvailableBotInstanceIds(guildId);
-    const targetInstanceId = await findFreeInstance(guildId, candidates);
-    if (!targetInstanceId) {
-      await interaction.editReply({ content: '利用可能なBotがすべて別のVCで使用中です。' });
-      return;
-    }
-    const result = await delegateBotCommand(targetInstanceId, {
-      action: 'join', guildId, voiceChannelId: voiceChannel.id, textChannelId,
+
+    await interaction.deferReply();
+    deferred = true;
+    const result = await allocateVoiceConnection({
+      guildId,
+      voiceChannelId: voiceChannel.id,
+      textChannelId,
+      connectionMode: 'manual',
+      existingOwnerBehavior: 'update',
     });
-    if (!result.success) {
+
+    if (result.status === 'capacity') {
+      // 事前判定後に競合した場合は、公開defer済みの応答を汎用エラーにし、
+      // 容量不足の詳細だけをEphemeral follow-upで返す。
+      await interaction.editReply({ content: '接続処理中に利用可能なBotがなくなりました。' });
+      await interaction.followUp({
+        content: CAPACITY_ERROR_MESSAGE,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    if (result.status === 'failed') {
       await interaction.editReply({ content: result.message ?? 'ボイスチャンネルへの接続に失敗しました。' });
       return;
     }
 
-    await interaction.editReply({
-      content: `<#${voiceChannel.id}> に接続しました。<#${textChannelId}> のメッセージを読み上げます。`,
-    });
-
+    if (result.status === 'updated' || result.status === 'already-connected') {
+      await interaction.editReply({ content: `読み上げチャンネルを <#${textChannelId}> に変更しました。` });
+    } else {
+      await interaction.editReply({
+        content: `<#${voiceChannel.id}> に接続しました。<#${textChannelId}> のメッセージを読み上げます。`,
+      });
+    }
   } catch (error) {
     logger.error({ err: error, guildId, voiceChannelId: voiceChannel.id }, 'Failed to join VC');
-    await interaction.editReply({
-      content: 'ボイスチャンネルへの接続に失敗しました。Bot の権限を確認してください。',
-    });
+    if (deferred) {
+      await interaction.editReply({
+        content: 'ボイスチャンネルへの接続に失敗しました。Bot の権限を確認してください。',
+      });
+    } else {
+      await interaction.reply({
+        content: 'ボイスチャンネルへの接続に失敗しました。Bot の権限を確認してください。',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   }
-}
-
-async function findOwningInstance(guildId: string, voiceChannelId: string): Promise<number | undefined> {
-  const value = await getRedisClient().get(REDIS_KEYS.VC_CLAIM(guildId, voiceChannelId));
-  const instanceId = value ? Number(value.split(':', 1)[0]) : Number.NaN;
-  return Number.isInteger(instanceId) ? instanceId : undefined;
-}
-
-async function findFreeInstance(guildId: string, candidates: readonly number[]): Promise<number | undefined> {
-  for (const instanceId of candidates) {
-    if (!(await getRedisClient().get(REDIS_KEYS.BOT_VC_CLAIM(guildId, instanceId)))) return instanceId;
-  }
-  return undefined;
 }
 
 export const joinCommand: CommandDefinition = { data, execute };

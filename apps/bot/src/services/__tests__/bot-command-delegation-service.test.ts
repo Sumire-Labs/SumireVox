@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { REDIS_KEYS } from '@sumirevox/shared';
 
-const { clientMock, redisMock, vcSessionMock } = vi.hoisted(() => ({
+const { clientMock, redisMock, vcSessionMock, guildSettingsMock } = vi.hoisted(() => ({
   clientMock: {
     shard: { ids: [1] },
     guilds: { cache: { get: vi.fn() } },
@@ -17,6 +17,7 @@ const { clientMock, redisMock, vcSessionMock } = vi.hoisted(() => ({
     getVcSession: vi.fn(),
     updateTextChannel: vi.fn(),
   },
+  guildSettingsMock: vi.fn(),
 }));
 
 vi.mock('../../infrastructure/config.js', () => ({
@@ -38,7 +39,7 @@ vi.mock('../../infrastructure/pubsub.js', () => ({
 vi.mock('../vc-session-manager.js', () => vcSessionMock);
 
 vi.mock('../guild-settings-service.js', () => ({
-  getGuildSettings: vi.fn(),
+  getGuildSettings: guildSettingsMock,
 }));
 
 vi.mock('../predefined-audio-cache.js', () => ({
@@ -50,6 +51,9 @@ vi.mock('../speech-queue.js', () => ({
 }));
 
 import { handleDelegatedBotCommand } from '../bot-command-delegation-service.js';
+import { getGuildSettings } from '../guild-settings-service.js';
+
+const mockGetGuildSettings = vi.mocked(getGuildSettings);
 
 describe('handleDelegatedBotCommand', () => {
   const command = {
@@ -66,6 +70,10 @@ describe('handleDelegatedBotCommand', () => {
     clientMock.shard.ids = [1];
     clientMock.guilds.cache.get.mockReturnValue({ voiceAdapterCreator: {} });
     redisMock.set.mockResolvedValue('OK');
+    mockGetGuildSettings.mockResolvedValue({
+      greetingOnJoin: false,
+      defaultSpeakerId: null,
+    } as Awaited<ReturnType<typeof getGuildSettings>>);
     vcSessionMock.getVcSession.mockReturnValue({
       guildId: 'guild-1',
       voiceChannelId: 'voice-1',
@@ -90,7 +98,59 @@ describe('handleDelegatedBotCommand', () => {
       expect(vcSessionMock.updateTextChannel).toHaveBeenCalledWith('guild-1', 'text-2', 'manual');
       expect(redisMock.set).toHaveBeenCalledWith(
         REDIS_KEYS.BOT_COMMAND_RESULT('request-1'),
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, operation: 'updated' }),
+        'EX',
+        35,
+      );
+    });
+  });
+
+  it('自動接続の委譲はautoモードでセッションを作成する', async () => {
+    vcSessionMock.getVcSession.mockReturnValue(undefined);
+    vcSessionMock.createVcSession.mockResolvedValue(undefined);
+
+    handleDelegatedBotCommand(JSON.stringify({
+      ...command,
+      requestId: 'request-auto',
+      connectionMode: 'auto',
+    }));
+
+    await vi.waitFor(() => {
+      expect(vcSessionMock.createVcSession).toHaveBeenCalledWith(
+        'guild-1',
+        'voice-1',
+        'text-2',
+        expect.anything(),
+        'auto',
+      );
+      expect(redisMock.set).toHaveBeenCalledWith(
+        REDIS_KEYS.BOT_COMMAND_RESULT('request-auto'),
+        JSON.stringify({ success: true, operation: 'created' }),
+        'EX',
+        35,
+      );
+    });
+  });
+
+  it('自動接続の競合で既存の手動セッションを変更しない', async () => {
+    vcSessionMock.getVcSession.mockReturnValue({
+      guildId: 'guild-1',
+      voiceChannelId: 'voice-1',
+      textChannelId: 'text-1',
+      connectionMode: 'manual',
+    });
+
+    handleDelegatedBotCommand(JSON.stringify({
+      ...command,
+      requestId: 'request-auto-existing',
+      connectionMode: 'auto',
+    }));
+
+    await vi.waitFor(() => {
+      expect(vcSessionMock.updateTextChannel).not.toHaveBeenCalled();
+      expect(redisMock.set).toHaveBeenCalledWith(
+        REDIS_KEYS.BOT_COMMAND_RESULT('request-auto-existing'),
+        JSON.stringify({ success: true, operation: 'existing' }),
         'EX',
         35,
       );

@@ -12,7 +12,6 @@ import { config } from '../infrastructure/config.js';
 import { logger } from '../infrastructure/logger.js';
 import { getAutoJoinSettings, getGuildSettings } from './guild-settings-service.js';
 import {
-  createVcSession,
   destroyVcSession,
   getAllVcSessions,
   getVcSession,
@@ -25,13 +24,12 @@ import {
   cancelDisconnectTimer,
   startDisconnectTimer,
 } from './auto-disconnect-timer.js';
-import { enqueuePreSynthesized } from './speech-queue.js';
-import { getPredefinedAudio } from './predefined-audio-cache.js';
 import type { AutoJoinCandidate } from './auto-channel-selector.js';
 import {
   countHumanMembers,
   rankAutoJoinCandidates,
 } from './auto-channel-selector.js';
+import { allocateVoiceConnection } from './vc-allocation-service.js';
 
 interface RuntimeAutoJoinCandidate extends AutoJoinCandidate {
   voiceChannel: NonNullable<ReturnType<typeof getVoiceChannel>>;
@@ -99,26 +97,6 @@ export async function handleAutoJoinVoiceState(
         return;
       }
 
-      const candidates = await getAvailableBotInstanceIds(guildId);
-      const priorityIndex = candidates.indexOf(config.botInstanceId);
-      if (priorityIndex < 0) {
-        logger.info(
-          { guildId, instanceId: config.botInstanceId },
-          'Auto-join skipped: Bot instance is outside the current boost allocation',
-        );
-        return;
-      }
-      // 優先Botに先行claimの機会を与える。待機後に同じVCまたは自Botがclaim済みなら退出する。
-      if (priorityIndex > 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, priorityIndex * 100));
-      }
-      const [channelClaim, botClaim] = await Promise.all([
-        getRedisClient().get(REDIS_KEYS.VC_CLAIM(guildId, pair.voiceChannelId)),
-        getRedisClient().get(REDIS_KEYS.BOT_VC_CLAIM(guildId, config.botInstanceId)),
-      ]);
-      if (channelClaim || botClaim) return;
-      if (getVcSession(guildId)) return;
-
       if (!hasVoicePermissions(newState.guild, voiceChannel)) {
         logger.warn(
           { guildId, channelId: voiceChannel.id },
@@ -127,26 +105,58 @@ export async function handleAutoJoinVoiceState(
         return;
       }
 
-      const session = await createVcSession(
-        guildId,
-        pair.voiceChannelId,
-        pair.textChannelId,
-        newState.guild.voiceAdapterCreator,
-        'auto',
-      );
+      // 同一プロセスですでに対象VCを担当している場合は、既存セッションを変更しない。
+      if (getVcSession(guildId)?.voiceChannelId === pair.voiceChannelId) return;
 
-      // 手動 /join が先に接続した場合は、そのセッションを自動セッションとして扱わない。
+      const allocation = await allocateVoiceConnection({
+        guildId,
+        voiceChannelId: pair.voiceChannelId,
+        textChannelId: pair.textChannelId,
+        connectionMode: 'auto',
+        existingOwnerBehavior: 'preserve',
+      });
+
+      if (allocation.status === 'capacity') {
+        if (config.botInstanceId === 1) {
+          await notifyAutoJoinCapacity(
+            guildId,
+            pair.voiceChannelId,
+            pair.textChannelId,
+            newState.guild,
+          );
+        }
+        return;
+      }
+      if (allocation.status === 'failed') {
+        logger.warn(
+          { guildId, voiceChannelId: pair.voiceChannelId, message: allocation.message },
+          'Auto-join allocation failed',
+        );
+        return;
+      }
+
+      // 既存VCの所有者がある場合は、手動セッションを自動扱いへ変更しない。
+      if (allocation.status === 'already-connected') return;
+
       const currentSession = getVcSession(guildId);
-      if (!currentSession || currentSession.voiceChannelId !== pair.voiceChannelId) return;
+      if (currentSession?.voiceChannelId !== pair.voiceChannelId) {
+        // サブBotへ委譲した場合、接続セッションは担当Bot側に存在する。
+        logger.info(
+          {
+            guildId,
+            voiceChannelId: pair.voiceChannelId,
+            textChannelId: pair.textChannelId,
+            instanceId: allocation.instanceId,
+          },
+          'Auto-joined VC through allocated Bot',
+        );
+        return;
+      }
 
       logger.info(
         { guildId, voiceChannelId: pair.voiceChannelId, textChannelId: pair.textChannelId },
         'Auto-joined VC',
       );
-
-      if (currentSession.connectionMode === 'auto' && settings.greetingOnJoin) {
-        await enqueueConnectionGreeting(guildId, settings.defaultSpeakerId);
-      }
 
       await checkAutoDisconnect(guildId, newState.guild, pair.voiceChannelId);
     });
@@ -453,11 +463,33 @@ async function destroyAutoSessionIfCurrent(
   }
 }
 
-async function enqueueConnectionGreeting(
+async function notifyAutoJoinCapacity(
   guildId: string,
-  defaultSpeakerId: number | null,
+  voiceChannelId: string,
+  textChannelId: string,
+  guild: Guild,
 ): Promise<void> {
-  const speakerId = defaultSpeakerId ?? config.defaultSpeakerId;
-  const audio = await getPredefinedAudio('接続しました', speakerId, 1.0, 0.0);
-  if (audio) enqueuePreSynthesized(guildId, audio);
+  const noticeKey = REDIS_KEYS.AUTO_JOIN_CAPACITY_NOTIFICATION(guildId, voiceChannelId);
+  const acquired = await getRedisClient().set(noticeKey, '1', 'EX', 30, 'NX');
+  if (acquired !== 'OK') return;
+
+  const textChannel = getTextChannel(guild, textChannelId);
+  if (!textChannel) {
+    logger.warn(
+      { guildId, textChannelId },
+      'Auto-join capacity notification skipped: text channel not found',
+    );
+    return;
+  }
+
+  try {
+    await textChannel.send({
+      content: '利用可能なBotがすべて別のVCで使用中のため、自動接続できません。',
+    });
+  } catch (error) {
+    logger.warn(
+      { err: error, guildId, textChannelId },
+      'Failed to send auto-join capacity notification',
+    );
+  }
 }

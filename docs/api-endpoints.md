@@ -130,7 +130,7 @@
 
 `channelPairs` は送信された配列全体で置き換えられ、空配列で全ペアを解除できる。順序はそのまま保存され、最大25件、同じVCの重複は不可。`channelPairs` を指定しない部分更新（`{ "autoJoin": false }` など）は、既存のペアを保持する。成功時の `data` は `null`。
 
-`GET /api/guilds/:guildId/bots` は `autoJoinSettings`、`botInstancePriority`、Bot一覧と現在の利用枠を返す。優先順位は参加・生存中の有効Botだけを対象とし、未保存のBotはインスタンス番号順で末尾に補う。
+`GET /api/guilds/:guildId/bots` は `autoJoinSettings`、`botInstancePriority`、Bot一覧と現在の利用枠を返す。優先順位は参加・生存中の有効Botだけを対象とし、未保存のBotはインスタンス番号順で末尾に補う。保存された優先順位は自動接続と `/join` の両方で使われ、Boost枠内の空き Bot を上位から割り当てる。
 
 `PUT /api/guilds/:guildId/bot-priority` は次の順序付きID配列を受け取り、参加・生存中の有効Botを重複なくすべて指定しなければならない。不明ID・欠落ID・重複IDは `VALIDATION_ERROR` で拒否する。
 
@@ -139,6 +139,8 @@
 ```
 
 Boost枠は優先順位の先頭から使われる。順位変更は新規接続の選択規則だけを変更し、稼働中の正常な接続は移動しない。
+
+接続候補がすべて使用中の場合、`/join` は実行した Interaction に Ephemeral で通知する。自動接続では Bot 1 が対応するペアの TC に通知し、同じ VC への通知はVC単位の Redis キーで30秒間抑止する。旧 `botInstanceSettings` は共通設定がない場合の互換読み取りに限り使用する。
 
 ## 認証済みユーザー向け Bot インスタンス情報
 

@@ -13,6 +13,7 @@ import {
 import { getGuildSettings } from './guild-settings-service.js';
 import { getPredefinedAudio } from './predefined-audio-cache.js';
 import { enqueuePreSynthesized } from './speech-queue.js';
+import type { VcSessionConnectionMode } from '@sumirevox/shared';
 
 type BotCommand = {
   requestId: string;
@@ -21,9 +22,14 @@ type BotCommand = {
   guildId: string;
   voiceChannelId: string;
   textChannelId?: string;
+  connectionMode?: VcSessionConnectionMode;
 };
 
-type BotCommandResult = { success: boolean; message?: string };
+type BotCommandResult = {
+  success: boolean;
+  message?: string;
+  operation?: 'created' | 'updated' | 'existing' | 'left';
+};
 
 export async function delegateBotCommand(
   instanceId: number,
@@ -101,19 +107,32 @@ async function executeBotCommand(command: BotCommand): Promise<BotCommandResult>
     return { success: true };
   }
   if (!command.textChannelId) return { success: false, message: '読み上げチャンネルが未指定です。' };
+  const connectionMode: VcSessionConnectionMode = command.connectionMode === 'auto'
+    ? 'auto'
+    : 'manual';
   const existingSession = getVcSession(command.guildId);
   if (existingSession) {
     if (existingSession.voiceChannelId !== command.voiceChannelId) {
       return { success: false, message: 'このBotは既に別のVCで使用中です。' };
     }
-    await updateTextChannel(command.guildId, command.textChannelId, 'manual');
-    return { success: true };
+    // 自動接続の競合で既存の手動セッションを自動扱いへ変更しない。
+    if (connectionMode === 'auto' && existingSession.connectionMode !== 'auto') {
+      return { success: true, operation: 'existing' };
+    }
+    await updateTextChannel(command.guildId, command.textChannelId, connectionMode);
+    return { success: true, operation: 'updated' };
   }
-  await createVcSession(command.guildId, command.voiceChannelId, command.textChannelId, guild.voiceAdapterCreator, 'manual');
+  await createVcSession(
+    command.guildId,
+    command.voiceChannelId,
+    command.textChannelId,
+    guild.voiceAdapterCreator,
+    connectionMode,
+  );
   const settings = await getGuildSettings(command.guildId);
   if (settings.greetingOnJoin) {
     const audio = await getPredefinedAudio('接続しました', settings.defaultSpeakerId ?? config.defaultSpeakerId, 1.0, 0.0);
     if (audio) enqueuePreSynthesized(command.guildId, audio);
   }
-  return { success: true };
+  return { success: true, operation: 'created' };
 }

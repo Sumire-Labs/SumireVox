@@ -8,5 +8,7 @@ export const REDIS_KEYS = {
   VC_CLAIM: (guildId: string, voiceChannelId: string) => `vc-claim:${guildId}:channel:${voiceChannelId}`,
   BOT_VC_CLAIM: (guildId: string, instanceId: number) => `vc-claim:${guildId}:bot:${instanceId}`,
   VC_ALLOCATION_LOCK: (guildId: string) => `vc-claim:${guildId}:lock`,
+  AUTO_JOIN_CAPACITY_NOTIFICATION: (guildId: string, voiceChannelId: string) =>
+    `vc-capacity-notice:${guildId}:${voiceChannelId}`,
   BOT_COMMAND_RESULT: (requestId: string) => `bot-command-result:${requestId}`,
 } as const;
