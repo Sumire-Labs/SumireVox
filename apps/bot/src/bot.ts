@@ -37,6 +37,7 @@ import { initShardSemaphore, clearAllQueues } from './services/speech-queue.js';
 import { preloadPredefinedAudio } from './services/predefined-audio-cache.js';
 import { clearAllDisconnectTimers } from './services/auto-disconnect-timer.js';
 import { scheduleDisconnectTimersForRestoredSessions } from './services/auto-connection-service.js';
+import { cleanupSubBotCommands } from './infrastructure/cleanup-sub-bot-commands.js';
 
 async function bootstrap(): Promise<void> {
   const client = new Client({
@@ -101,6 +102,9 @@ async function bootstrap(): Promise<void> {
         { user: readyClient.user.tag, guildCount: readyClient.guilds.cache.size },
         `Shard ${shardId} ready as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guilds)`,
       );
+
+      // サブBotのシャード0だけ、他の起動処理より先に登録済みコマンドを確認・削除する。
+      await cleanupSubBotCommands(readyClient, shardId);
 
       // Bot インスタンス登録
       await registerBotInstance();
