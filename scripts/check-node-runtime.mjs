@@ -24,6 +24,14 @@ if (app === 'bot') {
   assert.equal(manager.totalShards, 1);
   requireApp('@discordjs/voice');
 
+  const requireOpus = createRequire(requireApp.resolve('@discordjs/opus'));
+  const requirePreGyp = createRequire(requireOpus.resolve('@discordjs/node-pre-gyp'));
+  const requireRimraf = createRequire(requirePreGyp.resolve('rimraf'));
+  const requireGlob = createRequire(requireRimraf.resolve('glob'));
+  const minimatch = requireGlob('minimatch');
+  assert.equal(minimatch('audio/first.wav', 'audio/{first,second}.wav'), true);
+  assert.equal(minimatch('audio/third.wav', 'audio/{first,second}.wav'), false);
+
   const { OpusEncoder } = requireApp('@discordjs/opus');
   const encoder = new OpusEncoder(48_000, 2);
   const pcm = Buffer.alloc(960 * 2 * 2);

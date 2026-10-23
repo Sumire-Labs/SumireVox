@@ -7,7 +7,7 @@
 - 開発環境・6つのDockerfile・GitHub Actions・Cloudflare PagesのビルドをNode.js 24.22.1 LTSに統一した。
 - ルートの`engines.node`は`>=24.22.1 <25`、`.nvmrc`は`24.22.1`。pnpmは9.15.9を維持し、Dockerの`pnpm@latest`を廃止した。
 - Bot/API/sharedの`@types/node`を22.19.15から24.19.2へ更新した。対応する`undici-types`は6.21.0から7.24.6へ変わった。型定義のパッチ番号はNode.js本体とは独立している。
-- ロックファイルはpnpm 9.15.9の通常の`install`で更新し、`--frozen-lockfile`で再検証した。上記2パッケージ以外の解決バージョンは変更していない。
+- 初回移行時のロックファイルはpnpm 9.15.9の通常の`install`で更新し、`--frozen-lockfile`で再検証した。後述の監査修正では追加で2つの実行依存を更新する。
 - Dockerのビルド成立に必要な共通設定のコピー、Adminのshared依存のインストール・ビルド、Botの音声アセット配置を補った。Botの誤った`node_modules/.prisma`コピーを除き、実際の生成先であるpnpmストアを含む`node_modules`をコピーする構成にした。
 - 開発用Bot/APIにもOpenSSLとネイティブ依存のビルドツールを追加し、Botには本番用と同様にffmpegを配置した。
 - `AGENTS.md`、`README.md`、`docs/architecture.md`を更新した。architectureの既存の「24-alpine」は実際のDockerfileと異なっていたため、24.22.1-slimへ修正した。過去の監査記録は保持した。
@@ -33,7 +33,7 @@ Node.js自体のセキュリティ修正は[24.22.1の公式リリース](https:
 
 [Corepackの公式説明](https://nodejs.org/download/release/v24.22.1/docs/api/corepack.html)、[Prismaのシステム要件](https://docs.prisma.io/docs/orm/v6/reference/system-requirements)、[Opus](https://github.com/discordjs/opus)、[sodium-native](https://github.com/holepunchto/sodium-native)も確認した。Corepackは24.22.1の公式配布に同梱されており、追加更新なしで指定のpnpmを有効化できた。
 
-## 検証結果
+## 初回移行時の検証結果
 
 ローカル検証はmacOS arm64で実施した。公式配布のNode.js 24.22.1をSHA-256照合後に一時ディレクトリへ展開し、PATHを明示して使用した。既存のシステム全体のNode.js設定は変更していない。
 
@@ -60,7 +60,7 @@ Node.js自体のセキュリティ修正は[24.22.1の公式リリース](https:
 
 pnpm 9.15.9はNode.js 24.22.1で`DEP0169`（`url.parse()`）警告を出すが、インストール・テスト・ビルドは成功した。pnpmの更新は行っていない。
 
-## 監査の未解決事項とCI
+## 初回監査の指摘とCI
 
 変更前の`origin/main`のロックファイルでも監査を実行し、同じ31件（high 4 / moderate 23 / low 4 / critical 0）であることを確認した。高重要度の対象は次のとおり。
 
@@ -69,13 +69,35 @@ pnpm 9.15.9はNode.js 24.22.1で`DEP0169`（`url.parse()`）警告を出すが�
 | undici 7.29.0 | [WebSocketサブプロトコルによるDoS](https://github.com/advisories/GHSA-rfgv-xxqx-mfg5)、[BalancedPoolのTLS検証回避](https://github.com/advisories/GHSA-w293-vg96-wgc3) | 7.29.1以上 |
 | brace-expansion 5.0.9 | [ネストしたbraceによるDoS](https://github.com/advisories/GHSA-qhr7-859c-m2p7)、[parseCommaPartsによるDoS](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p) | 5.0.11以上で両方を修正 |
 
-今回の承認済み計画に従い、Node.js互換性に必要な型定義以外の依存更新は行っていない。Node.js本体に含まれるUndiciの更新は、npm依存のundiciを更新するものではない。
+初回移行時点では、承認済み計画に従いNode.js互換性に必要な型定義以外の依存更新は行っていなかった。Node.js本体に含まれるUndiciの更新は、npm依存のundiciを更新するものではない。
 
-CIの監査基準は維持している。この指摘が解消されるまでは監査ステップとテストジョブが失敗し、mainのイメージ公開も停止する。PRのテスト・ビルド・runtime確認は監査が失敗しても前段の準備が成功していれば実行し、各結果を取得する。監査失敗を成功として扱う設定は追加していない。
+CIの監査基準は維持している。初回のPR実行ではこの指摘によって監査ステップとテストジョブが失敗した。PRのテスト・ビルド・runtime確認は監査が失敗しても前段の準備が成功していれば実行し、各結果を取得する。監査失敗を成功として扱う設定は追加していない。
 
 PRのDocker検証は読み取り権限で`push: false`・`load: true`とし、アプリ起動用entrypointを上書きして確認する。DBマイグレーションは実行しない。GHCR公開ジョブはmainへのpushに限定し、Pagesもmainへのpushのみで起動する。
 
-本番デプロイ前には上記監査指摘の解消、LinuxでのBot/APIイメージビルドと実行確認、検証用Discord環境での接続・再生確認が必要。Docker・本番運用の完了条件は未達として扱う。
+初回移行時点では上記監査指摘の解消、LinuxでのBot/APIイメージビルドと実行確認、検証用Discord環境での接続・再生確認が本番デプロイ前の課題として残っていた。
+
+## 監査指摘の修正
+
+PR #45の監査失敗に対する追加の修正指示に従い、ルートの`pnpm.overrides`で`undici`を7.29.1、`minimatch@3>brace-expansion`を1.1.20に固定する。pnpm・discord.js・Prismaなど他の主要依存バージョンと監査基準は維持する。
+
+`undici`は修正済みの最小パッチへ更新する。`brace-expansion`は5.0.11への更新だけでも監査を通過したが、既存のminimatch 3.1.5が要求する関数形式のAPIと互換性がなく、braceを含むパターンで`TypeError: expand is not a function`が発生した。この問題は従来の5系overrideにも存在していたため、依存元の要求する`^1.1.7`に適合し、同じ2件を修正した1.1.20を限定適用する。公式アドバイザリにも1系の修正版として1.1.19・1.1.20が記載されている。
+
+pnpm 9.15.9でロックファイルを更新し、Node.js 24.22.1でfrozen install・監査・全テスト・全体ビルド・runtime確認を再実行した。Botのruntime確認には、Opusのインストール依存が利用するminimatchでのbrace展開も追加した。修正前のTypeErrorを再現し、修正後の正常動作を確認した。
+
+| 再検証 | 結果 |
+|---|---|
+| 通常のinstall・frozen install・Prisma生成 | 成功 |
+| `pnpm audit --prod --audit-level=high` | **成功**。high / criticalは0件。残りはmoderate 18 / low 1 |
+| `pnpm test` / `pnpm build` | 全229テスト・全5ワークスペースの型チェックとビルドが成功 |
+| Bot/API runtime確認 | 成功。Opus・sodium-native・minimatchの互換性を確認 |
+| brace-expansionの深いネスト・繰り返しパース | 公式アドバイザリの入力例でスタックオーバーフローが発生しないことを確認 |
+| npm依存のundiciによる一時HTTPサーバーへのリクエスト | 成功 |
+| ロックファイルの変更範囲 | undici・brace-expansionと、後者の補助依存balanced-match / concat-mapのみ |
+
+brace-expansionの1系へAPI互換性を戻すため、補助依存のbalanced-matchは4.0.4から1.0.2へ変更され、concat-map 0.0.1が追加された。これらはpnpmによる正規の解決結果である。監査の残り19件は今回の高重要度4件の修正対象外で、監査基準を緩和せず残件数を記録している。
+
+初回の[PR CI実行](https://github.com/Sumire-Labs/SumireVox/actions/runs/39966651087)では、Linux上のBot/API本番イメージのビルドとコンテナ内のruntime確認が両方成功した。今回の依存修正後のイメージもPR CIで再検証する。実Discord・DB/Redis・OAuth2・VOICEVOXとの接続は引き続き未検証であり、検証用環境での確認が必要。
 
 ## コミット
 
