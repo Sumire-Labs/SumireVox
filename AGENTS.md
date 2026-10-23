@@ -5,7 +5,7 @@ VOICEVOX 読み上げ Discord Bot、Hono API、React ダッシュボードの pn
 ## 作業前
 
 - 返答は日本語。実装前に対象の `docs/*.md` とパスに対応する `.claude/rules/*.md` を確認し、仕様と scripts/config が食い違う場合は実行設定を優先する。
-- Node.js 22 / pnpm 9.15.9 を使い、コマンドはリポジトリルートから実行する。新機能の仕様変更は対応する docs を先に更新する。
+- Node.js 24.22.1 LTS（24.22.1以上25未満） / pnpm 9.15.9 を使い、コマンドはリポジトリルートから実行する。新機能の仕様変更は対応する docs を先に更新する。
 
 ## Workspace
 

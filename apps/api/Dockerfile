@@ -1,9 +1,11 @@
-FROM node:22-slim AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:24.22.1-slim AS base
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS deps
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+RUN apt-get update && apt-get install -y python3 make g++ libopus-dev && rm -rf /var/lib/apt/lists/*
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/bot/package.json apps/bot/
 COPY packages/shared/package.json packages/shared/
@@ -17,7 +19,7 @@ COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_module
 COPY packages/shared/ packages/shared/
 COPY apps/bot/prisma/ apps/bot/prisma/
 COPY apps/api/ apps/api/
-COPY --from=deps /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml ./
+COPY --from=deps /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.yaml /app/.npmrc ./
 COPY tsconfig.base.json ./
 RUN pnpm --filter @sumirevox/shared build
 RUN ./apps/bot/node_modules/.bin/prisma generate --schema=apps/bot/prisma/schema.prisma

@@ -1,11 +1,11 @@
-FROM node:22-slim AS base
+FROM node:24.22.1-slim AS base
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 RUN apt-get update && apt-get install -y openssl ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS deps
 RUN apt-get update && apt-get install -y python3 make g++ libopus-dev && rm -rf /var/lib/apt/lists/*
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/bot/package.json apps/bot/
 COPY packages/shared/package.json packages/shared/
@@ -36,4 +36,5 @@ COPY apps/api/package.json apps/api/
 COPY apps/bot/package.json apps/bot/
 COPY packages/shared/package.json packages/shared/
 COPY package.json pnpm-workspace.yaml ./
+COPY scripts/check-node-runtime.mjs scripts/
 CMD ["node", "apps/bot/dist/index.js"]
