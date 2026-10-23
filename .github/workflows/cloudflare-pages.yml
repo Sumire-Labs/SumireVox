@@ -7,6 +7,12 @@ on:
       - 'apps/web/**'
       - 'apps/admin/**'
       - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.nvmrc'
+      - 'tsconfig.base.json'
       - '.github/workflows/cloudflare-pages.yml'
 jobs:
   test:
@@ -21,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.1'
           cache: 'pnpm'
       - name: Install dependencies
         run: |
@@ -52,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.1'
           cache: 'pnpm'
       - name: Install dependencies
         run: |
@@ -93,7 +99,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.1'
           cache: 'pnpm'
       - name: Install dependencies
         run: |

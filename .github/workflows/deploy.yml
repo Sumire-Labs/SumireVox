@@ -1,5 +1,8 @@
 name: Build and Push Docker Images
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -9,7 +12,14 @@ on:
       - 'packages/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - '.nvmrc'
+      - 'tsconfig.base.json'
+      - 'scripts/check-node-runtime.mjs'
       - '.github/workflows/deploy.yml'
+permissions:
+  contents: read
 env:
   REGISTRY: ghcr.io
   API_IMAGE: ghcr.io/sumire-labs/sumirevox-api
@@ -17,6 +27,7 @@ env:
 jobs:
   changes:
     name: Detect changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       api: ${{ steps.filter.outputs.api }}
@@ -32,15 +43,27 @@ jobs:
               - 'packages/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.npmrc'
+              - '.nvmrc'
+              - 'tsconfig.base.json'
+              - 'scripts/check-node-runtime.mjs'
+              - '.github/workflows/deploy.yml'
             bot:
               - 'apps/bot/**'
               - 'packages/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.npmrc'
+              - '.nvmrc'
+              - 'tsconfig.base.json'
+              - 'scripts/check-node-runtime.mjs'
+              - '.github/workflows/deploy.yml'
   build-api:
     name: Build API Image
     needs: [changes, test]
-    if: needs.changes.outputs.api == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -69,7 +92,7 @@ jobs:
   build-bot:
     name: Build Bot Image
     needs: [changes, test]
-    if: needs.changes.outputs.bot == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.bot == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -107,7 +130,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.22.1'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -116,10 +139,50 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @sumirevox/bot exec prisma generate
       - name: Build shared package
+        id: shared
         run: pnpm --filter @sumirevox/shared build
       - name: Security audit
         run: pnpm audit --prod --audit-level=high
       - name: Run tests
+        id: tests
+        if: ${{ !cancelled() && steps.shared.outcome == 'success' }}
         run: pnpm test
       - name: Build check
+        id: build
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
         run: pnpm build
+      - name: Check runtime and native dependencies
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          node scripts/check-node-runtime.mjs bot
+          node scripts/check-node-runtime.mjs api
+  check-docker:
+    name: Check ${{ matrix.app }} production image
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [bot, api]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile.prod
+          push: false
+          load: true
+          tags: sumirevox-${{ matrix.app }}:check
+          cache-from: type=gha
+      - name: Check image runtime without starting the application
+        env:
+          APP: ${{ matrix.app }}
+        run: |
+          docker run --rm --entrypoint node "sumirevox-$APP:check" --version
+          docker run --rm --entrypoint pnpm "sumirevox-$APP:check" --version
+          docker run --rm --network none --entrypoint node "sumirevox-$APP:check" scripts/check-node-runtime.mjs "$APP"
