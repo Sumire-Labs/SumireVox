@@ -1,6 +1,6 @@
 # Node.js 24 LTS 移行・検証記録
 
-検証日: 2026-10-23。起点: `origin/main`の`6593b01`。作業ブランチ: `chore/upgrade-node-24`。
+検証日: 2026-10-23。起点: `origin/main`の`6593b01`。作業ブランチ: `issue/upgrade-node-24`。
 
 ## 変更内容
 
@@ -54,7 +54,7 @@ Node.js自体のセキュリティ修正は[24.22.1の公式リリース](https:
 | `pnpm audit --prod --audit-level=high` | **失敗**。既存の高重要度4件を含む31件 |
 | Bot/API本番Dockerビルド | **未検証**。両コマンドともDockerデーモンに接続できずビルド開始前に終了 |
 | 開発用Docker・migrate・Web/Admin Dockerビルド | **未検証**。同じDocker環境制約 |
-| GitHub Actions上での実行 | **未実施**。push・PR作成は行っていない |
+| GitHub Actions上での実行 | **未実施**。mainへのpush・PR作成は行っていない |
 
 既存テストの内訳はshared 27、Bot 104、API 89、Web 7、Admin 2。Stripe Webhook、Discord API、権限、設定更新など既存モックテストが含まれる。実Discordログイン・シャードspawn・VC接続/音声再生、実DB/Redis連携、実OAuth2ログイン、実VOICEVOXエンジンとの通信は未検証。一時Honoサーバーの確認はHTTPアダプターの検証であり、DB接続を伴う実APIの起動確認ではない。
 
@@ -82,4 +82,4 @@ PRのDocker検証は読み取り権限で`push: false`・`load: true`とし、�
 - `f4b7f1c`: `chore: upgrade Node.js runtime and types to 24 LTS`
 - `595f6a0`: `ci: validate Node.js 24 builds on pull requests`
 
-push、本番デプロイ、稼働サービスの再起動は行っていない。元の作業ブランチと未pushの2コミットは保持した。
+mainへのpush、本番デプロイ、稼働サービスの再起動は行っていない。元の作業ブランチと未pushの2コミットは保持した。
