@@ -1,6 +1,6 @@
 # Node.js 24 LTS 移行・検証記録
 
-検証日: 2026-10-23。起点: `origin/main`の`6593b01`。作業ブランチ: `codex/upgrade-node-24`。
+検証日: 2026-10-23。起点: `origin/main`の`6593b01`。作業ブランチ: `chore/upgrade-node-24`。
 
 ## 変更内容
 
