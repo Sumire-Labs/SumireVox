@@ -82,8 +82,8 @@ sumirevox/
 
 ## 必要環境
 
-- Node.js 22+
-- pnpm 9+
+- Node.js 24.22.1 LTS（24.22.1以上25未満）
+- pnpm 9.15.9
 - Docker & Docker Compose
 - Discord Bot Token（[Discord Developer Portal](https://discord.com/developers/applications)）
 - NVIDIA GPU（VOICEVOX の GPU 推論を使う場合。CPU 版を使う場合は `docker-compose.yml` の `voicevox` イメージを `voicevox/voicevox_engine:cpu-latest` に変更）
@@ -95,10 +95,16 @@ sumirevox/
 ```bash
 git clone <repo-url>
 cd sumirevox
+nvm install
+nvm use
+corepack enable
+corepack prepare pnpm@9.15.9 --activate
 pnpm run setup
 ```
 
 `pnpm run setup` は `.env` の雛形生成 → 依存インストール → Prisma Client 生成を一括で行います。
+
+上記はnvmを使用する場合の例です。ほかのバージョン管理ツールを使用する場合も、`.nvmrc`に指定されたNode.jsとpnpm 9.15.9を使用してください。
 
 ### 2. 環境変数の設定
 

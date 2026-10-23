@@ -2,6 +2,9 @@
   "name": "sumirevox",
   "private": true,
   "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
   "scripts": {
     "dev:bot": "pnpm --filter @sumirevox/bot dev",
     "dev:api": "pnpm --filter @sumirevox/api dev",
