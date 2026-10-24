@@ -50,25 +50,18 @@ for (const production of [false, true]) {
     assert.ok(existsSync(config), 'Run this check from the repository root');
     docker('network', 'create', network);
     networkCreated = true;
-    const [networkInfo] = JSON.parse(docker('network', 'inspect', network));
-    const subnet = networkInfo.IPAM.Config.find((entry) => entry.Subnet?.includes('.'))?.Subnet;
-    assert.ok(subnet, 'The fixture requires an IPv4 network');
-    const [base, bits] = subnet.split('/');
-    assert.ok(Number(bits) <= 28, 'The fixture requires space for distinct API addresses');
-    const baseNumber = base.split('.').reduce((value, octet) => value * 256 + Number(octet), 0);
-    const ip = (offset) => [24, 16, 8, 0].map((shift) => ((baseNumber + offset) >>> shift) & 255).join('.');
-    const startFixture = (suffix, aliases, port, address) => {
+    const startFixture = (suffix, aliases, port) => {
       const container = `${prefix}-${suffix}`;
       containers.add(container);
       docker('run', '-d', '--name', container, '--network', network,
-        ...(address ? ['--ip', address] : []),
         ...aliases.flatMap((alias) => ['--network-alias', alias]),
         images.fixture, 'node', '-e', fixture, String(port), suffix);
       return container;
     };
-    const firstApi = startFixture('api-before', ['api'], 3000, ip(10));
+    const firstApi = startFixture('api-before', ['api'], 3000);
     const [first] = JSON.parse(docker('inspect', firstApi));
-    assert.equal(first.NetworkSettings.Networks[network].IPAddress, ip(10));
+    const firstAddress = first.NetworkSettings.Networks[network].IPAddress;
+    assert.ok(firstAddress, 'The original API must have an IPv4 address');
     if (!production) startFixture('frontend', ['web', 'admin'], 80);
     const mountTarget = production ? '/etc/nginx/nginx.conf' : '/etc/nginx/conf.d/default.conf';
     containers.add(nginx);
@@ -149,13 +142,16 @@ for (const production of [false, true]) {
         });
       }
     }
+    // Reserve the original IP until Docker allocates a different one to the replacement.
+    // No requests are sent while both containers share the api alias.
+    const secondApi = startFixture('api-after', ['api'], 3000);
+    const [second] = JSON.parse(docker('inspect', secondApi));
+    const secondAddress = second.NetworkSettings.Networks[network].IPAddress;
+    assert.ok(secondAddress, 'The replacement API must have an IPv4 address');
+    assert.notEqual(secondAddress, firstAddress, 'The replacement API must use a different IP');
     const deadline = Date.now() + 30_000;
     docker('rm', '-f', firstApi);
     containers.delete(firstApi);
-    const secondApi = startFixture('api-after', ['api'], 3000, ip(11));
-    const [second] = JSON.parse(docker('inspect', secondApi));
-    assert.equal(second.NetworkSettings.Networks[network].IPAddress, ip(11));
-    assert.notEqual(ip(10), ip(11));
     // Keep the same Nginx process: no restart or reload is allowed during this check.
     await waitForHealth('api-after', deadline);
     await checkApi('api-after');
