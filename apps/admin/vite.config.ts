@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   build: {
-    target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
+    target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     rolldownOptions: {
       output: {
         codeSplitting: {

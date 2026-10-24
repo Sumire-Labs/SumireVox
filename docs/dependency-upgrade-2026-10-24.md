@@ -133,3 +133,14 @@ lockfileを一度ゼロから再解決して、既存lockの残留による未�
 6. 反映時は旧Bot/APIイメージのdigest、設定ファイル、Stripe endpoint設定を保存する。不具合時は旧イメージと設定に戻す。DBのdown migrationやresetは不要で、現在のデータとoutboxを保持する。Webhook endpointを新形式に切り替えた場合、旧アプリへ戻す前にendpointも旧版へ戻すか、この互換ハンドラーを残す。支払いイベントやBoostレコードを手動削除しない。
 
 ローカルの実ブラウザーではWebのホーム→コマンド遷移とAdminのログイン必須画面を確認し、コンソールエラーなし。ログイン後のフォーム全操作、実Discordの音声、実VOICEVOX/GPU、Stripe Sandbox/本番、外部TLS DB/Redis、Cloudflareへの実公開は未検証。
+
+## 最終検証記録
+
+- Node.js 24.22.1 / pnpm 9.15.9でfrozen install、Prisma生成、全248テスト（既存229 + 回帰19）、全5workspaceのビルド、Bot/API runtime検証が成功。
+- PostgreSQL 16の隔離DBで9件の既存migration・冪等性・JSON/日時/リレーション・P2002/P2025/P2034・Serializable・ロールバックが成功。
+- Redis 7の隔離環境でRESP3のTTL/NXロック/JSONキャッシュ/MGET/Lua/PubSubが成功。
+- 本番依存のみ／開発依存込みの両方で監査の全深刻度が0件。
+- ローカルでBot/APIの通常版・本番版Dockerビルドと各コンテナのruntime検証が成功。GitHubのLinux runnerでも同じ4種類を検証。
+- [d98c246の通常CI](https://github.com/Sumire-Labs/SumireVox/actions/runs/40079599518)は全必要ジョブが成功。main専用の公開ジョブは意図通りskip。旧失敗run `40077734402`と混同しない。最新headの結果は[PR Checks](https://github.com/Sumire-Labs/SumireVox/pull/46/checks)を参照。
+- 最終差分で元mainのViteが6系と確認したため、ブラウザーのJavaScript targetは途中のVite 7既定値ではなく、更新前のVite 6既定値へ合わせた。公式根拠: https://v6.vite.dev/config/build-options#build-target
+- 全633種類をregistryと照合。147種類には旧版を要求する上流制約等があり、独立した最新安定版との相違を依存一覧に明示した。すべての推移依存が最新、またはプレリリース0件、とは報告しない。
