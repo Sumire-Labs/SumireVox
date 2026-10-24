@@ -6,7 +6,7 @@
 - pnpmは9.15.9に固定する。ローカルのNode.js指定はルートの`.nvmrc`を参照する。
 - DockerのNode.jsステージは`node:24.22.1-slim`を共通のベースにする。Web/Adminの静的配信は引き続きnginxを使用する。
 - PRではNode.js 24.22.1で全テスト・全ワークスペースのビルドとBot/API本番イメージの検証を行う。GHCR公開とCloudflare Pagesデプロイはmainへのpush時だけ実行する。
-- `node scripts/check-node-runtime.mjs bot` / `api`でビルド成果物、Prisma Client、ネイティブ音声依存またはHTTPサーバーを確認する。DB接続・マイグレーション・Discord接続は実行しない。
+- `node scripts/check-node-runtime.mjs bot` / `api`でビルド成果物、Prisma Client、ネイティブ音声依存またはHTTPサーバーを確認する。BotではHTTP/2対応のローカルTLSサーバーに対するDiscord RESTの互換性も確認する。DB接続・マイグレーション・実Discord接続は実行しない。
 
 ## docker-compose 構成 (8サービス)
 
@@ -22,6 +22,10 @@
 | certbot | certbot/certbot | Let's Encrypt 証明書取得・更新 |
 
 全サービスに `restart: unless-stopped`（migrate と certbot を除く）。migrate は `restart: "no"`、bot と api は `depends_on: migrate: condition: service_completed_successfully`。
+
+## リバースプロキシの名前解決
+
+NginxはDocker DNS (`127.0.0.11`, キャッシュ10秒) と変数による `proxy_pass` でコンテナのIP変更に追従する。設定はホストからのマウントであり、Bot/APIイメージの更新では反映されない。`node scripts/check-nginx-routing.mjs` で通常版・本番版のAPI再作成後の復帰を検証する。[停止障害の復旧手順](outage-recovery-2026-10-24.md) を参照。
 
 ## シャーディング
 
