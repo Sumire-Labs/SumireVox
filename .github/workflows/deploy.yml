@@ -33,8 +33,8 @@ jobs:
       api: ${{ steps.filter.outputs.api }}
       bot: ${{ steps.filter.outputs.bot }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - uses: actions/checkout@v7.0.1
+      - uses: dorny/paths-filter@v4.0.3
         id: filter
         with:
           filters: |
@@ -69,17 +69,17 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4.4.1
       - name: Build and push API image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           file: apps/api/Dockerfile.prod
@@ -98,17 +98,17 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4.4.1
       - name: Build and push Bot image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
           file: apps/bot/Dockerfile.prod
@@ -121,14 +121,28 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: sumirevox-test-only
+          POSTGRES_DB: sumirevox_upgrade_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6.1.0
         with:
           version: 9.15.9
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24.22.1'
           cache: 'pnpm'
@@ -151,13 +165,23 @@ jobs:
         id: build
         if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
         run: pnpm build
+      - name: Check PostgreSQL migrations and Prisma operations
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node scripts/check-prisma-compatibility.mjs
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:sumirevox-test-only@127.0.0.1:5432/sumirevox_upgrade_test
+      - name: Check Redis sessions and Pub/Sub
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node scripts/check-redis-compatibility.mjs
+        env:
+          TEST_REDIS_URL: redis://127.0.0.1:6379/15
       - name: Check runtime and native dependencies
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           node scripts/check-node-runtime.mjs bot
           node scripts/check-node-runtime.mjs api
   check-docker:
-    name: Check ${{ matrix.app }} production image
+    name: Check ${{ matrix.app }} ${{ matrix.dockerfile }} image
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -166,23 +190,25 @@ jobs:
       fail-fast: false
       matrix:
         app: [bot, api]
+        dockerfile: [Dockerfile, Dockerfile.prod]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4.4.1
       - name: Build image without publishing
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7.4.0
         with:
           context: .
-          file: apps/${{ matrix.app }}/Dockerfile.prod
+          file: apps/${{ matrix.app }}/${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: sumirevox-${{ matrix.app }}:check
+          tags: sumirevox-${{ matrix.app }}:${{ matrix.dockerfile }}-check
           cache-from: type=gha
       - name: Check image runtime without starting the application
         env:
           APP: ${{ matrix.app }}
+          IMAGE: sumirevox-${{ matrix.app }}:${{ matrix.dockerfile }}-check
         run: |
-          docker run --rm --entrypoint node "sumirevox-$APP:check" --version
-          docker run --rm --entrypoint pnpm "sumirevox-$APP:check" --version
-          docker run --rm --network none --entrypoint node "sumirevox-$APP:check" scripts/check-node-runtime.mjs "$APP"
+          docker run --rm --workdir /app --entrypoint node "$IMAGE" --version
+          docker run --rm --workdir /app --entrypoint pnpm "$IMAGE" --version
+          docker run --rm --workdir /app --network none --entrypoint node "$IMAGE" scripts/check-node-runtime.mjs "$APP"

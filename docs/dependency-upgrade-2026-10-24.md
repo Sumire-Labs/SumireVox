@@ -42,3 +42,9 @@ PR #46 / `chore/upgrade-all-deps-20261024` を継続する。npm registry の公
 回帰テストは新旧payload、支払い成功/失敗、数量増減、返金対象の特定・全ページ処理・重複排除、部分返金、APIの一時失敗、期限欠落、手動同期と定期整合の期限更新を検証する。
 
 参考: https://docs.stripe.com/changelog/clover/2025-09-30/billing-mode-default-flexible
+
+## CI の整理
+
+`.github/workflows/dependency-refresh.yml` を削除し、自動更新コミットの再発を防ぐ。通常CIではPostgreSQL 16 / Redis 7のローカルテストサービスを使い、migration・DB例外・RESP3のセッション/ロック/PubSubを検証する。Docker検証はBot/API × 通常版/本番版の4種類。イメージはPRで公開せず、アプリ起動時のmigrationも実行しない。
+
+GitHub Actionsは公式最新安定リリースのcheckout 7.0.1、setup-node 7.1.0、pnpm/action-setup 6.1.0、paths-filter 4.0.3、docker/login-action 4.7.0、setup-buildx-action 4.4.1、build-push-action 7.4.0に統一。Pages用Wranglerは4.152.0をルート開発依存としてlockし、`pnpm exec wrangler`を使う。`pages deploy --help`でCLI互換性を確認し、公開操作は実行していない。
