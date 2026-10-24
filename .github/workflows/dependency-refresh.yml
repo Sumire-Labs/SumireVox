@@ -38,9 +38,9 @@ jobs:
           function latestStable(name) {
             if (cache.has(name)) return cache.get(name);
             // Prisma CLI's current "latest" tag is an incompatible 8.0 release candidate.
-            // Match the stable Prisma 7 client instead.
+            // Remain on the latest Prisma 6 for schema and runtime compatibility.
             const selector = name === "prisma" || name === "@prisma/client"
-              ? name + "@7"
+              ? name + "@6"
               : name === "@types/node" ? name + "@24" : name + "@latest";
             const output = execFileSync("npm", ["view", selector, "version", "--json"], {
               encoding: "utf8", timeout: 90000,
