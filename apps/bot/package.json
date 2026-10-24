@@ -3,26 +3,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "dev": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
-    "deploy-commands": "dotenv -e ../../.env -- tsx src/deploy-commands.ts",
+    "deploy-commands": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- tsx src/deploy-commands.ts",
     "test": "vitest run",
-    "prisma:generate": "dotenv -e ../../.env -- prisma generate",
-    "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
-    "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
-    "prisma:studio": "dotenv -e ../../.env -- prisma studio"
+    "prisma:generate": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- prisma generate",
+    "prisma:migrate:dev": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- prisma migrate dev",
+    "prisma:migrate:deploy": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- prisma migrate deploy",
+    "prisma:studio": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- prisma studio"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "7.10.1",
     "@sumirevox/shared": "workspace:*",
     "discord.js": "^14.27.0",
     "dotenv": "^18.0.9",
     "emojibase-data": "^18.0.0",
     "ioredis": "^6.0.0",
     "pino": "^10.4.0",
-    "prisma": "^6.19.3",
-    "wanakana": "^5.3.1"
+    "prisma": "7.10.1",
+    "wanakana": "^5.3.1",
+    "@prisma/adapter-pg": "7.10.1"
   },
   "optionalDependencies": {
     "@discordjs/opus": "^0.10.0",

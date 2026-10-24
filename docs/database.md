@@ -135,3 +135,11 @@
 | publishedAt | DateTime? | 公開日時。未来日時で予約公開可能 |
 | createdAt | DateTime | 作成日時 |
 | updatedAt | DateTime | 更新日時 |
+
+## Prisma 7 接続設定
+
+Prisma CLI / Client / PostgreSQL adapter は同じ `7.10.1` を使う。スキーマの接続URLは `apps/bot/prisma.config.ts` に移し、Bot/APIの実行時は設定モジュールの `DATABASE_URL` を `PrismaPg` に渡す。テーブル、カラム、既存migrationは変更しない。
+
+`databaseConnectionConfig` は既存URLの `connection_limit`（Bot 3 / API 5）と `schema` を引き継ぐ。pgの単一接続待機タイムアウトへ `pool_timeout`（指定時）、それ以外は `connect_timeout`（既定5秒）を適用する。アイドル寿命は既定300秒、接続寿命は既定無制限。URLに接続数指定がない場合はpgの既定10接続となる。TLSオプションは接続文字列に残す。
+
+`TEST_DATABASE_URL` にローカルの専用DB `sumirevox_upgrade_test` を指定して `node scripts/check-prisma-compatibility.mjs` を実行すると、新規のランダムスキーマ内だけで既存migration、JSON/日時/リレーション、トランザクションと既知例外を検証する。既存DBや本番の認証情報は利用しない。

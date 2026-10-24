@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y python3 make g++ libopus-dev && rm -rf 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY apps/bot/package.json apps/bot/
 COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile
+RUN PRISMA_SKIP_POSTINSTALL_GENERATE=true pnpm install --frozen-lockfile
 
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
@@ -29,11 +29,13 @@ COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/bot/package.json ./apps/bot/
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
+COPY --from=build /app/apps/bot/prisma.config.ts ./apps/bot/prisma.config.ts
 ENV NODE_ENV=production
 WORKDIR /app/apps/bot
-CMD ["npx", "prisma", "migrate", "deploy"]
+CMD ["pnpm", "exec", "prisma", "migrate", "deploy"]
 
 FROM base AS runner
+COPY scripts/check-node-runtime.mjs /app/scripts/
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/bot/node_modules ./apps/bot/node_modules
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
@@ -41,6 +43,7 @@ COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/apps/bot/dist ./apps/bot/dist
 COPY --from=build /app/apps/bot/package.json ./apps/bot/
 COPY --from=build /app/apps/bot/prisma ./apps/bot/prisma
+COPY --from=build /app/apps/bot/prisma.config.ts ./apps/bot/prisma.config.ts
 COPY --from=build /app/apps/bot/assets ./apps/bot/assets
 ENV NODE_ENV=production
 WORKDIR /app/apps/bot

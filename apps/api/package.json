@@ -3,23 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "dotenv -e ../../.env -- tsx watch src/index.ts",
+    "dev": "node ./node_modules/dotenv-cli/cli.js -e ../../.env -- tsx watch src/index.ts",
     "build": "tsc",
     "test": "vitest run --passWithNoTests",
-    "prisma:generate": "prisma generate --schema=../bot/prisma/schema.prisma"
-  },
-  "prisma": {
-    "schema": "../bot/prisma/schema.prisma"
+    "prisma:generate": "pnpm --filter @sumirevox/bot prisma:generate"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "7.10.1",
     "@sumirevox/shared": "workspace:*",
     "hono": "4.13.13",
     "ioredis": "^6.0.0",
     "pino": "^10.4.0",
     "stripe": "^23.0.1",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "prisma": "7.10.1",
+    "@prisma/adapter-pg": "7.10.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",

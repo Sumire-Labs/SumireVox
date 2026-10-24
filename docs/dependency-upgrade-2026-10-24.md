@@ -27,3 +27,10 @@ PR #46 / `chore/upgrade-all-deps-20261024` を継続する。npm registry の公
 ## 検証と本番移行
 
 実行結果・全依存一覧・制約・手動検証とロールバック手順は検証後に追記する。本番へのSSH、DBリセット、本番migration、マージ、デプロイは禁止。VOICEVOXのdigest固定とWatchtower除外を解除しない。既存Composeのlatestタグは本番の固定済み設定に上書き適用しない。
+
+## Prisma / ランタイム検証
+
+- PostgreSQL 16の隔離コンテナで既存9件のmigrationを適用し、再適用の冪等性を確認。Bot/APIのClient共有、JSONと日時、リレーション、Serializable、ロールバック、P2002/P2025/P2034を確認する専用スクリプトを追加。
+- Dockerの通常版/本番版でconfigを明示してClientを生成する。API起動時のmigrationも同じconfigを使用する。
+- dotenv 18で同名の`dotenv`バイナリが追加されたため、既存dotenv-cliのJSエントリを明示し、ルート.envの読み込みと変数展開を維持する。
+- Undici 8.12.3へのoverride後、実際のDiscord RESTクライアントからローカルHTTPへのGET/PUT、シャーディング初期化、Opusの符号化/復号、sodium暗号化を確認。
