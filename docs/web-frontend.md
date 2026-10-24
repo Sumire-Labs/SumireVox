@@ -66,3 +66,7 @@ Bot 管理者 (BOT_ADMIN_USER_IDS) のみ。
 - HeroUI のテーマ設定 (カラーパレット等) と Tailwind 基本設定のみ共有
 - 共通 UI パッケージは設けない (将来必要なら packages/ui/ を切り出し)
 - 認証: Discord OAuth2 → Cookie セッション
+
+## Vite 8 のビルド互換性
+
+チャンク分割はRolldownの `codeSplitting.groups` に移行し、React / Router / HeroUI / Motionの分割を維持する。Vite 8の既定値変更で対応ブラウザーが狭まらないよう、JavaScriptのtargetはVite 7相当のChrome/Edge 107・Firefox 104・Safari 16を明示する。Web/Admin双方に同じ方針を適用する。
