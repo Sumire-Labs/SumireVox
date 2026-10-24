@@ -33,7 +33,17 @@ PR #46 / `chore/upgrade-all-deps-20261024` を継続する。npm registry の公
 - PostgreSQL 16の隔離コンテナで既存9件のmigrationを適用し、再適用の冪等性を確認。Bot/APIのClient共有、JSONと日時、リレーション、Serializable、ロールバック、P2002/P2025/P2034を確認する専用スクリプトを追加。
 - Dockerの通常版/本番版でconfigを明示してClientを生成する。API起動時のmigrationも同じconfigを使用する。
 - dotenv 18で同名の`dotenv`バイナリが追加されたため、既存dotenv-cliのJSエントリを明示し、ルート.envの読み込みと変数展開を維持する。
-- Undici 8.12.3へのoverride後、実際のDiscord RESTクライアントからローカルHTTPへのGET/PUT、シャーディング初期化、Opusの符号化/復号、sodium暗号化を確認。
+- Undici 8.12.3へのoverride時のDiscord REST検証はローカルHTTP/1.1へのGET/PUTのみだった。HTTP/2を提供するDiscordでの互換性は確認できておらず、後述の起動障害を検出できなかった。シャーディング初期化もmanagerの構築のみで、ログイン・ready到達は未検証。
+
+## 2026-10-24 Discord起動障害の修正
+
+報告書ではUndici 8.12.3のHTTP/2応答ヘッダーに含まれる `Symbol(sensitiveHeaders)` を、`@discordjs/rest` が `new Headers(res.headers)` に渡すことでBotが起動時に停止している。Discord関連の2つの依存経路をUndici 6.29.1へ限定固定し、他の依存は8.12.3を維持する。Bot本体への独自dispatcherやHTTP/1.1強制設定は追加しない。
+
+`check-node-runtime.mjs bot` にHTTP/2・HTTP/1.1両対応のローカルTLSサーバーを追加する。テスト専用証明書をCAとして信頼し、実際のDiscord RESTとその依存から解決したAgentの既定動作でGET/PUT、ヘッダー変換、本文処理を検証する。HTTP/2を提供するサーバーに対してもHTTP/1.1が選択され、Discord側のUndiciが6.29.1であることを確認する。TLS検証は無効化せず、Discordへの接続やトークンは使わない。
+
+根拠: [Undici 8のHTTP/2既定値変更](https://undici.nodejs.org/best-practices/migrating-from-v7-to-v8)、[セキュリティ修正を含む6.29.1](https://github.com/nodejs/undici/releases/tag/v6.29.1)。本番4 Botのready到達・再起動回数の安定・実際の読み上げは本作業では未検証。
+
+今回の検証では、修正前のBotイメージ（Undici 8.12.3）に同じTLS回帰テストを適用し、報告書と同じ `Symbol(sensitiveHeaders)` の例外を再現した。修正後はNode.js 24.22.1 / pnpm 9.15.9でfrozen install、Prisma生成、本番依存監査（既知の脆弱性0件）、全289テスト、全workspaceビルド、Bot/APIのローカルruntime確認が成功した。通常版・本番版のBotイメージでも、外部ネットワークを無効にしてTLS回帰テストとOpus/sodiumのruntime確認が成功した。
 
 ## Stripe の移行
 
@@ -106,7 +116,7 @@ mainとの差分。未変更の最新安定版も含む。`@types/node`はNode 2
 
 lockfileを一度ゼロから再解決して、既存lockの残留による未更新でないことを確認した。既存のeffect / defu / lodash / brace-expansion / deepmerge-tsのoverrideは削除し、上流の指定を優先しても監査0件であることを確認した。
 
-- `undici=8.12.3`: Discordの旧メジャー要求に対して最新安定版を適用。実Discord REST経由のHTTP GET/PUTとnative runtimeを検証。
+- `undici=8.12.3`: Discord以外の依存向けに維持する。`discord.js>undici` と `@discordjs/rest>undici` は要求範囲 `^6.27.0` に適合する `6.29.1` に限定固定する。8系へのメジャー差し替えは撤回する。
 - `tar>=7.5.22 <8`: Opusのnode-pre-gypは古い6系要求のため、修正済み7系overrideを維持。LinuxとmacOSのnative build / 符号化・復号を検証。
 - `ws=8.22.0`: Wrangler配下の古いexact pinも修正版へ統一。
 - `@visx/{curve,event,grid,group,point,responsive,scale,shape,vendor}=4.0.0`: Prisma Studioのalpha固定を最新安定版で置換。隔離DB上でStudioを起動し、テーブルの読込・外部キーの関連図表示をブラウザーで確認。コンソールエラーなし。

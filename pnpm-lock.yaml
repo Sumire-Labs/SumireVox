@@ -6,6 +6,8 @@ settings:
 
 overrides:
   undici: 8.12.3
+  discord.js>undici: 6.29.1
+  '@discordjs/rest>undici': 6.29.1
   tar: '>=7.5.22 <8'
   '@visx/curve': 4.0.0
   '@visx/event': 4.0.0
@@ -3196,6 +3198,10 @@ packages:
   undici-types@7.24.6:
     resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
 
+  undici@6.29.1:
+    resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
+    engines: {node: '>=18.17'}
+
   undici@8.12.3:
     resolution: {integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==}
     engines: {node: '>=22.19.0'}
@@ -3517,7 +3523,7 @@ snapshots:
       discord-api-types: 0.38.57
       magic-bytes.js: 1.13.1
       tslib: 2.8.1
-      undici: 8.12.3
+      undici: 6.29.1
 
   '@discordjs/util@1.2.0':
     dependencies:
@@ -4918,7 +4924,7 @@ snapshots:
       lodash.snakecase: 4.1.1
       magic-bytes.js: 1.13.1
       tslib: 2.8.1
-      undici: 8.12.3
+      undici: 6.29.1
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -6402,6 +6408,8 @@ snapshots:
       '@typescript/typescript-win32-x64': 7.0.2
 
   undici-types@7.24.6: {}
+
+  undici@6.29.1: {}
 
   undici@8.12.3: {}
 
