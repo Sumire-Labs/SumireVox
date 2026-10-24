@@ -24,7 +24,8 @@
     "db:migrate:deploy": "pnpm --filter @sumirevox/bot prisma:migrate:deploy",
     "db:studio": "pnpm --filter @sumirevox/bot prisma:studio",
     "db:generate": "pnpm --filter @sumirevox/bot prisma:generate",
-    "setup": "bash scripts/setup-env.sh && pnpm install && pnpm db:generate"
+    "setup": "bash scripts/setup-env.sh && pnpm install && pnpm db:generate",
+    "stripe:test": "node scripts/stripe-test.mjs"
   },
   "pnpm": {
     "overrides": {
