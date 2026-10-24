@@ -88,3 +88,15 @@ Webhook 配信失敗や遅延による DB と Stripe の不整合を修復する
 - DB 上の設定値は保持 (再度 PREMIUM で復帰)
 - 読み上げ時に FREE 上限でクランプ
 - 辞書エントリは削除しないが、上限超過時は新規追加禁止
+
+## Stripe 23 との互換性
+
+APIへのリクエストは `2026-09-30.endive`。API更新で新規契約の課金方式が暗黙に変わらないよう、Checkoutは `subscription_data.billing_mode.type = classic` を明示する。価格・数量・日割り計算・期末解約の既存動作を維持し、契約をflexibleへ移行しない。
+
+課金期間はBoost数量と同じ先頭subscription itemの `current_period_end` を使用する。旧Webhook/outboxに残るsubscription直下の期限も読み取る。期限の欠落時は無効な日時をDBに保存せず、outboxの再試行対象とする。
+
+Invoiceと契約の関連は `parent.subscription_details.subscription`、新しいChargeとInvoiceの関連はPaymentIntentを指定したInvoice Payments一覧から解決する。全ページを確認し、対象の契約を重複排除する。旧Chargeのinvoice、旧Invoiceのsubscription、展開済みオブジェクトのIDにも対応する。顧客IDによる契約の代替検索は行わない。全ページの支払いが同じ契約に対応すると確認できた場合だけ自動解約する。複数契約、契約外のInvoiceとの混在、関連欠落は `stripe_refund_unresolved` の警告ログ（eventId / chargeId / paymentIntentId）で運用検知し、手動調査する。関連取得APIの一時障害はoutboxへ伝播し再試行する。部分返金はBoostを変更せず、全額返金は安全に特定した契約の解除・Boost削除・premiumキャッシュ無効化を行う。
+
+返金時はStripeの解約成功、既に `canceled`、または取得APIの404を確認してからDBトランザクションでCANCELEDへの更新とBoost削除を行う。解約APIの404は再取得でcanceled/404を確認する。取得結果がactiveなら再試行し、DBを変更しない。500/429/ネットワーク障害やその他のエラーもDB更新前にoutboxへ伝播する。Stripe解約後にDB更新が失敗しても、再試行時に解約済み状態を確認して同じトランザクションを実行できる。404時のCANCELED化は定期整合処理の方針と一致する。
+
+Webhook endpointの設定はアプリのSDK更新では自動変更されない。テスト環境で新旧payloadを確認してから手動で変更する。既存outboxの削除・書換えは不要。

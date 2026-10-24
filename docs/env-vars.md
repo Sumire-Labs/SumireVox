@@ -32,3 +32,5 @@
 | API_DOMAIN | API サーバーの公開ドメイン | http://localhost:3000 |
 | WEB_DOMAIN | メインサイトドメイン | http://localhost:5173 |
 | ADMIN_DOMAIN | 管理者ダッシュボードドメイン | http://localhost:5174 |
+
+Stripe Sandbox用の分離設定と起動手順は [stripe-testing.md](stripe-testing.md) を参照。専用設定 `.env.stripe-test.local` は通常の `.env` と分け、Git管理しない。

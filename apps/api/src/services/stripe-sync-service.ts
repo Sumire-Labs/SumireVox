@@ -1,3 +1,4 @@
+import { stripeSubscriptionPeriodEnd } from './stripe-billing-data.js';
 import type Stripe from 'stripe';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
@@ -96,7 +97,7 @@ async function syncSingleSubscription(
           stripeCustomerId: customerId,
           stripeSubscriptionId: stripeSub.id,
           status,
-          currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+          currentPeriodEnd: stripeSubscriptionPeriodEnd(stripeSub),
           boostCount,
         },
       });
@@ -120,7 +121,7 @@ async function syncSingleSubscription(
       where: { stripeSubscriptionId: stripeSub.id },
       data: {
         status,
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodEnd: stripeSubscriptionPeriodEnd(stripeSub),
         boostCount,
       },
     });

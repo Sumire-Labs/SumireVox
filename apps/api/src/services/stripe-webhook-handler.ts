@@ -1,3 +1,6 @@
+import { AppError } from '../infrastructure/app-error.js';
+import { stripeRefundSubscriptions } from './stripe-refund-subscriptions.js';
+import { stripeSubscriptionPeriodEnd, stripeInvoiceSubscriptionId, stripeReferenceId } from './stripe-billing-data.js';
 import Stripe from 'stripe';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
@@ -27,22 +30,22 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
   try {
     switch (event.type) {
       case 'checkout.session.completed':
-        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        await handleCheckoutCompleted(event.data.object);
         break;
       case 'invoice.paid':
-        await handleInvoicePaid(event.data.object as Stripe.Invoice);
+        await handleInvoicePaid(event.data.object);
         break;
       case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
+        await handleInvoicePaymentFailed(event.data.object);
         break;
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        await handleSubscriptionUpdated(event.data.object);
         break;
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        await handleSubscriptionDeleted(event.data.object);
         break;
       case 'charge.refunded':
-        await handleChargeRefunded(event.data.object as Stripe.Charge);
+        await handleChargeRefunded(event.data.object, event.id);
         break;
       default:
         logger.debug({ type: event.type }, 'Unhandled webhook event type');
@@ -51,7 +54,11 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
     // リトライ遅延中に対象リソースが Stripe 上で削除済み（resource_missing）の場合も
     // 成功扱いでスキップする。残状態は定期整合処理が修復する。
     if (isStripeResourceMissing(error)) {
-      logger.info({ eventId: event.id, type: event.type }, 'Stripe webhook resource missing, skipping');
+      if (event.type === 'charge.refunded') {
+        logger.warn({ eventId: event.id, chargeId: event.data.object.id }, 'stripe_refund_unresolved: Stripe payment resource missing');
+      } else {
+        logger.info({ eventId: event.id, type: event.type }, 'Stripe webhook resource missing, skipping');
+      }
       return;
     }
 
@@ -62,8 +69,8 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
   const userId = session.metadata?.userId;
   const boostCount = parseInt(session.metadata?.boostCount ?? '0', 10);
-  const subscriptionId = session.subscription as string;
-  const customerId = session.customer as string;
+  const subscriptionId = stripeReferenceId(session.subscription);
+  const customerId = stripeReferenceId(session.customer);
 
   if (!userId || !subscriptionId || !customerId) {
     logger.warn({ sessionId: session.id }, 'Checkout completed but missing metadata');
@@ -82,12 +89,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         status: 'ACTIVE',
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodEnd: stripeSubscriptionPeriodEnd(stripeSubscription),
         boostCount,
       },
       update: {
         status: 'ACTIVE',
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodEnd: stripeSubscriptionPeriodEnd(stripeSubscription),
         boostCount,
       },
     });
@@ -104,7 +111,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-  const subscriptionId = invoice.subscription as string;
+  const subscriptionId = stripeInvoiceSubscriptionId(invoice);
   if (!subscriptionId) return;
 
   const prisma = getPrisma();
@@ -115,7 +122,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
       where: { stripeSubscriptionId: subscriptionId },
       data: {
         status: 'ACTIVE',
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodEnd: stripeSubscriptionPeriodEnd(stripeSubscription),
       },
     });
   });
@@ -124,7 +131,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
 }
 
 async function handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-  const subscriptionId = invoice.subscription as string;
+  const subscriptionId = stripeInvoiceSubscriptionId(invoice);
   if (!subscriptionId) return;
 
   const prisma = getPrisma();
@@ -170,7 +177,7 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription): Pro
       where: { stripeSubscriptionId: subscription.id },
       data: {
         status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodEnd: stripeSubscriptionPeriodEnd(subscription),
         boostCount,
       },
     });
@@ -219,63 +226,56 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   logger.info({ subscriptionId: subscription.id }, 'Subscription deleted, all boosts unassigned');
 }
 
-async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
+/** API errors must escape before entering the local state transaction. */
+async function cancelRefundSubscription(subscriptionId: string): Promise<void> {
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe!.subscriptions.retrieve(subscriptionId);
+  } catch (error) {
+    // Match the reconciler: an absent subscription cannot continue billing.
+    if (isStripeResourceMissing(error)) return;
+    throw error;
+  }
+  if (subscription.status === 'canceled') return;
+
+  try {
+    await stripe!.subscriptions.cancel(subscriptionId);
+  } catch (error) {
+    if (!isStripeResourceMissing(error)) throw error;
+    // A concurrent cancellation can race with retrieve. Confirm actual state;
+    // a cancel endpoint error alone is not evidence that billing has stopped.
+    try {
+      const current = await stripe!.subscriptions.retrieve(subscriptionId);
+      if (current.status === 'canceled') return;
+    } catch (retrieveError) {
+      if (isStripeResourceMissing(retrieveError)) return;
+      throw retrieveError;
+    }
+    throw new AppError('INTERNAL_ERROR', 'Stripe subscription remains active after cancel returned 404', 502);
+  }
+}
+
+async function handleChargeRefunded(charge: Stripe.Charge, eventId: string): Promise<void> {
+  // Partial refunds never revoke boosts and do not require further Stripe lookups.
+  if (charge.amount_refunded < charge.amount) {
+    logger.info({ eventId, chargeId: charge.id }, 'Partial refund detected, no automatic boost changes applied');
+    return;
+  }
+  const subscriptionIds = await stripeRefundSubscriptions(stripe!, charge);
+  if (subscriptionIds.length === 0) {
+    logger.warn({ eventId, chargeId: charge.id, paymentIntentId: stripeReferenceId(charge.payment_intent) },
+      'stripe_refund_unresolved: missing or ambiguous invoice subscription linkage; manual investigation required');
+    return;
+  }
   const prisma = getPrisma();
-  let subscriptionId: string | null = null;
 
-  // 1. charge → invoice → subscription の経路で取得を試みる
-  const invoiceId = charge.invoice as string | null;
-  if (invoiceId) {
-    const invoice = await stripe!.invoices.retrieve(invoiceId);
-    subscriptionId = invoice.subscription as string | null;
-  }
-
-  // 2. invoice 経由で取得できない場合、charge.customer から DB を検索
-  if (!subscriptionId) {
-    const customerId = charge.customer as string | null;
-    if (!customerId) {
-      logger.warn({ chargeId: charge.id }, 'Refunded charge has no invoice and no customer, skipping');
-      return;
-    }
-
-    const dbSubscription = await prisma.subscription.findFirst({
-      where: {
-        stripeCustomerId: customerId,
-        status: { in: ['ACTIVE', 'PAST_DUE'] },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!dbSubscription) {
-      logger.warn({ chargeId: charge.id, customerId }, 'No active subscription found for customer, skipping');
-      return;
-    }
-
-    subscriptionId = dbSubscription.stripeSubscriptionId;
-    logger.info({ chargeId: charge.id, customerId, subscriptionId }, 'Found subscription via customer ID fallback');
-  }
-
-  // 全額返金かどうか判定
-  const isFullRefund = charge.amount_refunded >= charge.amount;
-  const sid = subscriptionId;
-
-  if (isFullRefund) {
+  for (const sid of subscriptionIds) {
     const assignedBoosts = await prisma.boost.findMany({
       where: { subscriptionId: sid, guildId: { not: null } },
       select: { guildId: true },
     });
 
-    // Stripe 側のサブスクリプションキャンセル（存在する場合）
-    try {
-      const stripeSubscription = await stripe!.subscriptions.retrieve(sid);
-      if (stripeSubscription.status !== 'canceled') {
-        await stripe!.subscriptions.cancel(sid);
-        logger.info({ subscriptionId: sid }, 'Stripe subscription canceled due to full refund');
-      }
-    } catch (err) {
-      // Stripe 上にサブスクリプションが存在しない場合（手動 DB 登録の場合）はスキップ
-      logger.warn({ err, subscriptionId: sid }, 'Could not cancel Stripe subscription (may not exist in Stripe)');
-    }
+    await cancelRefundSubscription(sid);
 
     await prisma.$transaction(async (tx) => {
       await tx.subscription.updateMany({
@@ -299,10 +299,5 @@ async function handleChargeRefunded(charge: Stripe.Charge): Promise<void> {
 
     await publishGuildPremiumInvalidation(assignedBoosts.map((boost) => boost.guildId));
     logger.info({ subscriptionId: sid, chargeId: charge.id }, 'Full refund processed: subscription canceled, all boosts revoked and deleted');
-  } else {
-    logger.info(
-      { subscriptionId: sid, chargeId: charge.id, amountRefunded: charge.amount_refunded, totalAmount: charge.amount },
-      'Partial refund detected, no automatic boost changes applied',
-    );
   }
 }

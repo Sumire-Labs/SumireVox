@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
@@ -13,7 +15,10 @@ assert.ok(existsSync(`apps/${app}/dist/index.js`), 'Application entry point is m
 assert.ok(existsSync('packages/shared/dist/index.js'), 'Shared build is missing');
 assert.ok(existsSync('apps/bot/prisma/schema.prisma'), 'Prisma schema is missing');
 const { PrismaClient } = requireApp('@prisma/client');
-const prisma = new PrismaClient();
+const { PrismaPg } = requireApp('@prisma/adapter-pg');
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: 'postgresql://unused:unused@127.0.0.1:1/unused' }),
+});
 await prisma.$disconnect();
 
 if (app === 'bot') {
@@ -23,6 +28,31 @@ if (app === 'bot') {
   const manager = new ShardingManager(resolve('apps/bot/dist/bot.js'), { totalShards: 1 });
   assert.equal(manager.totalShards, 1);
   requireApp('@discordjs/voice');
+
+  // Exercise the actual Discord REST transport after the Undici major upgrade.
+  const requireDiscord = createRequire(requireApp.resolve('discord.js'));
+  const { REST } = requireDiscord('@discordjs/rest');
+  const http = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({ method: request.method, body: Buffer.concat(chunks).toString() }));
+  });
+  http.listen(0, '127.0.0.1');
+  await once(http, 'listening');
+  try {
+    const address = http.address();
+    assert.ok(address && typeof address !== 'string');
+    const rest = new REST({ api: `http://127.0.0.1:${address.port}` });
+    assert.deepEqual(await rest.get('/gateway', { auth: false }), { method: 'GET', body: '' });
+    const body = { name: 'test-command' };
+    assert.deepEqual(await rest.put('/applications/test/commands', { auth: false, body }), {
+      method: 'PUT', body: JSON.stringify(body),
+    });
+  } finally {
+    await new Promise((resolve, reject) => http.close((error) => error ? reject(error) : resolve()));
+  }
+
 
   const requireOpus = createRequire(requireApp.resolve('@discordjs/opus'));
   const requirePreGyp = createRequire(requireOpus.resolve('@discordjs/node-pre-gyp'));

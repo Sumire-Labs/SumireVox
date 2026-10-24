@@ -68,6 +68,14 @@ describe('createCheckoutSession', () => {
     redisMock.del.mockResolvedValue(1);
   });
 
+  it('preserves classic billing semantics when using the new Stripe API', async () => {
+    stripeMock.checkout.sessions.create.mockResolvedValue({ id: 'cs_classic', url: 'https://checkout.stripe.test/classic' });
+    await createCheckoutSession('user-1', 2);
+    expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(expect.objectContaining({
+      subscription_data: expect.objectContaining({ billing_mode: { type: 'classic' } }),
+    }), expect.objectContaining({ idempotencyKey: 'checkout:user-1:2' }));
+  });
+
   it('releases the checkout lock after a successful session creation', async () => {
     stripeMock.checkout.sessions.create.mockResolvedValue({
       id: 'cs_123',

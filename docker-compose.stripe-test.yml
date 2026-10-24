@@ -1,0 +1,35 @@
+# Only used with: docker compose --env-file .env.stripe-test.local
+#   -p sumirevox-stripe-test -f docker-compose.stripe-test.yml ...
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sumirevox_stripe_test
+      POSTGRES_DB: sumirevox_stripe_test
+      POSTGRES_PASSWORD: ${STRIPE_TEST_POSTGRES_PASSWORD:?Run pnpm stripe:test setup}
+    ports:
+      - '127.0.0.1:15446:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sumirevox_stripe_test -d sumirevox_stripe_test']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDISCLI_AUTH: ${STRIPE_TEST_REDIS_PASSWORD:?Run pnpm stripe:test setup}
+    command: ['sh', '-c', 'exec redis-server --requirepass "$$REDISCLI_AUTH" --appendonly yes']
+    ports:
+      - '127.0.0.1:16446:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+volumes:
+  postgres-data:
+  redis-data:

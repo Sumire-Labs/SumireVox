@@ -59,3 +59,6 @@ diff.txt
 
 # Deepwork local progress
 .slim/deepwork/
+
+# Isolated Stripe sandbox tooling, credentials and local state
+.stripe-test/
