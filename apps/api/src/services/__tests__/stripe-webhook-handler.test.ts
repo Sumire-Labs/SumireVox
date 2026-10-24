@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 
 const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock, redisPublisherMock } = vi.hoisted(() => ({
   prismaMock: {
+    stripeEvent: { upsert: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     subscription: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -76,6 +77,7 @@ vi.mock('../adjust-boost-slots.js', async () => {
 });
 
 import { processStripeEvent } from '../stripe-webhook-handler.js';
+import { enqueueStripeEvent, drainStripeEventOutbox } from '../stripe-event-outbox.js';
 
 describe('processStripeEvent', () => {
   beforeEach(() => {
@@ -388,6 +390,190 @@ describe('processStripeEvent', () => {
     } as never)).rejects.toThrow('temporary Stripe failure');
     expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
     expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+  });
+
+  describe('refund safety and retries', () => {
+    const refund = (extra: Record<string, unknown> = {}) => ({
+      id: 'evt-refund-safety', type: 'charge.refunded',
+      data: { object: { id: 'ch_safe', customer: 'cus-multiple', invoice: 'in_safe',
+        amount: 3000, amount_refunded: 3000, ...extra } },
+    });
+    const missing = () => new Stripe.errors.StripeInvalidRequestError({
+      type: 'invalid_request_error', code: 'resource_missing', message: 'No such subscription', statusCode: 404,
+    });
+    beforeEach(() => {
+      stripeMock.invoices.retrieve.mockResolvedValue({ subscription: 'sub-paid' });
+      stripeMock.subscriptions.retrieve.mockResolvedValue({ status: 'active' });
+      prismaMock.subscription.findFirst.mockResolvedValue({ stripeSubscriptionId: 'sub-unrelated' });
+    });
+
+    it.each([
+      { invoice: null, payment_intent: null },
+      { invoice: null, payment_intent: 'pi-no-invoices' },
+    ])('preserves all customer subscriptions without payment linkage: %j', async (extra) => {
+      await processStripeEvent(refund(extra) as never);
+      expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(loggerMock.warn).toHaveBeenCalledWith(expect.objectContaining({ chargeId: 'ch_safe' }), expect.stringContaining('stripe_refund_unresolved'));
+    });
+
+    it('only cancels the invoiced subscription even with another active customer subscription', async () => {
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.cancel).toHaveBeenCalledExactlyOnceWith('sub-paid');
+      expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('does not cancel a customer subscription for a non-subscription invoice', async () => {
+      stripeMock.invoices.retrieve.mockResolvedValue({ subscription: null });
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each(['sub-other', null])('rejects ambiguous invoice payments across pages: %s', async (other) => {
+      stripeMock.invoicePayments.list
+        .mockResolvedValueOnce({ data: [{ id: 'ip_1', status: 'paid', invoice: { subscription: 'sub-paid' } }], has_more: true })
+        .mockResolvedValueOnce({ data: [{ id: 'ip_2', status: 'paid', invoice: { subscription: other } }], has_more: false });
+      await processStripeEvent(refund({ invoice: null, payment_intent: 'pi-shared' }) as never);
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(stripeMock.invoicePayments.list).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries incomplete pagination without canceling a subset of contracts', async () => {
+      stripeMock.invoicePayments.list.mockResolvedValue({ data: [], has_more: true });
+      await expect(processStripeEvent(refund({ invoice: null, payment_intent: 'pi-broken' }) as never)).rejects.toThrow();
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      new Stripe.errors.StripeAPIError({ message: 'server error', statusCode: 500 }),
+      new Stripe.errors.StripeRateLimitError({ message: 'rate limited', statusCode: 429 }),
+      new Stripe.errors.StripeConnectionError({ message: 'network error' }),
+      new Stripe.errors.StripePermissionError({ message: 'forbidden', statusCode: 403 }),
+    ])('does not mutate DB when cancellation fails: %s', async (error) => {
+      stripeMock.subscriptions.cancel.mockRejectedValueOnce(error);
+      await expect(processStripeEvent(refund() as never)).rejects.toBe(error);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+      expect(redisPublisherMock.publish).not.toHaveBeenCalled();
+      await processStripeEvent(refund() as never);
+      expect(txMock.boost.deleteMany).toHaveBeenCalledExactlyOnceWith({ where: { subscriptionId: 'sub-paid' } });
+    });
+
+    it('propagates subscription retrieval failures before canceling or mutating DB', async () => {
+      stripeMock.subscriptions.retrieve.mockRejectedValueOnce(new Error('network error'));
+      await expect(processStripeEvent(refund() as never)).rejects.toThrow('network error');
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('finalizes an already canceled subscription and repeated events idempotently', async () => {
+      stripeMock.subscriptions.retrieve.mockResolvedValue({ status: 'canceled' });
+      await processStripeEvent(refund() as never);
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(txMock.subscription.updateMany).toHaveBeenCalledTimes(2);
+      expect(txMock.boost.deleteMany).toHaveBeenCalledTimes(2);
+      expect(txMock.boost.createMany).not.toHaveBeenCalled();
+    });
+
+    it('finalizes a missing subscription in accordance with reconciliation', async () => {
+      stripeMock.subscriptions.retrieve.mockRejectedValue(missing());
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+      expect(txMock.subscription.updateMany).toHaveBeenCalledWith({ where: { stripeSubscriptionId: 'sub-paid' }, data: { status: 'CANCELED' } });
+      expect(txMock.boost.deleteMany).toHaveBeenCalled();
+    });
+
+    it.each(['canceled', 'missing'])('confirms cancellation after a cancel 404: %s', async (status) => {
+      stripeMock.subscriptions.retrieve.mockReset().mockResolvedValueOnce({ status: 'active' });
+      if (status === 'missing') stripeMock.subscriptions.retrieve.mockRejectedValueOnce(missing());
+      else stripeMock.subscriptions.retrieve.mockResolvedValueOnce({ status });
+      stripeMock.subscriptions.cancel.mockRejectedValueOnce(missing());
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.retrieve).toHaveBeenCalledTimes(2);
+      expect(txMock.boost.deleteMany).toHaveBeenCalled();
+    });
+
+    it('does not finalize an active subscription after a cancel 404', async () => {
+      stripeMock.subscriptions.cancel.mockRejectedValueOnce(missing());
+      await expect(processStripeEvent(refund() as never)).rejects.toThrow();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each(['Stripe failure', 'DB rollback', 'lost cancellation response'])(
+      'reaches a consistent final state through the real outbox after %s', async (failure) => {
+        const event = refund();
+        let record: { status: string; payload: typeof event; attempts: number; lastError: string | null } | undefined;
+        let localState = { status: 'ACTIVE', boosts: 2 };
+        let remoteStatus = 'active';
+        prismaMock.stripeEvent.upsert.mockImplementation(async () => {
+          record ??= { status: 'PENDING', payload: event, attempts: 0, lastError: null };
+        });
+        prismaMock.stripeEvent.findMany.mockImplementation(async () =>
+          record?.status === 'PENDING' ? [{ id: event.id, type: event.type, ...record }] : []);
+        prismaMock.stripeEvent.update.mockImplementation(async ({ data }: {
+          data: { status?: string; attempts: number | { increment: number }; lastError: string | null };
+        }) => {
+          if (!record) throw new Error('not enqueued');
+          record = { ...record, status: data.status ?? record.status,
+            attempts: typeof data.attempts === 'number' ? data.attempts : record.attempts + data.attempts.increment,
+            lastError: data.lastError };
+        });
+        stripeMock.subscriptions.retrieve.mockImplementation(async () => ({ status: remoteStatus }));
+        let failOnce = true;
+        stripeMock.subscriptions.cancel.mockImplementation(async () => {
+          if (failOnce && failure !== 'DB rollback') {
+            failOnce = false;
+            if (failure === 'lost cancellation response') remoteStatus = 'canceled';
+            throw new Stripe.errors.StripeConnectionError({ message: 'network error' });
+          }
+          remoteStatus = 'canceled';
+        });
+        prismaMock.$transaction.mockImplementation(async (callback: (tx: typeof txMock) => Promise<unknown>) => {
+          // Stage updates in a transaction; a failing commit cannot expose half state.
+          const staged = { ...localState };
+          txMock.subscription.updateMany.mockImplementation(async () => { staged.status = 'CANCELED'; });
+          txMock.boost.deleteMany.mockImplementation(async () => { staged.boosts = 0; });
+          await callback(txMock);
+          if (failOnce && failure === 'DB rollback') {
+            failOnce = false;
+            throw new Error('transaction rollback');
+          }
+          localState = staged;
+        });
+        await enqueueStripeEvent(event as never);
+        await enqueueStripeEvent(event as never);
+        await drainStripeEventOutbox();
+        expect(record).toMatchObject({ status: 'PENDING', attempts: 1, lastError: expect.any(String) });
+        expect(localState).toEqual({ status: 'ACTIVE', boosts: 2 });
+        await drainStripeEventOutbox();
+        expect(record).toMatchObject({ status: 'PROCESSED', attempts: 0, lastError: null });
+        expect(localState).toEqual({ status: 'CANCELED', boosts: 0 });
+        expect(remoteStatus).toBe('canceled');
+        const calls = stripeMock.subscriptions.cancel.mock.calls.length;
+        await enqueueStripeEvent(event as never);
+        await drainStripeEventOutbox();
+        expect(stripeMock.subscriptions.cancel).toHaveBeenCalledTimes(calls);
+        expect(localState).toEqual({ status: 'CANCELED', boosts: 0 });
+        if (failure !== 'Stripe failure') expect(calls).toBe(1);
+      },
+    );
+
+    it('retries DB failure after successful Stripe cancellation without canceling twice', async () => {
+      stripeMock.subscriptions.cancel.mockImplementationOnce(async () => {
+        stripeMock.subscriptions.retrieve.mockResolvedValue({ status: 'canceled' });
+      });
+      prismaMock.$transaction.mockRejectedValueOnce(new Error('transaction failed'));
+      await expect(processStripeEvent(refund() as never)).rejects.toThrow('transaction failed');
+      expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+      await processStripeEvent(refund() as never);
+      expect(stripeMock.subscriptions.cancel).toHaveBeenCalledTimes(1);
+      expect(txMock.subscription.updateMany).toHaveBeenCalledWith({ where: { stripeSubscriptionId: 'sub-paid' }, data: { status: 'CANCELED' } });
+      expect(txMock.boost.deleteMany).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('rejects a missing period instead of storing an invalid date', async () => {
