@@ -17,6 +17,8 @@ on:
       - '.nvmrc'
       - 'tsconfig.base.json'
       - 'scripts/check-node-runtime.mjs'
+      - 'scripts/check-nginx-routing.mjs'
+      - 'nginx/**'
       - '.github/workflows/deploy.yml'
 permissions:
   contents: read
@@ -62,7 +64,7 @@ jobs:
               - '.github/workflows/deploy.yml'
   build-api:
     name: Build API Image
-    needs: [changes, test]
+    needs: [changes, test, check-nginx]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -91,7 +93,7 @@ jobs:
           cache-to: type=gha,mode=max
   build-bot:
     name: Build Bot Image
-    needs: [changes, test]
+    needs: [changes, test, check-nginx]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.bot == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -180,6 +182,17 @@ jobs:
         run: |
           node scripts/check-node-runtime.mjs bot
           node scripts/check-node-runtime.mjs api
+  check-nginx:
+    name: Check Nginx routing and API recreation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Setup Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24.22.1'
+      - name: Check both Nginx configurations without production services
+        run: node scripts/check-nginx-routing.mjs
   check-docker:
     name: Check ${{ matrix.app }} ${{ matrix.dockerfile }} image
     if: github.event_name == 'pull_request'

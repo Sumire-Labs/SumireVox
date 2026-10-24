@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { connect, createSecureServer } from 'node:http2';
 import { once } from 'node:events';
-import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const app = process.argv[2];
 assert.ok(app === 'bot' || app === 'api', 'Usage: node scripts/check-node-runtime.mjs bot|api');
@@ -29,7 +32,7 @@ if (app === 'bot') {
   assert.equal(manager.totalShards, 1);
   requireApp('@discordjs/voice');
 
-  // Exercise the actual Discord REST transport after the Undici major upgrade.
+  // Exercise the actual Discord REST transport, including TLS/ALPN negotiation.
   const requireDiscord = createRequire(requireApp.resolve('discord.js'));
   const { REST } = requireDiscord('@discordjs/rest');
   const http = createServer(async (request, response) => {
@@ -53,6 +56,68 @@ if (app === 'bot') {
     await new Promise((resolve, reject) => http.close((error) => error ? reject(error) : resolve()));
   }
 
+  const requireRest = createRequire(requireDiscord.resolve('@discordjs/rest'));
+  const { Agent } = requireRest('undici');
+  const tlsDirectory = mkdtempSync(join(tmpdir(), 'sumirevox-rest-'));
+  let agent;
+  let tlsServer;
+  const sockets = new Set();
+  try {
+    const keyPath = join(tlsDirectory, 'key.pem');
+    const certPath = join(tlsDirectory, 'cert.pem');
+    execFileSync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+      '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1',
+      '-keyout', keyPath, '-out', certPath,
+    ], { stdio: 'pipe', timeout: 10_000 });
+    const cert = readFileSync(certPath);
+    tlsServer = createSecureServer({ key: readFileSync(keyPath), cert, allowHTTP1: true });
+    tlsServer.on('connection', (socket) => {
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+    });
+    tlsServer.on('request', async (request, response) => {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      response.setHeader('Content-Type', 'application/json');
+      response.setHeader('X-Runtime-Check', 'tls');
+      response.end(JSON.stringify({
+        method: request.method, body: Buffer.concat(chunks).toString(), version: request.httpVersion,
+      }));
+    });
+    tlsServer.listen(0, '127.0.0.1');
+    await once(tlsServer, 'listening');
+    const address = tlsServer.address();
+    assert.ok(address && typeof address !== 'string');
+    const api = `https://127.0.0.1:${address.port}`;
+    // Prove the fixture offers h2 before testing the REST client's default protocol.
+    const session = connect(api, { ca: cert });
+    try {
+      await once(session, 'connect');
+      assert.equal(session.alpnProtocol, 'h2');
+    } finally {
+      session.destroy();
+    }
+    // Do not set allowH2: this must catch incompatible changes to its default.
+    agent = new Agent({ connect: { ca: cert } });
+    const rest = new REST({ api, agent, retries: 0, timeout: 5_000 });
+    const get = await rest.queueRequest({ fullRoute: '/gateway', method: 'GET', auth: false });
+    assert.equal(get.headers.get('x-runtime-check'), 'tls');
+    assert.deepEqual(await get.json(), { method: 'GET', body: '', version: '1.1' });
+    const body = { name: 'test-command' };
+    assert.deepEqual(await rest.put('/applications/test/commands', { auth: false, body }), {
+      method: 'PUT', body: JSON.stringify(body), version: '1.1',
+    });
+    assert.equal(requireRest('undici/package.json').version, '6.29.1');
+    assert.equal(requireDiscord('undici/package.json').version, '6.29.1');
+  } finally {
+    await agent?.destroy();
+    for (const socket of sockets) socket.destroy();
+    if (tlsServer?.listening) {
+      await new Promise((resolve, reject) => tlsServer.close((error) => error ? reject(error) : resolve()));
+    }
+    rmSync(tlsDirectory, { recursive: true, force: true });
+  }
 
   const requireOpus = createRequire(requireApp.resolve('@discordjs/opus'));
   const requirePreGyp = createRequire(requireOpus.resolve('@discordjs/node-pre-gyp'));
