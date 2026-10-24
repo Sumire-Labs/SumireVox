@@ -66,6 +66,7 @@ mainとの差分。未変更の最新安定版も含む。`@types/node`はNode 2
 | `@react-aria/ssr` | 追加 | ^3.10.1 | apps/admin, apps/web |
 | `@react-aria/utils` | 追加 | ^3.34.1 | apps/admin, apps/web |
 | `@tailwindcss/vite` | ^4.0.0 | ^4.3.3 | apps/admin, apps/web |
+| `@types/pg` | 追加 | 8.23.1 | packages/shared |
 | `@types/node` | ^24.19.2 | ^24.19.2 | apps/api, apps/bot, packages/shared |
 | `@types/react` | ^19.0.0 | ^19.3.0 | apps/admin, apps/web |
 | `@types/react-dom` | ^19.0.0 | ^19.3.0 | apps/admin, apps/web |
@@ -79,6 +80,7 @@ mainとの差分。未変更の最新安定版も含む。`@types/node`はNode 2
 | `hono` | 4.12.25 | 4.13.13 | apps/api |
 | `ioredis` | ^5.6.1 | ^6.0.0 | apps/api, apps/bot |
 | `lucide-react` | ^0.577.0 | ^1.61.0 | apps/web |
+| `pg` | 追加 | 8.23.1 | packages/shared |
 | `pino` | ^9.6.0 | ^10.4.0 | apps/api, apps/bot, packages/shared |
 | `pino-pretty` | ^13.0.0 | ^13.2.0 | apps/api, apps/bot, packages/shared |
 | `prisma` | ^6.19.2, 追加 | 7.10.1 | apps/api, apps/bot |
@@ -144,3 +146,13 @@ lockfileを一度ゼロから再解決して、既存lockの残留による未�
 - [d98c246の通常CI](https://github.com/Sumire-Labs/SumireVox/actions/runs/40079599518)は全必要ジョブが成功。main専用の公開ジョブは意図通りskip。旧失敗run `40077734402`と混同しない。最新headの結果は[PR Checks](https://github.com/Sumire-Labs/SumireVox/pull/46/checks)を参照。
 - 最終差分で元mainのViteが6系と確認したため、ブラウザーのJavaScript targetは途中のVite 7既定値ではなく、更新前のVite 6既定値へ合わせた。公式根拠: https://v6.vite.dev/config/build-options#build-target
 - 全633種類をregistryと照合。147種類には旧版を要求する上流制約等があり、独立した最新安定版との相違を依存一覧に明示した。すべての推移依存が最新、またはプレリリース0件、とは報告しない。
+
+## PR #46 レビュー修正
+
+返金対象の顧客IDによる代替検索を廃止し、支払いに関連する全Invoiceが同一契約を示す場合のみ自動解約する。Stripe解約の一時障害はoutboxへ伝播し、解約済み/不存在の確認後にDBを更新する。旧Webhook、Checkout classic、部分返金のBoost維持は継続する。詳細は [課金仕様](boost-system.md) を参照。
+
+DB接続は旧Prismaの接続5秒/プール待機10秒を別々に設定するため、既にadapterが利用するpg 8.23.1と同じドライバー/型定義をsharedの直接依存へ追加した。既存の解決バージョンは更新していない。pgのPoolタイマーによる新規接続への上限などの差異は [DB仕様](database.md#タイムアウトの互換性と制約) に記載する。
+
+Node.js 24.22.1 / pnpm 9.15.9で回帰テスト41件を追加し、全289テスト、全workspaceの型チェック/ビルド、Prisma生成/validate、Bot/API runtime確認、本番依存監査が成功。隔離PostgreSQL 16で既存migration/トランザクション検証に加え、pg/PrismaPgのプール枯渇・既定値・0・接続確立不能・タイムアウト後の復帰を確認した。Stripe APIはモックのみを使用し、outboxの実装を通した障害再試行・DBロールバック・解約レスポンス消失・重複イベントのテストが成功した。
+
+`pnpm lint` は終了コード0だが、各packageにlint scriptがないため実検証なし。`git diff --check` とスクリプトの `node --check` は成功。Stripe Sandboxおよび実TLS接続の検証は未実施。本番反映前にはSandboxでの新旧Webhook、返金とInvoiceの対応、`stripe_refund_unresolved` の警告監視を確認する。
