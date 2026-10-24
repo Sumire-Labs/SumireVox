@@ -104,6 +104,23 @@ describe('stripe-subscription-reconciler', () => {
     });
   });
 
+  it('repairs a changed item billing period without removing active boosts', async () => {
+    prismaMock.subscription.findMany.mockResolvedValue([{
+      stripeSubscriptionId: 'sub-current', status: 'ACTIVE', currentPeriodEnd: new Date(1700000000000), boostCount: 1,
+      boosts: [{ id: 'boost-1', guildId: 'guild-1', assignedAt: new Date() }],
+    }]);
+    stripeMock.subscriptions.retrieve.mockResolvedValue({
+      status: 'active', items: { data: [{ quantity: 1, current_period_end: 1800000000 }] },
+    });
+    await reconcileStripeSubscriptions();
+    expect(txMock.subscription.update).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub-current' },
+      data: { status: 'ACTIVE', boostCount: 1, currentPeriodEnd: new Date(1800000000000) },
+    });
+    expect(txMock.boost.updateMany).not.toHaveBeenCalled();
+    expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+  });
+
   it('skips overlapping runs while a previous reconcile is still active', async () => {
     let resolveFirstRun: (() => void) | null = null;
     let callCount = 0;

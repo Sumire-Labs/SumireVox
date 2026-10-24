@@ -34,3 +34,11 @@ PR #46 / `chore/upgrade-all-deps-20261024` を継続する。npm registry の公
 - Dockerの通常版/本番版でconfigを明示してClientを生成する。API起動時のmigrationも同じconfigを使用する。
 - dotenv 18で同名の`dotenv`バイナリが追加されたため、既存dotenv-cliのJSエントリを明示し、ルート.envの読み込みと変数展開を維持する。
 - Undici 8.12.3へのoverride後、実際のDiscord RESTクライアントからローカルHTTPへのGET/PUT、シャーディング初期化、Opusの符号化/復号、sodium暗号化を確認。
+
+## Stripe の移行
+
+旧参照を型アサーションで隠さず、item課金期限、invoice parent、Invoice Paymentsを使用する。Checkoutの課金モードは公式変更点を確認し、`classic`を明示して日割り計算などの既存仕様を維持する。Webhookのraw body署名検証・永続化・再試行は維持し、旧イベント形も引き続き処理する。
+
+回帰テストは新旧payload、支払い成功/失敗、数量増減、返金対象の特定・全ページ処理・重複排除、部分返金、APIの一時失敗、期限欠落、手動同期と定期整合の期限更新を検証する。
+
+参考: https://docs.stripe.com/changelog/clover/2025-09-30/billing-mode-default-flexible

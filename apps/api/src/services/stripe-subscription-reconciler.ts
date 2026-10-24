@@ -1,3 +1,4 @@
+import { stripeSubscriptionPeriodEnd } from './stripe-billing-data.js';
 import Stripe from 'stripe';
 import { stripe } from '../infrastructure/stripe-client.js';
 import { getPrisma } from '../infrastructure/database.js';
@@ -98,7 +99,7 @@ async function processSubscription(sub: ReconcileSubject, stripeSub: Stripe.Subs
 
   const newStatus = mapStripeStatus(stripeSub.status);
   const newBoostCount = stripeSub.items.data[0]?.quantity ?? 0;
-  const newPeriodEnd = new Date(stripeSub.current_period_end * 1000);
+  const newPeriodEnd = stripeSubscriptionPeriodEnd(stripeSub);
 
   const statusChanged = newStatus !== sub.status;
   const boostCountChanged = newBoostCount !== sub.boostCount;

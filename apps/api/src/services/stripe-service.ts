@@ -85,6 +85,7 @@ export async function createCheckoutSession(
       boostCount: boostCount.toString(),
     },
     subscription_data: {
+      billing_mode: { type: 'classic' },
       metadata: {
         userId,
         boostCount: boostCount.toString(),

@@ -32,6 +32,7 @@ const { prismaMock, txMock, stripeMock, loggerMock, adjustBoostSlotsMock, redisP
       retrieve: vi.fn(),
       cancel: vi.fn(),
     },
+    invoicePayments: { list: vi.fn() },
     invoices: {
       retrieve: vi.fn(),
     },
@@ -94,6 +95,7 @@ describe('processStripeEvent', () => {
     stripeMock.subscriptions.retrieve.mockReset();
     stripeMock.subscriptions.cancel.mockReset();
     stripeMock.invoices.retrieve.mockReset();
+    stripeMock.invoicePayments.list.mockReset().mockResolvedValue({ data: [], has_more: false });
 
     loggerMock.info.mockReset();
     loggerMock.warn.mockReset();
@@ -103,6 +105,27 @@ describe('processStripeEvent', () => {
     redisPublisherMock.publish.mockReset().mockResolvedValue(1);
 
     prismaMock.boost.findMany.mockResolvedValue([]);
+  });
+
+  it('handles current invoice parent references when payment fails', async () => {
+    await processStripeEvent({
+      id: 'evt-new-invoice', type: 'invoice.payment_failed',
+      data: { object: { parent: { type: 'subscription_details', subscription_details: { subscription: { id: 'sub-2' } } } } },
+    } as never);
+    expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub-2' }, data: { status: 'PAST_DUE' },
+    });
+  });
+
+  it('uses item billing periods for a current subscription event', async () => {
+    await processStripeEvent({
+      id: 'evt-new-sub', type: 'customer.subscription.updated',
+      data: { object: { id: 'sub-2', status: 'active', items: { data: [{ quantity: 2, current_period_end: 1800000000 }] } } },
+    } as never);
+    expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub-2' },
+      data: { status: 'ACTIVE', boostCount: 2, currentPeriodEnd: new Date(1800000000000) },
+    });
   });
 
   it('creates subscription and boosts on checkout.session.completed', async () => {
@@ -306,6 +329,73 @@ describe('processStripeEvent', () => {
     expect(txMock.boost.deleteMany).toHaveBeenCalledWith({
       where: { subscriptionId: 'sub-1' },
     });
+  });
+
+  it('restores ACTIVE and item period on a paid current invoice', async () => {
+    stripeMock.subscriptions.retrieve.mockResolvedValue({ items: { data: [{ current_period_end: 1800000000 }] } });
+    await processStripeEvent({
+      id: 'evt-paid', type: 'invoice.paid',
+      data: { object: { parent: { type: 'subscription_details', subscription_details: { subscription: 'sub-paid' } } } },
+    } as never);
+    expect(txMock.subscription.updateMany).toHaveBeenCalledWith({
+      where: { stripeSubscriptionId: 'sub-paid' },
+      data: { status: 'ACTIVE', currentPeriodEnd: new Date(1800000000000) },
+    });
+  });
+
+  it('resolves refunded payment invoices over all pages without canceling the customer fallback', async () => {
+    stripeMock.invoicePayments.list
+      .mockResolvedValueOnce({ data: [
+        { id: 'inpay_1', status: 'paid', invoice: { parent: { type: 'subscription_details', subscription_details: { subscription: 'sub-correct' } } } },
+      ], has_more: true })
+      .mockResolvedValueOnce({ data: [
+        { id: 'inpay_2', status: 'paid', invoice: 'in_2' },
+      ], has_more: false });
+    stripeMock.invoices.retrieve.mockResolvedValue({ parent: { type: 'subscription_details', subscription_details: { subscription: { id: 'sub-correct' } } } });
+    stripeMock.subscriptions.retrieve.mockResolvedValue({ status: 'active' });
+    prismaMock.subscription.findFirst.mockResolvedValue({ stripeSubscriptionId: 'sub-wrong' });
+    await processStripeEvent({
+      id: 'evt-new-refund', type: 'charge.refunded',
+      data: { object: { id: 'ch_new', customer: 'cus-1', payment_intent: { id: 'pi_new' }, amount: 3000, amount_refunded: 3000 } },
+    } as never);
+    expect(stripeMock.invoicePayments.list).toHaveBeenNthCalledWith(2, {
+      payment: { type: 'payment_intent', payment_intent: 'pi_new' },
+      expand: ['data.invoice'], limit: 100, starting_after: 'inpay_1',
+    });
+    expect(stripeMock.subscriptions.cancel).toHaveBeenCalledExactlyOnceWith('sub-correct');
+    expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+    expect(txMock.boost.deleteMany).toHaveBeenCalledWith({ where: { subscriptionId: 'sub-correct' } });
+  });
+
+  it('preserves boosts on a partial current charge refund', async () => {
+    stripeMock.invoicePayments.list.mockResolvedValue({ data: [
+      { id: 'inpay_1', status: 'paid', invoice: { parent: { type: 'subscription_details', subscription_details: { subscription: 'sub-correct' } } } },
+    ], has_more: false });
+    await processStripeEvent({
+      id: 'evt-partial', type: 'charge.refunded',
+      data: { object: { id: 'ch_partial', payment_intent: 'pi_partial', amount: 3000, amount_refunded: 1000 } },
+    } as never);
+    expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('does not acknowledge transient invoice payment API failures as a customer refund', async () => {
+    stripeMock.invoicePayments.list.mockRejectedValue(new Error('temporary Stripe failure'));
+    await expect(processStripeEvent({
+      id: 'evt-retry', type: 'charge.refunded',
+      data: { object: { id: 'ch_retry', customer: 'cus-1', payment_intent: 'pi_retry', amount: 100, amount_refunded: 100 } },
+    } as never)).rejects.toThrow('temporary Stripe failure');
+    expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+    expect(txMock.boost.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing period instead of storing an invalid date', async () => {
+    await expect(processStripeEvent({
+      id: 'evt-invalid-period', type: 'customer.subscription.updated',
+      data: { object: { id: 'sub-2', status: 'active', items: { data: [{ quantity: 2 }] } } },
+    } as never)).rejects.toThrow('no valid billing period');
+    expect(txMock.subscription.updateMany).not.toHaveBeenCalled();
   });
 
   it('skips processing when the Stripe resource is missing (404)', async () => {
