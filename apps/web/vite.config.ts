@@ -8,20 +8,18 @@ export default defineConfig({
   envDir: '../../',
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-router': ['react-router'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-heroui': [
-            '@heroui/react',
-            '@heroui/styles',
-            '@internationalized/date',
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/ },
+            { name: 'vendor-router', test: /[\\/]node_modules[\\/]react-router[\\/]/ },
+            { name: 'vendor-motion', test: /[\\/]node_modules[\\/]framer-motion[\\/]/ },
+            { name: 'vendor-heroui', test: /[\\/]node_modules[\\/](@heroui[\\/]|@internationalized[\\/]date[\\/])/ },
           ],
         },
       },
